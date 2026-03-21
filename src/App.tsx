@@ -1,0 +1,7151 @@
+import React, { useState, useEffect } from 'react';
+import { GoogleGenAI } from "@google/genai";
+import { 
+  UserPlus, 
+  LayoutDashboard, 
+  Users, 
+  BookOpen, 
+  Settings, 
+  LogOut, 
+  Bell, 
+  Search,
+  Upload,
+  CheckCircle2,
+  AlertCircle,
+  GraduationCap,
+  School,
+  Phone,
+  Mail,
+  MapPin,
+  HeartPulse,
+  FileText,
+  Signature,
+  Lock,
+  Plus,
+  Trash2,
+  Edit2,
+  Image as ImageIcon,
+  Stamp,
+  CreditCard,
+  Percent,
+  UserCheck,
+  BookOpenCheck,
+  Hash,
+  Tag as TagIcon,
+  Receipt,
+  Wallet,
+  QrCode,
+  Printer,
+  Download,
+  Share2,
+  MessageCircle,
+  FileSpreadsheet,
+  Calendar,
+  Filter,
+  Coins,
+  ArrowRightLeft,
+  X,
+  Clock,
+  ArrowUpCircle,
+  FileEdit,
+  ClipboardList,
+  Eye,
+  FileDown,
+  Sparkles,
+  UserCircle,
+  Home,
+  FileOutput,
+  Trophy,
+  BarChart3,
+  Bed,
+  DoorOpen,
+  UserCog,
+  ScanLine,
+  Building2,
+  ShieldCheck,
+  UserCheck2,
+  Camera,
+  Video,
+  CalendarRange,
+  XCircle,
+  PieChart as PieChartIcon
+} from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import * as XLSX from 'xlsx';
+import { jsPDF } from 'jspdf';
+import html2canvas from 'html2canvas';
+import { Html5QrcodeScanner, Html5Qrcode } from 'html5-qrcode';
+
+import { 
+  LineChart, 
+  Line, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  ResponsiveContainer, 
+  AreaChart, 
+  Area, 
+  BarChart, 
+  Bar, 
+  PieChart, 
+  Pie, 
+  Cell 
+} from 'recharts';
+
+// --- Types ---
+
+type View = 'login' | 'dashboard' | 'register-student' | 'student-list' | 'settings' | 'fee-management' | 'academics' | 'attendance' | 'examination' | 'id-cards' | 'hostel' | 'live-camera' | 'admin-360' | 'class-360' | 'due-fees' | 'teacher-panel' | 'parent-panel' | 'leave-management';
+
+interface HostelRoom {
+  id: string;
+  roomNumber: string;
+  floor: string;
+  capacity: number;
+  type: 'AC' | 'Non-AC';
+  gender: 'Male' | 'Female';
+  category: string;
+  price: number;
+}
+
+interface HostelBed {
+  id: string;
+  roomId: string;
+  bedNumber: string;
+  status: 'Available' | 'Occupied' | 'Maintenance';
+  studentId?: string;
+}
+
+interface HostelStaff {
+  id: string;
+  name: string;
+  role: 'Warden' | 'Assistant Warden' | 'Security' | 'Cleaning Staff';
+  mobile: string;
+  email: string;
+  shift: 'Day' | 'Night';
+}
+
+interface HostelAttendance {
+  id: string;
+  studentId: string;
+  date: string;
+  status: 'Present' | 'Absent' | 'Late' | 'Leave';
+  time: string;
+  remarks?: string;
+}
+
+interface Attendance {
+  id: string;
+  studentId: string;
+  studentName: string;
+  class: string;
+  section: string;
+  status: 'Present' | 'Absent' | 'Late' | 'Leave' | 'Holiday';
+  date: string;
+  time: string;
+  markedBy: string;
+}
+
+interface TimeTableEntry {
+  day: string;
+  startTime: string;
+  endTime: string;
+  subject: string;
+  teacher: string;
+}
+
+interface ClassTimeTable {
+  id: string;
+  class: string;
+  section: string;
+  entries: TimeTableEntry[];
+}
+
+interface Syllabus {
+  id: string;
+  class: string;
+  subject: string;
+  title: string;
+  description: string;
+  fileUrl?: string;
+  date: string;
+  status: 'Not Started' | 'Started' | 'Completed';
+}
+
+interface LeaveRequest {
+  id: string;
+  studentId: string;
+  studentName: string;
+  class: string;
+  section: string;
+  startDate: string;
+  endDate: string;
+  duration: number;
+  reason: string;
+  status: 'Pending' | 'Approved' | 'Rejected';
+  appliedDate: string;
+  approvedBy?: string;
+}
+
+interface Notification {
+  id: string;
+  title: string;
+  message: string;
+  date: string;
+  type: 'Info' | 'Warning' | 'Success' | 'Fee';
+  targetRoles: ('admin' | 'teacher' | 'student' | 'parent')[];
+  targetStudentId?: string;
+}
+
+interface Exam {
+  id: string;
+  name: string;
+  type: string;
+  startDate: string;
+  endDate: string;
+  status: 'Upcoming' | 'Ongoing' | 'Completed';
+}
+
+interface ExamSchedule {
+  id: string;
+  examId: string;
+  class: string;
+  section: string;
+  subject: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  room: string;
+  questionPaper?: string;
+  answerSheet?: string;
+}
+
+interface ExamResult {
+  id: string;
+  examScheduleId: string;
+  studentId: string;
+  studentName: string;
+  marks: number;
+  maxMarks: number;
+  grade: string;
+  status: 'Pass' | 'Fail';
+  feedback: string;
+  teacherId: string;
+}
+
+interface HomeworkSubmission {
+  studentId: string;
+  studentName: string;
+  file: string; // base64 or mock URL
+  date: string;
+}
+
+interface Homework {
+  id: string;
+  class: string;
+  section: string;
+  subject: string;
+  title: string;
+  description: string;
+  dueDate: string;
+  teacherName: string;
+  date: string;
+  file?: string;
+  submissions: HomeworkSubmission[];
+}
+
+interface ClassAssignment {
+  id: string;
+  class: string;
+  section: string;
+  classTeacher: string;
+  subjectTeachers: { subject: string; teacher: string }[];
+  session: string;
+}
+
+interface Activity {
+  id: string;
+  class: string;
+  section: string;
+  subject: string;
+  title: string;
+  description: string;
+  date: string;
+  teacherName: string;
+  fileUrl?: string;
+}
+
+interface FeeType {
+  id: string;
+  name: string;
+  description: string;
+}
+
+interface FeeMaster {
+  id: string;
+  class: string;
+  feeType: string;
+  amount: number;
+  frequency: 'Monthly' | 'Quarterly' | 'Half-Yearly' | 'Yearly';
+}
+
+interface FeeTransaction {
+  id: string;
+  studentId: string;
+  studentName: string;
+  class: string;
+  section: string;
+  feeType: string;
+  amount: number;
+  discount: number;
+  discountReason: string;
+  scholarship: number;
+  totalPaid: number;
+  paymentMode: 'Cash' | 'UPI' | 'Bank Transfer';
+  transactionId?: string;
+  date: string;
+  dueDate: string;
+  status: 'Paid' | 'Partial' | 'Due';
+}
+
+interface Student {
+  id: string;
+  name: string;
+  surname: string;
+  class: string;
+  section: string;
+  studentId: string;
+  caste: string;
+  category: string;
+  fatherName: string;
+  motherName: string;
+  fatherMobile: string;
+  motherMobile: string;
+  bloodGroup: string;
+  emergencyContact: string;
+  localGuardianContact: string;
+  email: string;
+  address: string;
+  allergy: string;
+  religion: string;
+  gender: string;
+  hasDisability: boolean;
+  disabilityDetails: string;
+  relationInSchool: {
+    name: string;
+    class: string;
+    section: string;
+  };
+}
+
+// --- Components ---
+
+const SidebarItem = ({ 
+  icon: Icon, 
+  label, 
+  active, 
+  onClick 
+}: { 
+  icon: any, 
+  label: string, 
+  active: boolean, 
+  onClick: () => void 
+}) => (
+  <button
+    onClick={onClick}
+    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
+      active 
+        ? 'bg-primary text-white shadow-lg shadow-primary/20' 
+        : 'text-text-sub hover:bg-slate-100'
+    }`}
+  >
+    <Icon size={20} />
+    <span className="font-medium">{label}</span>
+  </button>
+);
+
+const Card = ({ children, className = "", ...props }: { children: React.ReactNode, className?: string, [key: string]: any }) => (
+  <div className={`glass-panel rounded-2xl p-8 ${className}`} {...props}>
+    {children}
+  </div>
+);
+
+const Input = ({ label, type = "text", placeholder, required = false, ...props }: any) => (
+  <div className="w-full">
+    <label className="label-text">
+      {label} {required && <span className="text-red-500">*</span>}
+    </label>
+    <input
+      type={type}
+      placeholder={placeholder}
+      className="input-field"
+      {...props}
+    />
+  </div>
+);
+
+const Select = ({ label, options, required = false, ...props }: any) => (
+  <div className="w-full">
+    <label className="label-text">
+      {label} {required && <span className="text-red-500">*</span>}
+    </label>
+    <select className="input-field" {...props}>
+      <option value="">Select {label}</option>
+      {options.map((opt: string) => (
+        <option key={opt} value={opt}>{opt}</option>
+      ))}
+    </select>
+  </div>
+);
+
+const FileUpload = ({ label, icon: Icon = Upload, required = false }: any) => (
+  <div className="w-full">
+    <label className="label-text">
+      {label} {required && <span className="text-red-500">*</span>}
+    </label>
+    <div className="relative group">
+      <input
+        type="file"
+        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+      />
+      <div className="flex flex-col items-center justify-center gap-2 p-4 border-2 border-dashed border-slate-200 rounded-xl group-hover:border-primary group-hover:bg-primary/5 transition-all">
+        <Icon className="text-slate-400 group-hover:text-primary" size={24} />
+        <span className="text-xs text-text-secondary group-hover:text-primary">Click or drag to upload</span>
+      </div>
+    </div>
+  </div>
+);
+
+const Attendance = ({ students, attendance, setAttendance, masterData, currentUser }: any) => {
+  const [activeTab, setActiveTab] = useState<'scan' | 'manual' | 'history' | 'my-attendance'>(
+    (currentUser?.role === 'student' || currentUser?.role === 'parent') ? 'my-attendance' : 'scan'
+  );
+  const [scanResult, setScanResult] = useState<string | null>(null);
+  const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
+  const [studentSearch, setStudentSearch] = useState('');
+  const [manualForm, setManualForm] = useState({
+    class: '',
+    section: '',
+    date: new Date().toISOString().split('T')[0],
+    status: 'Present' as Attendance['status']
+  });
+  const [historyFilters, setHistoryFilters] = useState({
+    date: new Date().toISOString().split('T')[0],
+    class: '',
+    section: ''
+  });
+
+  const [scanning, setScanning] = useState(false);
+
+  useEffect(() => {
+    let html5QrCode: Html5Qrcode | null = null;
+
+    const startScanner = async () => {
+      if (scanning && activeTab === 'scan' && (currentUser?.role === 'admin' || currentUser?.role === 'teacher')) {
+        try {
+          // Small delay to ensure DOM element is ready
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
+          const element = document.getElementById("reader");
+          if (!element) return;
+
+          html5QrCode = new Html5Qrcode("reader");
+          await html5QrCode.start(
+            { facingMode: "environment" },
+            {
+              fps: 10,
+              qrbox: { width: 250, height: 250 },
+            },
+            (decodedText: string) => {
+              onScanSuccess(decodedText);
+            },
+            (errorMessage: string) => {
+              // Ignore constant scan errors
+            }
+          ).catch((err: any) => {
+            console.error("Scanner start error:", err);
+          });
+        } catch (err) {
+          console.error("Scanner initialization error:", err);
+        }
+      }
+    };
+
+    startScanner();
+
+    return () => {
+      if (html5QrCode) {
+        if (html5QrCode.isScanning) {
+          html5QrCode.stop().then(() => {
+            html5QrCode?.clear();
+          }).catch((err: any) => console.error("Scanner stop error:", err));
+        } else {
+          try {
+            html5QrCode.clear();
+          } catch (e) {}
+        }
+      }
+    };
+  }, [activeTab, currentUser, scanning]);
+
+  function onScanSuccess(decodedText: string) {
+    // Assuming QR code contains studentId
+    const student = students.find((s: any) => s.studentId === decodedText);
+    if (student) {
+      markAttendance(student, 'Present');
+      setScanResult(`Attendance marked for ${student.name} ${student.surname}`);
+      setTimeout(() => setScanResult(null), 3000);
+    } else {
+      setScanResult("Invalid Student QR Code");
+      setTimeout(() => setScanResult(null), 3000);
+    }
+  }
+
+  function onScanFailure(error: any) {
+    // console.warn(`Code scan error = ${error}`);
+  }
+
+  const markAttendance = (student: any, status: Attendance['status']) => {
+    const today = new Date().toLocaleDateString();
+    
+    setAttendance((prev: Attendance[]) => {
+      const existing = prev.find((a: any) => a.studentId === student.studentId && a.date === today);
+      
+      if (existing) {
+        return prev.map((a: any) => 
+          (a.studentId === student.studentId && a.date === today) ? { ...a, status, time: new Date().toLocaleTimeString() } : a
+        );
+      } else {
+        const newEntry: Attendance = {
+          id: Date.now().toString(),
+          studentId: student.studentId,
+          studentName: `${student.name} ${student.surname}`,
+          class: student.class,
+          section: student.section,
+          status,
+          date: today,
+          time: new Date().toLocaleTimeString(),
+          markedBy: currentUser?.role === 'admin' ? 'Admin' : 'Teacher'
+        };
+        return [...prev, newEntry];
+      }
+    });
+  };
+
+  const handleManualMark = () => {
+    if (selectedStudents.length === 0) {
+      alert("Please select at least one student");
+      return;
+    }
+
+    const studentsToMark = students.filter((s: any) => selectedStudents.includes(s.studentId));
+    
+    const newEntries = studentsToMark.map((s: any) => {
+      const existing = attendance.find((a: any) => a.studentId === s.studentId && a.date === new Date(manualForm.date).toLocaleDateString());
+      if (existing) return null;
+
+      return {
+        id: Math.random().toString(36).substr(2, 9),
+        studentId: s.studentId,
+        studentName: `${s.name} ${s.surname}`,
+        class: s.class,
+        section: s.section,
+        status: manualForm.status,
+        date: new Date(manualForm.date).toLocaleDateString(),
+        time: '--',
+        markedBy: currentUser?.role === 'admin' ? 'Admin' : 'Teacher'
+      };
+    }).filter(Boolean);
+
+    setAttendance([...attendance, ...newEntries]);
+    setSelectedStudents([]);
+    alert(`Attendance marked for ${newEntries.length} students`);
+  };
+
+  const manualFilteredStudents = students.filter((s: any) => {
+    const matchesClass = !manualForm.class || s.class === manualForm.class;
+    const matchesSection = !manualForm.section || s.section === manualForm.section;
+    const matchesSearch = !studentSearch || 
+      `${s.name} ${s.surname}`.toLowerCase().includes(studentSearch.toLowerCase()) ||
+      s.studentId.toLowerCase().includes(studentSearch.toLowerCase());
+    return matchesClass && matchesSection && matchesSearch;
+  });
+
+  const toggleSelectAll = () => {
+    if (selectedStudents.length === manualFilteredStudents.length) {
+      setSelectedStudents([]);
+    } else {
+      setSelectedStudents(manualFilteredStudents.map((s: any) => s.studentId));
+    }
+  };
+
+  const toggleStudentSelection = (studentId: string) => {
+    if (selectedStudents.includes(studentId)) {
+      setSelectedStudents(selectedStudents.filter(id => id !== studentId));
+    } else {
+      setSelectedStudents([...selectedStudents, studentId]);
+    }
+  };
+
+  const filteredHistory = attendance.filter((a: any) => {
+    return (!historyFilters.date || a.date === new Date(historyFilters.date).toLocaleDateString()) &&
+           (!historyFilters.class || a.class === historyFilters.class) &&
+           (!historyFilters.section || a.section === historyFilters.section);
+  });
+
+  const myAttendance = attendance.filter((a: any) => a.studentId === currentUser?.studentId);
+
+  return (
+    <div className="space-y-8">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">Attendance Management 📅</h1>
+          <p className="text-text-secondary">Track student attendance via QR code or manual entry.</p>
+        </div>
+      </div>
+
+      <div className="flex gap-4 p-1 bg-slate-100 rounded-2xl w-fit">
+        {(currentUser?.role === 'admin' || currentUser?.role === 'teacher') ? (
+          [
+            { id: 'scan', label: 'QR Scan', icon: QrCode },
+            { id: 'manual', label: 'Manual Entry', icon: UserCheck },
+            { id: 'history', label: 'History', icon: Clock }
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as any)}
+              className={`flex items-center gap-2 px-6 py-3 rounded-xl font-bold transition-all ${
+                activeTab === tab.id 
+                  ? 'bg-white text-primary shadow-sm' 
+                  : 'text-text-sub hover:bg-white/50'
+              }`}
+            >
+              <tab.icon size={18} />
+              {tab.label}
+            </button>
+          ))
+        ) : (
+          <button
+            className="flex items-center gap-2 px-6 py-3 rounded-xl font-bold bg-white text-primary shadow-sm"
+          >
+            <Clock size={18} />
+            {currentUser?.role === 'parent' ? 'Child Attendance' : 'My Attendance'}
+          </button>
+        )}
+      </div>
+
+      <AnimatePresence mode="wait">
+        {activeTab === 'scan' && (currentUser?.role === 'admin' || currentUser?.role === 'teacher') && (
+          <motion.div key="scan" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              <Card>
+                <h3 className="text-lg font-bold mb-6 flex items-center justify-between gap-2 text-primary">
+                  <div className="flex items-center gap-2">
+                    <QrCode size={20} /> QR Scanner
+                  </div>
+                  {!scanning && (
+                    <button 
+                      onClick={() => setScanning(true)}
+                      className="px-4 py-2 bg-primary text-white rounded-xl text-xs font-bold shadow-lg shadow-primary/20 hover:scale-105 transition-all"
+                    >
+                      Start Camera
+                    </button>
+                  )}
+                  {scanning && (
+                    <button 
+                      onClick={() => setScanning(false)}
+                      className="px-4 py-2 bg-red-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-red-500/20 hover:scale-105 transition-all"
+                    >
+                      Stop Camera
+                    </button>
+                  )}
+                </h3>
+                <div id="reader" className="w-full overflow-hidden rounded-2xl border-2 border-slate-200 min-h-[300px] bg-slate-50 flex items-center justify-center relative">
+                  {!scanning && (
+                    <div className="text-center p-8">
+                      <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-400">
+                        <Camera size={32} />
+                      </div>
+                      <p className="text-sm text-text-sub font-medium">Camera is currently off.</p>
+                      <p className="text-xs text-text-sub/60 mt-1">Click "Start Camera" to begin scanning student QR codes.</p>
+                    </div>
+                  )}
+                </div>
+                {scanResult && (
+                  <div className={`mt-4 p-4 rounded-xl text-center font-bold ${scanResult.includes('Invalid') ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'}`}>
+                    {scanResult}
+                  </div>
+                )}
+                <div className="mt-6 p-4 bg-blue-50 rounded-xl border border-blue-100 flex gap-3">
+                  <AlertCircle className="text-blue-500 shrink-0" size={20} />
+                  <p className="text-xs text-blue-800">Point the camera at the student's ID card QR code to mark them present automatically.</p>
+                </div>
+              </Card>
+
+              <Card>
+                <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-primary">
+                  <CheckCircle2 size={20} /> Today's Scanned Attendance
+                </h3>
+                <div className="space-y-3">
+                  {attendance.filter((a: any) => a.date === new Date().toLocaleDateString()).length === 0 ? (
+                    <div className="text-center py-12 text-text-sub italic">No scans today yet.</div>
+                  ) : (
+                    attendance
+                      .filter((a: any) => a.date === new Date().toLocaleDateString())
+                      .slice(-10)
+                      .reverse()
+                      .map((a: any) => (
+                        <div key={a.id} className="p-3 bg-slate-50 rounded-xl border border-slate-100 flex justify-between items-center">
+                          <div>
+                            <p className="text-sm font-bold">{a.studentName}</p>
+                            <p className="text-[10px] text-text-sub uppercase">{a.class} - {a.section} | {a.time}</p>
+                          </div>
+                          <span className={`text-[10px] font-black px-2 py-1 rounded-full uppercase ${
+                            a.status === 'Present' ? 'bg-green-100 text-green-700' : 
+                            a.status === 'Late' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'
+                          }`}>
+                            {a.status}
+                          </span>
+                        </div>
+                      ))
+                  )}
+                </div>
+              </Card>
+            </div>
+          </motion.div>
+        )}
+
+        {activeTab === 'manual' && (currentUser?.role === 'admin' || currentUser?.role === 'teacher') && (
+          <motion.div key="manual" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              <Card className="lg:col-span-1 h-fit">
+                <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-primary">
+                  <UserCheck size={20} /> Attendance Settings
+                </h3>
+                <div className="space-y-6">
+                  <Select label="Class" options={masterData.classes} value={manualForm.class} onChange={(e: any) => setManualForm({...manualForm, class: e.target.value})} />
+                  <Select label="Section" options={masterData.sections} value={manualForm.section} onChange={(e: any) => setManualForm({...manualForm, section: e.target.value})} />
+                  <Input label="Date" type="date" value={manualForm.date} onChange={(e: any) => setManualForm({...manualForm, date: e.target.value})} />
+                  <Select label="Mark As" options={['Present', 'Absent', 'Late', 'Leave', 'Holiday']} value={manualForm.status} onChange={(e: any) => setManualForm({...manualForm, status: e.target.value as any})} />
+                  
+                  <div className="pt-4 border-t border-slate-100">
+                    <button 
+                      onClick={handleManualMark} 
+                      disabled={selectedStudents.length === 0}
+                      className="btn-primary w-full py-4 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <CheckCircle2 size={20} />
+                      Mark Attendance ({selectedStudents.length})
+                    </button>
+                    <p className="mt-4 text-[10px] text-center text-text-sub italic leading-relaxed">
+                      Select students from the list and click the button to mark their attendance for the selected date.
+                    </p>
+                  </div>
+                </div>
+              </Card>
+
+              <Card className="lg:col-span-2">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                  <h3 className="text-lg font-bold flex items-center gap-2 text-primary">
+                    <Users size={20} /> Student List
+                  </h3>
+                  <div className="relative flex-1 max-w-xs">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                    <input 
+                      type="text" 
+                      placeholder="Search student..." 
+                      className="w-full pl-10 pr-4 py-2 rounded-xl border border-slate-200 focus:border-primary outline-none text-sm transition-all"
+                      value={studentSearch}
+                      onChange={(e) => setStudentSearch(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div className="overflow-hidden rounded-xl border border-slate-100">
+                  <table className="w-full text-left">
+                    <thead className="bg-slate-50">
+                      <tr>
+                        <th className="p-4 w-12">
+                          <input 
+                            type="checkbox" 
+                            className="w-4 h-4 rounded border-slate-300 text-primary focus:ring-primary"
+                            checked={manualFilteredStudents.length > 0 && selectedStudents.length === manualFilteredStudents.length}
+                            onChange={toggleSelectAll}
+                          />
+                        </th>
+                        <th className="p-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Student Info</th>
+                        <th className="p-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Class/Section</th>
+                        <th className="p-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {manualFilteredStudents.length === 0 ? (
+                        <tr>
+                          <td colSpan={4} className="py-12 text-center text-text-sub italic">
+                            No students found matching the criteria.
+                          </td>
+                        </tr>
+                      ) : (
+                        manualFilteredStudents.map((s: any) => {
+                          const isMarked = attendance.find((a: any) => a.studentId === s.studentId && a.date === new Date(manualForm.date).toLocaleDateString());
+                          return (
+                            <tr 
+                              key={s.studentId} 
+                              className={`hover:bg-slate-50/50 transition-colors cursor-pointer ${selectedStudents.includes(s.studentId) ? 'bg-primary/5' : ''}`}
+                              onClick={() => toggleStudentSelection(s.studentId)}
+                            >
+                              <td className="p-4" onClick={(e) => e.stopPropagation()}>
+                                <input 
+                                  type="checkbox" 
+                                  className="w-4 h-4 rounded border-slate-300 text-primary focus:ring-primary"
+                                  checked={selectedStudents.includes(s.studentId)}
+                                  onChange={() => toggleStudentSelection(s.studentId)}
+                                />
+                              </td>
+                              <td className="p-4">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-primary font-bold text-xs">
+                                    {s.name[0]}{s.surname[0]}
+                                  </div>
+                                  <div>
+                                    <p className="text-sm font-bold text-text-heading">{s.name} {s.surname}</p>
+                                    <p className="text-[10px] text-text-sub uppercase">{s.studentId}</p>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="p-4 text-sm font-medium text-text-sub">
+                                {s.class} - {s.section}
+                              </td>
+                              <td className="p-4">
+                                {isMarked ? (
+                                  <span className={`text-[10px] font-black px-2 py-1 rounded-full uppercase ${
+                                    isMarked.status === 'Present' ? 'bg-green-100 text-green-700' : 
+                                    isMarked.status === 'Absent' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
+                                  }`}>
+                                    {isMarked.status}
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] font-bold text-slate-400 uppercase">Not Marked</span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
+            </div>
+          </motion.div>
+        )}
+
+        {(activeTab === 'history' || activeTab === 'my-attendance') && (
+          <motion.div key="history" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+            <Card>
+              {(currentUser?.role === 'admin' || currentUser?.role === 'teacher') && (
+                <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
+                  <div className="flex flex-wrap items-center gap-4">
+                    <div className="flex items-center gap-2 bg-slate-100 px-3 py-2 rounded-xl border border-slate-200">
+                      <Calendar size={16} className="text-text-secondary" />
+                      <input 
+                        type="date" 
+                        className="bg-transparent outline-none text-sm font-medium"
+                        value={historyFilters.date}
+                        onChange={(e) => setHistoryFilters({...historyFilters, date: e.target.value})}
+                      />
+                    </div>
+                    <select 
+                      className="bg-slate-100 px-3 py-2 rounded-xl border border-slate-200 outline-none text-sm font-medium"
+                      value={historyFilters.class}
+                      onChange={(e) => setHistoryFilters({...historyFilters, class: e.target.value})}
+                    >
+                      <option value="">All Classes</option>
+                      {masterData.classes.map((c: string) => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                    <select 
+                      className="bg-slate-100 px-3 py-2 rounded-xl border border-slate-200 outline-none text-sm font-medium"
+                      value={historyFilters.section}
+                      onChange={(e) => setHistoryFilters({...historyFilters, section: e.target.value})}
+                    >
+                      <option value="">All Sections</option>
+                      {masterData.sections.map((s: string) => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                  <thead>
+                    <tr className="border-b border-slate-200">
+                      <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Date</th>
+                      {(currentUser?.role === 'admin' || currentUser?.role === 'teacher') && <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Student</th>}
+                      <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Class</th>
+                      <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Status</th>
+                      <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Time</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {((currentUser?.role === 'admin' || currentUser?.role === 'teacher') ? filteredHistory : myAttendance).length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="py-12 text-center text-text-sub italic">No attendance records found.</td>
+                      </tr>
+                    ) : (
+                      ((currentUser?.role === 'admin' || currentUser?.role === 'teacher') ? filteredHistory : myAttendance).map((a: any) => (
+                        <tr key={a.id} className="hover:bg-slate-50/50 transition-colors">
+                          <td className="py-4 text-sm font-medium text-text-sub">{a.date}</td>
+                          {(currentUser?.role === 'admin' || currentUser?.role === 'teacher') && (
+                            <td className="py-4">
+                              <p className="text-sm font-bold text-text-heading">{a.studentName}</p>
+                              <p className="text-[10px] text-text-sub uppercase">{a.studentId}</p>
+                            </td>
+                          )}
+                          <td className="py-4 text-sm font-medium text-text-sub">{a.class} - {a.section}</td>
+                          <td className="py-4">
+                            <span className={`text-[10px] font-black px-2 py-1 rounded-full uppercase ${
+                              a.status === 'Present' ? 'bg-green-100 text-green-700' : 
+                              a.status === 'Absent' ? 'bg-red-100 text-red-700' : 
+                              a.status === 'Late' ? 'bg-amber-100 text-amber-700' : 
+                              a.status === 'Leave' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-700'
+                            }`}>
+                              {a.status}
+                            </span>
+                          </td>
+                          <td className="py-4 text-sm font-medium text-text-sub">{a.time}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
+const Academics = ({
+  students,
+  setStudents,
+  masterData,
+  timeTables,
+  setTimeTables,
+  syllabuses,
+  setSyllabuses,
+  homeworks,
+  setHomeworks,
+  teacherAssignments,
+  setTeacherAssignments,
+  currentUser
+}: any) => {
+  const [activeTab, setActiveTab] = useState<'timetable' | 'assignments' | 'promotion' | 'syllabus' | 'homework' | 'planner'>('timetable');
+  
+  // Filter data based on user role
+  const filteredTimeTables = (currentUser?.role === 'admin' || currentUser?.role === 'teacher')
+    ? timeTables 
+    : timeTables.filter((t: any) => t.class === currentUser?.class && t.section === currentUser?.section);
+    
+  const filteredSyllabuses = (currentUser?.role === 'admin' || currentUser?.role === 'teacher')
+    ? syllabuses
+    : syllabuses.filter((s: any) => s.class === currentUser?.class);
+    
+  const filteredHomeworks = (currentUser?.role === 'admin' || currentUser?.role === 'teacher')
+    ? homeworks
+    : homeworks.filter((h: any) => h.class === currentUser?.class && h.section === currentUser?.section);
+
+  const filteredAssignments = (currentUser?.role === 'admin')
+    ? teacherAssignments
+    : (currentUser?.role === 'teacher')
+      ? teacherAssignments.filter((a: any) => a.classTeacher === currentUser.name || a.subjectTeachers.some((st: any) => st.teacher === currentUser.name))
+      : teacherAssignments.filter((a: any) => a.class === currentUser?.class && a.section === currentUser?.section);
+    
+  // Time Table Form
+  const [ttForm, setTtForm] = useState({
+    class: '',
+    section: '',
+    day: 'Monday',
+    startTime: '',
+    endTime: '',
+    subject: '',
+    teacher: ''
+  });
+
+  // Assignment Form
+  const [assignForm, setAssignForm] = useState({
+    class: '',
+    section: '',
+    classTeacher: '',
+    subject: '',
+    teacher: '',
+    session: '2024-25'
+  });
+
+  // Syllabus Form
+  const [syllabusForm, setSyllabusForm] = useState({
+    class: '',
+    subject: '',
+    title: '',
+    description: ''
+  });
+
+  // Homework Form
+  const [homeworkForm, setHomeworkForm] = useState({
+    class: '',
+    section: '',
+    subject: '',
+    title: '',
+    description: '',
+    dueDate: ''
+  });
+
+  const [isGeneratingAI, setIsGeneratingAI] = useState(false);
+  const [homeworkFile, setHomeworkFile] = useState<File | null>(null);
+
+  const generateAITimeTable = async () => {
+    if (!ttForm.class || !ttForm.section) {
+      alert('Please select Class and Section first');
+      return;
+    }
+    
+    setIsGeneratingAI(true);
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY! });
+      const prompt = `Generate a weekly school time table for Class ${ttForm.class} Section ${ttForm.section}. 
+      Available Subjects: ${masterData.subjects.join(', ')}. 
+      Available Teachers: ${masterData.teachers.join(', ')}. 
+      Format: JSON array of objects with fields: day (Monday-Friday), startTime, endTime, subject, teacher. 
+      Ensure no teacher is double booked. Return ONLY the JSON array.`;
+      
+      const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: prompt,
+        config: { responseMimeType: "application/json" }
+      });
+      
+      const result = JSON.parse(response.text);
+      const newEntries = result.map((entry: any) => ({
+        ...entry,
+        id: Math.random().toString(36).substr(2, 9),
+        class: ttForm.class,
+        section: ttForm.section
+      }));
+      
+      setTimeTables([...timeTables, ...newEntries]);
+      alert('AI Time Table generated successfully!');
+    } catch (error) {
+      console.error('AI Generation error:', error);
+      alert('Failed to generate AI Time Table');
+    } finally {
+      setIsGeneratingAI(false);
+    }
+  };
+
+  const handleAddTimeTable = () => {
+    if (!ttForm.class || !ttForm.section || !ttForm.subject) return;
+    
+    const existing = timeTables.find((t: any) => t.class === ttForm.class && t.section === ttForm.section);
+    if (existing) {
+      const updated = timeTables.map((t: any) => {
+        if (t.class === ttForm.class && t.section === ttForm.section) {
+          return { ...t, entries: [...t.entries, { day: ttForm.day, startTime: ttForm.startTime, endTime: ttForm.endTime, subject: ttForm.subject, teacher: ttForm.teacher }] };
+        }
+        return t;
+      });
+      setTimeTables(updated);
+    } else {
+      setTimeTables([...timeTables, {
+        id: Date.now().toString(),
+        class: ttForm.class,
+        section: ttForm.section,
+        entries: [{ day: ttForm.day, startTime: ttForm.startTime, endTime: ttForm.endTime, subject: ttForm.subject, teacher: ttForm.teacher }]
+      }]);
+    }
+    alert('Time table entry added!');
+  };
+
+  const handleAssignTeacher = () => {
+    if (!assignForm.class || !assignForm.section) return;
+    
+    const existing = teacherAssignments.find((a: any) => a.class === assignForm.class && a.section === assignForm.section && a.session === assignForm.session);
+    if (existing) {
+      const updated = teacherAssignments.map((a: any) => {
+        if (a.class === assignForm.class && a.section === assignForm.section && a.session === assignForm.session) {
+          const newSubjectTeachers = [...a.subjectTeachers];
+          if (assignForm.subject && assignForm.teacher) {
+            // Check if subject already assigned
+            const subIdx = newSubjectTeachers.findIndex(st => st.subject === assignForm.subject);
+            if (subIdx > -1) {
+              newSubjectTeachers[subIdx].teacher = assignForm.teacher;
+            } else {
+              newSubjectTeachers.push({ subject: assignForm.subject, teacher: assignForm.teacher });
+            }
+          }
+          return { ...a, classTeacher: assignForm.classTeacher || a.classTeacher, subjectTeachers: newSubjectTeachers };
+        }
+        return a;
+      });
+      setTeacherAssignments(updated);
+    } else {
+      setTeacherAssignments([...teacherAssignments, {
+        id: Date.now().toString(),
+        class: assignForm.class,
+        section: assignForm.section,
+        classTeacher: assignForm.classTeacher,
+        session: assignForm.session,
+        subjectTeachers: assignForm.subject && assignForm.teacher ? [{ subject: assignForm.subject, teacher: assignForm.teacher }] : []
+      }]);
+    }
+    alert('Teacher assigned!');
+  };
+
+  const handleAddSyllabus = () => {
+    if (!syllabusForm.class || !syllabusForm.subject || !syllabusForm.title) return;
+    setSyllabuses([...syllabuses, {
+      ...syllabusForm,
+      id: Date.now().toString(),
+      date: new Date().toLocaleDateString()
+    }]);
+    alert('Syllabus added!');
+  };
+
+  const handleAddHomework = () => {
+    if (!homeworkForm.class || !homeworkForm.section || !homeworkForm.subject) return;
+    setHomeworks([...homeworks, {
+      ...homeworkForm,
+      id: Date.now().toString(),
+      teacherName: currentUser?.role === 'teacher' ? currentUser.name : 'Admin',
+      date: new Date().toLocaleDateString(),
+      submissions: [],
+      file: homeworkFile ? URL.createObjectURL(homeworkFile) : undefined
+    }]);
+    setHomeworkForm({ class: '', section: '', subject: '', title: '', description: '', dueDate: '' });
+    setHomeworkFile(null);
+    alert('Homework uploaded!');
+  };
+
+  const handleStudentSubmit = (homeworkId: string, file: File) => {
+    const updatedHomeworks = homeworks.map((h: any) => {
+      if (h.id === homeworkId) {
+        return {
+          ...h,
+          submissions: [
+            ...(h.submissions || []),
+            {
+              studentId: currentUser.id,
+              studentName: currentUser.name,
+              file: URL.createObjectURL(file),
+              date: new Date().toLocaleString()
+            }
+          ]
+        };
+      }
+      return h;
+    });
+    setHomeworks(updatedHomeworks);
+    alert('Homework submitted successfully!');
+  };
+
+  const handlePromoteStudents = (fromClass: string, toClass: string) => {
+    if (!fromClass || !toClass) return;
+    const updated = students.map((s: any) => {
+      if (s.class === fromClass) {
+        return { ...s, class: toClass };
+      }
+      return s;
+    });
+    setStudents(updated);
+    alert(`Students promoted from ${fromClass} to ${toClass}!`);
+  };
+
+  return (
+    <div className="space-y-8">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">Academics Module 🎓</h1>
+          <p className="text-text-secondary">Manage time tables, teacher assignments, syllabus, and student promotions.</p>
+        </div>
+      </div>
+
+      <div className="flex gap-4 p-1 bg-slate-100 rounded-2xl w-fit">
+        {[
+          { id: 'timetable', label: 'Time Table', icon: Clock },
+          { id: 'assignments', label: 'Teacher Assignments', icon: UserCheck },
+          { id: 'promotion', label: 'Promotion', icon: ArrowUpCircle, adminOnly: true },
+          { id: 'syllabus', label: 'Syllabus', icon: BookOpen },
+          { 
+            id: 'homework', 
+            label: 'Homework', 
+            icon: () => (
+              <img 
+                src="https://storage.googleapis.com/cortex-dev-cortex-build-public-assets/ais-dev-qwpf4dfgd7b2nhd2genpku-212916940376/nehatripathifreelance%40gmail.com/1742561480073-image-2.png" 
+                alt="HW" 
+                className="w-5 h-5 object-contain"
+                referrerPolicy="no-referrer"
+              />
+            ) 
+          },
+          { id: 'planner', label: 'Academic Planner', icon: Calendar }
+        ].filter(tab => !tab.adminOnly || currentUser?.role === 'admin').map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id as any)}
+            className={`flex items-center gap-2 px-6 py-3 rounded-xl font-bold transition-all ${
+              activeTab === tab.id 
+                ? 'bg-white text-primary shadow-sm' 
+                : 'text-text-sub hover:bg-white/50'
+            }`}
+          >
+            {(() => {
+              const TabIcon = tab.icon as React.ElementType;
+              return typeof tab.icon === 'function' ? <TabIcon /> : <TabIcon size={18} />;
+            })()}
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      <AnimatePresence mode="wait">
+        {activeTab === 'timetable' && (
+          <motion.div key="timetable" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              {(currentUser?.role === 'admin' || currentUser?.role === 'teacher') && (
+                <Card className="lg:col-span-1">
+                  <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-primary">
+                    <Plus size={20} /> Add Time Table Entry
+                  </h3>
+                  <div className="space-y-4">
+                    <Select label="Class" options={masterData.classes} value={ttForm.class} onChange={(e: any) => setTtForm({...ttForm, class: e.target.value})} />
+                    <Select label="Section" options={masterData.sections} value={ttForm.section} onChange={(e: any) => setTtForm({...ttForm, section: e.target.value})} />
+                    <Select label="Day" options={['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']} value={ttForm.day} onChange={(e: any) => setTtForm({...ttForm, day: e.target.value})} />
+                    <div className="grid grid-cols-2 gap-4">
+                      <Input label="Start Time" type="time" value={ttForm.startTime} onChange={(e: any) => setTtForm({...ttForm, startTime: e.target.value})} />
+                      <Input label="End Time" type="time" value={ttForm.endTime} onChange={(e: any) => setTtForm({...ttForm, endTime: e.target.value})} />
+                    </div>
+                    <Select label="Subject" options={masterData.subjects} value={ttForm.subject} onChange={(e: any) => setTtForm({...ttForm, subject: e.target.value})} />
+                    <Input label="Teacher Name" value={ttForm.teacher} onChange={(e: any) => setTtForm({...ttForm, teacher: e.target.value})} />
+                    <button onClick={handleAddTimeTable} className="btn-primary w-full py-3 mt-4">Add Entry</button>
+                    <div className="relative py-4">
+                      <div className="absolute inset-0 flex items-center"><span className="w-full border-t border-slate-200"></span></div>
+                      <div className="relative flex justify-center text-xs uppercase"><span className="bg-white px-2 text-slate-400">Or use AI</span></div>
+                    </div>
+                    <button 
+                      onClick={generateAITimeTable} 
+                      disabled={isGeneratingAI}
+                      className="w-full py-3 rounded-xl font-bold bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-all flex items-center justify-center gap-2 border border-indigo-100"
+                    >
+                      {isGeneratingAI ? <Clock className="animate-spin" size={18} /> : <Sparkles size={18} />}
+                      {isGeneratingAI ? 'Generating...' : 'AI Generate Time Table'}
+                    </button>
+                  </div>
+                </Card>
+              )}
+
+              <Card className={(currentUser?.role === 'admin' || currentUser?.role === 'teacher') ? "lg:col-span-2" : "lg:col-span-3"}>
+                <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-primary">
+                  <Clock size={20} /> {(currentUser?.role === 'admin' || currentUser?.role === 'teacher') ? 'Class Time Tables' : 'My Time Table'}
+                </h3>
+                <div className="space-y-6">
+                  {filteredTimeTables.length === 0 ? (
+                    <div className="text-center py-12 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                      <p className="text-text-sub">No time tables set yet.</p>
+                    </div>
+                  ) : (
+                    filteredTimeTables.map((tt: any) => (
+                      <div key={tt.id} className="p-6 bg-slate-50 rounded-2xl border border-slate-100">
+                        <div className="flex items-center justify-between mb-4">
+                          <h4 className="font-bold text-lg">{tt.class} - Section {tt.section}</h4>
+                        </div>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left border-collapse">
+                            <thead>
+                              <tr className="text-xs font-bold text-text-secondary uppercase tracking-wider border-b border-slate-200">
+                                <th className="pb-3">Day</th>
+                                <th className="pb-3">Time</th>
+                                <th className="pb-3">Subject</th>
+                                <th className="pb-3">Teacher</th>
+                              </tr>
+                            </thead>
+                            <tbody className="text-sm">
+                              {tt.entries.map((entry: any, idx: number) => (
+                                <tr key={idx} className="border-b border-slate-100 last:border-0">
+                                  <td className="py-3 font-medium">{entry.day}</td>
+                                  <td className="py-3">{entry.startTime} - {entry.endTime}</td>
+                                  <td className="py-3">{entry.subject}</td>
+                                  <td className="py-3">{entry.teacher}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </Card>
+            </div>
+          </motion.div>
+        )}
+
+        {activeTab === 'assignments' && (
+          <motion.div key="assignments" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              {currentUser?.role === 'admin' && (
+                <Card className="lg:col-span-1">
+                  <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-primary">
+                    <UserCheck size={20} /> Assign Teacher
+                  </h3>
+                  <div className="space-y-4">
+                    <Select label="Session" options={masterData.sessions} value={assignForm.session} onChange={(e: any) => setAssignForm({...assignForm, session: e.target.value})} />
+                    <Select label="Class" options={masterData.classes} value={assignForm.class} onChange={(e: any) => setAssignForm({...assignForm, class: e.target.value})} />
+                    <Select label="Section" options={masterData.sections} value={assignForm.section} onChange={(e: any) => setAssignForm({...assignForm, section: e.target.value})} />
+                    <Input label="Class Teacher Name" value={assignForm.classTeacher} onChange={(e: any) => setAssignForm({...assignForm, classTeacher: e.target.value})} />
+                    <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 space-y-4">
+                      <p className="text-xs font-bold text-text-sub uppercase">Subject Teacher Assignment</p>
+                      <Select label="Subject" options={masterData.subjects} value={assignForm.subject} onChange={(e: any) => setAssignForm({...assignForm, subject: e.target.value})} />
+                      <Select label="Teacher" options={masterData.teachers} value={assignForm.teacher} onChange={(e: any) => setAssignForm({...assignForm, teacher: e.target.value})} />
+                    </div>
+                    <button onClick={handleAssignTeacher} className="btn-primary w-full py-3 mt-4">Assign</button>
+                  </div>
+                </Card>
+              )}
+
+              <Card className={(currentUser?.role === 'admin' || currentUser?.role === 'teacher') ? "lg:col-span-2" : "lg:col-span-3"}>
+                <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-primary">
+                  <ClipboardList size={20} /> {(currentUser?.role === 'admin' || currentUser?.role === 'teacher') ? 'Class Assignments' : 'My Teachers'}
+                </h3>
+                <div className="space-y-6">
+                  {filteredAssignments.length === 0 ? (
+                    <div className="text-center py-12 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                      <p className="text-text-sub">No teachers assigned yet.</p>
+                    </div>
+                  ) : (
+                    filteredAssignments.map((ca: any) => (
+                      <div key={ca.id} className="p-6 bg-slate-50 rounded-2xl border border-slate-100 hover:border-primary/20 transition-all group">
+                        <div className="flex items-start justify-between mb-4">
+                          <div>
+                            <div className="flex items-center gap-2 mb-1">
+                              <h4 className="font-bold text-lg">{ca.class} - Section {ca.section}</h4>
+                              <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-black uppercase tracking-wider">{ca.session}</span>
+                            </div>
+                            <span className="text-sm text-text-sub font-bold">Class Teacher: {ca.classTeacher}</span>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          {ca.subjectTeachers.map((st: any, idx: number) => (
+                            <div key={idx} className="bg-white p-3 rounded-xl border border-slate-200 flex justify-between items-center">
+                              <span className="text-sm font-bold">{st.subject}</span>
+                              <span className="text-sm text-text-sub">{st.teacher}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </Card>
+            </div>
+          </motion.div>
+        )}
+
+        {activeTab === 'promotion' && (
+          <motion.div key="promotion" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+            <Card>
+              <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-primary">
+                <ArrowUpCircle size={20} /> Promote Students
+              </h3>
+              <p className="text-text-sub mb-8">Select the current class and the class to promote students to. All students in the current class will be updated.</p>
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-end">
+                <Select id="promote-from" label="Current Class" options={masterData.classes} />
+                <div className="flex justify-center pb-4">
+                  <ArrowRightLeft className="text-slate-300" size={32} />
+                </div>
+                <Select id="promote-to" label="Next Class" options={masterData.classes} />
+              </div>
+              
+              <div className="mt-12 p-6 bg-amber-50 rounded-2xl border border-amber-100 flex gap-4">
+                <AlertCircle className="text-amber-500 shrink-0" size={24} />
+                <div>
+                  <h4 className="font-bold text-amber-900">Important Note</h4>
+                  <p className="text-sm text-amber-800">Student promotion is a bulk action. Ensure you have finalized all results before proceeding. This action will update the class for all students currently in the selected "Current Class".</p>
+                </div>
+              </div>
+
+              <button 
+                onClick={() => {
+                  const from = (document.getElementById('promote-from') as any)?.value;
+                  const to = (document.getElementById('promote-to') as any)?.value;
+                  if (from && to) handlePromoteStudents(from, to);
+                }}
+                className="btn-primary px-12 py-4 mt-8"
+              >
+                Execute Bulk Promotion
+              </button>
+            </Card>
+          </motion.div>
+        )}
+
+        {activeTab === 'syllabus' && (
+          <motion.div key="syllabus" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              {(currentUser?.role === 'admin' || currentUser?.role === 'teacher') && (
+                <Card className="lg:col-span-1">
+                  <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-primary">
+                    <Plus size={20} /> Prepare Syllabus
+                  </h3>
+                  <div className="space-y-4">
+                    <Select label="Class" options={masterData.classes} value={syllabusForm.class} onChange={(e: any) => setSyllabusForm({...syllabusForm, class: e.target.value})} />
+                    <Select label="Subject" options={masterData.subjects} value={syllabusForm.subject} onChange={(e: any) => setSyllabusForm({...syllabusForm, subject: e.target.value})} />
+                    <Input label="Syllabus Title" value={syllabusForm.title} onChange={(e: any) => setSyllabusForm({...syllabusForm, title: e.target.value})} />
+                    <div className="space-y-2">
+                      <label className="label-text">Description / Topics</label>
+                      <textarea 
+                        className="input-field min-h-[150px]" 
+                        value={syllabusForm.description}
+                        onChange={(e: any) => setSyllabusForm({...syllabusForm, description: e.target.value})}
+                      ></textarea>
+                    </div>
+                    <FileUpload label="Upload Syllabus PDF (Optional)" />
+                    <button onClick={handleAddSyllabus} className="btn-primary w-full py-3 mt-4">Save Syllabus</button>
+                  </div>
+                </Card>
+              )}
+
+              <Card className={(currentUser?.role === 'admin' || currentUser?.role === 'teacher') ? "lg:col-span-2" : "lg:col-span-3"}>
+                <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-primary">
+                  <BookOpen size={20} /> {(currentUser?.role === 'admin' || currentUser?.role === 'teacher') ? 'Published Syllabus' : 'My Syllabus'}
+                </h3>
+                <div className="space-y-6">
+                  {filteredSyllabuses.length === 0 ? (
+                    <div className="text-center py-12 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                      <p className="text-text-sub">No syllabus prepared yet.</p>
+                    </div>
+                  ) : (
+                    filteredSyllabuses.map((s: any) => (
+                      <div key={s.id} className="p-6 bg-slate-50 rounded-2xl border border-slate-100">
+                        <div className="flex items-center justify-between mb-4">
+                          <div>
+                            <h4 className="font-bold text-lg">{s.title}</h4>
+                            <p className="text-sm text-text-sub">{s.class} | {s.subject}</p>
+                          </div>
+                          <span className="text-xs text-text-sub">{s.date}</span>
+                        </div>
+                        <p className="text-sm text-text-secondary whitespace-pre-wrap">{s.description}</p>
+                        <button className="mt-4 flex items-center gap-2 text-primary text-sm font-bold hover:underline">
+                          <Download size={16} /> Download PDF
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </Card>
+            </div>
+          </motion.div>
+        )}
+
+        {activeTab === 'homework' && (
+          <motion.div key="homework" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              {(currentUser?.role === 'admin' || currentUser?.role === 'teacher') && (
+                <Card className="lg:col-span-1">
+                  <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-primary">
+                    <Upload size={20} /> Upload Homework
+                  </h3>
+                  <div className="space-y-4">
+                    <Select label="Class" options={masterData.classes} value={homeworkForm.class} onChange={(e: any) => setHomeworkForm({...homeworkForm, class: e.target.value})} />
+                    <Select label="Section" options={masterData.sections} value={homeworkForm.section} onChange={(e: any) => setHomeworkForm({...homeworkForm, section: e.target.value})} />
+                    <Select label="Subject" options={masterData.subjects} value={homeworkForm.subject} onChange={(e: any) => setHomeworkForm({...homeworkForm, subject: e.target.value})} />
+                    <Input label="Homework Title" value={homeworkForm.title} onChange={(e: any) => setHomeworkForm({...homeworkForm, title: e.target.value})} />
+                    <div className="space-y-2">
+                      <label className="label-text">Instructions</label>
+                      <textarea 
+                        className="input-field min-h-[150px]" 
+                        value={homeworkForm.description}
+                        onChange={(e: any) => setHomeworkForm({...homeworkForm, description: e.target.value})}
+                      ></textarea>
+                    </div>
+                    <Input label="Due Date" type="date" value={homeworkForm.dueDate} onChange={(e: any) => setHomeworkForm({...homeworkForm, dueDate: e.target.value})} />
+                    <div className="space-y-2">
+                      <label className="label-text">Homework PDF (Optional)</label>
+                      <input 
+                        type="file" 
+                        accept=".pdf"
+                        onChange={(e) => setHomeworkFile(e.target.files?.[0] || null)}
+                        className="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
+                      />
+                    </div>
+                    <button onClick={handleAddHomework} className="btn-primary w-full py-3 mt-4">Upload Homework</button>
+                  </div>
+                </Card>
+              )}
+
+              <Card className={(currentUser?.role === 'admin' || currentUser?.role === 'teacher') ? "lg:col-span-2" : "lg:col-span-3"}>
+                <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-primary">
+                  <FileEdit size={20} /> {(currentUser?.role === 'admin' || currentUser?.role === 'teacher') ? 'Homework List' : 'My Homework'}
+                </h3>
+                <div className="space-y-6">
+                  {filteredHomeworks.length === 0 ? (
+                    <div className="text-center py-12 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                      <p className="text-text-sub">No homework uploaded yet.</p>
+                    </div>
+                  ) : (
+                    filteredHomeworks.map((h: any) => (
+                      <div key={h.id} className="p-6 bg-slate-50 rounded-2xl border border-slate-100">
+                        <div className="flex items-center justify-between mb-4">
+                          <div>
+                            <h4 className="font-bold text-lg">{h.title}</h4>
+                            <p className="text-sm text-text-sub">{h.class} - {h.section} | {h.subject}</p>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-xs font-bold text-red-500 block">Due: {h.dueDate}</span>
+                            <span className="text-[10px] text-text-sub">By {h.teacherName}</span>
+                          </div>
+                        </div>
+                        <p className="text-sm text-text-secondary whitespace-pre-wrap">{h.description}</p>
+                        
+                        {h.file && (
+                          <a href={h.file} target="_blank" rel="noreferrer" className="mt-4 inline-flex items-center gap-2 text-primary text-sm font-bold hover:underline">
+                            <FileDown size={16} /> Download Assignment PDF
+                          </a>
+                        )}
+
+                        {/* Student Submission Section */}
+                        {currentUser?.role === 'student' && (
+                          <div className="mt-6 pt-6 border-t border-slate-100">
+                            <h5 className="text-sm font-bold mb-3 flex items-center gap-2">
+                              <Upload size={16} /> Submit Your Work
+                            </h5>
+                            <div className="flex items-center gap-4">
+                              <input 
+                                type="file" 
+                                accept=".pdf"
+                                onChange={(e) => {
+                                  const file = e.target.files?.[0];
+                                  if (file) handleStudentSubmit(h.id, file);
+                                }}
+                                className="text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200"
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Admin/Teacher View Submissions */}
+                        {(currentUser?.role === 'admin' || currentUser?.role === 'teacher') && h.submissions?.length > 0 && (
+                          <div className="mt-6 pt-6 border-t border-slate-100">
+                            <h5 className="text-sm font-bold mb-3 flex items-center gap-2">
+                              <ClipboardList size={16} /> Submissions ({h.submissions.length})
+                            </h5>
+                            <div className="space-y-2">
+                              {h.submissions.map((sub: any, idx: number) => (
+                                <div key={idx} className="flex items-center justify-between p-3 bg-white rounded-xl border border-slate-100">
+                                  <div>
+                                    <p className="text-sm font-bold">{sub.studentName}</p>
+                                    <p className="text-[10px] text-text-sub">{sub.date}</p>
+                                  </div>
+                                  <a href={sub.file} target="_blank" rel="noreferrer" className="text-primary hover:text-primary-dark">
+                                    <Eye size={18} />
+                                  </a>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </Card>
+            </div>
+          </motion.div>
+        )}
+
+        {activeTab === 'planner' && (
+          <motion.div key="planner" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+            <AcademicPlanner currentUser={currentUser} />
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
+const AcademicPlanner = ({ currentUser }: any) => {
+  const [holidays, setHolidays] = useState<any[]>([
+    { date: '2026-01-26', title: 'Republic Day', type: 'National', icon: '🇮🇳' },
+    { date: '2026-08-15', title: 'Independence Day', type: 'National', icon: '🇮🇳' },
+    { date: '2026-10-02', title: 'Gandhi Jayanti', type: 'National', icon: '👓' },
+    { date: '2026-12-25', title: 'Christmas', type: 'Festival', icon: '🎄' },
+    { date: '2026-03-04', title: 'Holi', type: 'Festival', icon: '🎨' },
+    { date: '2026-11-08', title: 'Diwali', type: 'Festival', icon: '🪔' },
+    { date: '2026-03-20', title: 'Eid al-Fitr', type: 'Festival', icon: '🌙' },
+  ]);
+
+  const months = [
+    { name: 'APRIL', days: 30, year: 2026, monthIdx: 3 },
+    { name: 'MAY', days: 31, year: 2026, monthIdx: 4 },
+    { name: 'JUNE', days: 30, year: 2026, monthIdx: 5 },
+    { name: 'JULY', days: 31, year: 2026, monthIdx: 6 },
+    { name: 'AUGUST', days: 31, year: 2026, monthIdx: 7 },
+    { name: 'SEPTEMBER', days: 30, year: 2026, monthIdx: 8 },
+    { name: 'OCTOBER', days: 31, year: 2026, monthIdx: 9 },
+    { name: 'NOVEMBER', days: 30, year: 2026, monthIdx: 10 },
+    { name: 'DECEMBER', days: 31, year: 2026, monthIdx: 11 },
+    { name: 'JANUARY', days: 31, year: 2027, monthIdx: 0 },
+    { name: 'FEBRUARY', days: 28, year: 2027, monthIdx: 1 },
+    { name: 'MARCH', days: 31, year: 2027, monthIdx: 2 },
+  ];
+
+  const days = Array.from({ length: 31 }, (_, i) => i + 1);
+
+  const getHoliday = (day: number, month: any) => {
+    const dateStr = `${month.year}-${String(month.monthIdx + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    return holidays.find(h => h.date === dateStr);
+  };
+
+  const isSunday = (day: number, month: any) => {
+    const date = new Date(month.year, month.monthIdx, day);
+    return date.getDay() === 0;
+  };
+
+  const getDayName = (day: number, month: any) => {
+    const date = new Date(month.year, month.monthIdx, day);
+    return date.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase();
+  };
+
+  const handleGoogleCalendarSync = async () => {
+    try {
+      const response = await fetch('/api/auth/google/url');
+      if (!response.ok) throw new Error('Failed to get auth URL');
+      const { url } = await response.json();
+      
+      const authWindow = window.open(url, 'google_oauth', 'width=600,height=700');
+      if (!authWindow) {
+        alert('Please allow popups to sync with Google Calendar');
+      }
+    } catch (error) {
+      console.error('Sync error:', error);
+      alert('Failed to initiate Google Calendar sync');
+    }
+  };
+
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'OAUTH_AUTH_SUCCESS') {
+        alert('Successfully synced with Google Calendar!');
+        // In a real app, we would fetch the events here
+        setHolidays(prev => [
+          ...prev,
+          { date: '2026-09-13', title: 'Grandparents Day', type: 'Other', icon: '👴' },
+          { date: '2026-08-28', title: 'Raksha Bandhan', type: 'Festival', icon: '🪢' },
+        ]);
+      }
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
+
+  return (
+    <Card className="overflow-hidden p-0 border-none shadow-2xl bg-slate-900">
+      <div className="p-6 flex items-center justify-between bg-gradient-to-r from-slate-800 to-slate-900 border-b border-slate-700">
+        <div>
+          <h2 className="text-2xl font-black text-white tracking-tighter uppercase">Academic Planner 2026-27</h2>
+          <p className="text-slate-400 text-sm font-medium">Annual Academic Calendar & Holiday List</p>
+        </div>
+        {currentUser?.role === 'admin' && (
+          <button 
+            onClick={handleGoogleCalendarSync}
+            className="flex items-center gap-2 bg-white text-slate-900 px-4 py-2 rounded-full font-bold text-sm hover:bg-slate-100 transition-all shadow-lg"
+          >
+            <Calendar size={18} />
+            Sync Google Calendar
+          </button>
+        )}
+      </div>
+
+      <div className="overflow-x-auto">
+        <div className="min-w-[1200px]">
+          {/* Header Row */}
+          <div className="grid grid-cols-[80px_repeat(12,1fr)] bg-slate-800 border-b border-slate-700">
+            <div className="p-4 flex flex-col items-center justify-center border-r border-slate-700">
+              <span className="text-white font-black text-xl italic leading-none">D/</span>
+              <span className="text-white font-black text-xl italic leading-none">M</span>
+            </div>
+            {months.map((m, idx) => (
+              <div key={idx} className="p-4 text-center border-r border-slate-700 last:border-0 bg-gradient-to-b from-indigo-600/20 to-transparent">
+                <span className="text-indigo-400 font-black text-sm tracking-widest">{m.name}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Days Rows */}
+          {days.map((day) => (
+            <div key={day} className="grid grid-cols-[80px_repeat(12,1fr)] border-b border-slate-800 last:border-0">
+              <div className="p-4 flex items-center justify-center bg-slate-800/50 border-r border-slate-700">
+                <span className="text-white font-black text-2xl italic">{day}</span>
+              </div>
+              {months.map((m, idx) => {
+                const holiday = getHoliday(day, m);
+                const sunday = isSunday(day, m);
+                const dayName = getDayName(day, m);
+                const isInvalidDate = day > m.days;
+
+                return (
+                  <div 
+                    key={idx} 
+                    className={`p-2 min-h-[100px] border-r border-slate-800 last:border-0 transition-all relative group
+                      ${isInvalidDate ? 'bg-slate-900/50' : 'bg-slate-900 hover:bg-slate-800/50'}
+                      ${holiday ? 'ring-1 ring-inset ring-indigo-500/50' : ''}
+                    `}
+                  >
+                    {!isInvalidDate && (
+                      <>
+                        <div className="flex justify-between items-start mb-1">
+                          <span className={`text-[10px] font-bold tracking-tighter ${sunday ? 'text-rose-500' : 'text-slate-600'}`}>
+                            {dayName}
+                          </span>
+                          {currentUser?.role === 'admin' && !holiday && (
+                            <button className="opacity-0 group-hover:opacity-100 text-indigo-500 hover:text-indigo-400 transition-opacity">
+                              <Plus size={12} />
+                            </button>
+                          )}
+                        </div>
+                        
+                        {holiday && (
+                          <div className="flex flex-col items-center justify-center h-full pb-4">
+                            <span className="text-3xl mb-1 drop-shadow-lg">{holiday.icon}</span>
+                            <span className={`text-[9px] font-black text-center leading-tight uppercase px-1 py-0.5 rounded
+                              ${holiday.type === 'National' ? 'bg-indigo-500 text-white' : 'bg-slate-700 text-slate-300'}
+                            `}>
+                              {holiday.title}
+                            </span>
+                          </div>
+                        )}
+
+                        {sunday && !holiday && (
+                          <div className="flex items-center justify-center h-full pb-4">
+                            <span className="text-rose-900/30 font-black text-xs tracking-widest uppercase rotate-45">Sunday</span>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      </div>
+    </Card>
+  );
+};
+
+const FeeManagement = ({ 
+  students, 
+  feeTypes, 
+  setFeeTypes, 
+  feeMaster, 
+  setFeeMaster, 
+  feeTransactions, 
+  setFeeTransactions,
+  schoolProfile,
+  masterData,
+  showModal
+}: any) => {
+  const [activeTab, setActiveTab] = useState<'collect' | 'master' | 'reports'>('collect');
+  const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+  const [selectedFeeType, setSelectedFeeType] = useState('');
+  const [paymentDetails, setPaymentDetails] = useState({
+    mode: 'Cash' as 'Cash' | 'UPI' | 'Bank Transfer',
+    transactionId: '',
+    discount: 0,
+    discountReason: '',
+    scholarship: 0,
+    dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+  });
+  const [showReceipt, setShowReceipt] = useState<FeeTransaction | null>(null);
+  const [filters, setFilters] = useState({
+    date: '',
+    class: '',
+    section: ''
+  });
+
+  const handleCollectFee = () => {
+    if (!selectedStudent || !selectedFeeType) {
+      alert('Please select student and fee type');
+      return;
+    }
+
+    const feeInfo = feeMaster.find((f: any) => f.class === selectedStudent.class && f.feeType === selectedFeeType);
+    if (!feeInfo) {
+      alert('Fee not configured for this class and type in Fee Master');
+      return;
+    }
+
+    // Duplicate Transaction ID check
+    if (paymentDetails.mode !== 'Cash' && paymentDetails.transactionId) {
+      const duplicate = feeTransactions.find((t: any) => t.transactionId === paymentDetails.transactionId);
+      if (duplicate) {
+        alert('Duplicate Transaction ID detected!');
+        return;
+      }
+    }
+
+    const totalPaid = feeInfo.amount - paymentDetails.discount - paymentDetails.scholarship;
+    
+    const newTransaction: FeeTransaction = {
+      id: `FT${Date.now()}`,
+      studentId: selectedStudent.studentId,
+      studentName: `${selectedStudent.name} ${selectedStudent.surname}`,
+      class: selectedStudent.class,
+      section: selectedStudent.section,
+      feeType: selectedFeeType,
+      amount: feeInfo.amount,
+      discount: paymentDetails.discount,
+      discountReason: paymentDetails.discountReason,
+      scholarship: paymentDetails.scholarship,
+      totalPaid,
+      paymentMode: paymentDetails.mode,
+      transactionId: paymentDetails.transactionId,
+      date: new Date().toLocaleDateString(),
+      dueDate: paymentDetails.dueDate,
+      status: 'Paid'
+    };
+
+    setFeeTransactions([newTransaction, ...feeTransactions]);
+    setShowReceipt(newTransaction);
+    
+    // Reset form
+    setSelectedStudent(null);
+    setSelectedFeeType('');
+    setPaymentDetails({
+      mode: 'Cash',
+      transactionId: '',
+      discount: 0,
+      discountReason: '',
+      scholarship: 0,
+      dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+    });
+  };
+
+  const exportToExcel = () => {
+    const ws = XLSX.utils.json_to_sheet(feeTransactions);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Transactions");
+    XLSX.writeFile(wb, "Fee_Report.xlsx");
+  };
+
+  const filteredTransactions = feeTransactions.filter(t => {
+    return (!filters.date || t.date === new Date(filters.date).toLocaleDateString()) &&
+           (!filters.class || t.class === filters.class) &&
+           (!filters.section || t.section === filters.section);
+  });
+
+  const [masterClass, setMasterClass] = useState('');
+  const [masterSelections, setMasterSelections] = useState<{[key: string]: { selected: boolean, amount: number, frequency: string }}>({});
+
+  useEffect(() => {
+    const initialSelections: any = {};
+    feeTypes.forEach(ft => {
+      initialSelections[ft.name] = { selected: false, amount: 0, frequency: 'Monthly' };
+    });
+    setMasterSelections(initialSelections);
+  }, [feeTypes]);
+
+  const handleAssignFees = () => {
+    if (!masterClass) {
+      alert('Please select a class');
+      return;
+    }
+
+    const newEntries: FeeMaster[] = [];
+    Object.entries(masterSelections).forEach(([feeType, data]: [string, any]) => {
+      if (data.selected && data.amount > 0) {
+        // Check if already exists for this class and type
+        const exists = feeMaster.find((f: any) => f.class === masterClass && f.feeType === feeType);
+        if (!exists) {
+          newEntries.push({
+            id: `FM${Date.now()}${Math.random().toString(36).substr(2, 5)}`,
+            class: masterClass,
+            feeType,
+            amount: data.amount,
+            frequency: data.frequency as any
+          });
+        }
+      }
+    });
+
+    if (newEntries.length > 0) {
+      setFeeMaster([...feeMaster, ...newEntries]);
+      alert(`${newEntries.length} fees assigned to ${masterClass}`);
+    } else {
+      alert('No new fees to assign. Check if they are already assigned or amounts are zero.');
+    }
+  };
+
+  const [editingFee, setEditingFee] = useState<FeeMaster | null>(null);
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-black text-text-heading uppercase tracking-tighter">Fee Management</h1>
+          <p className="text-text-secondary text-sm">Configure, collect and report school fees</p>
+        </div>
+        <div className="flex bg-white p-1 rounded-xl border border-slate-200 shadow-sm">
+          <button 
+            onClick={() => setActiveTab('collect')}
+            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'collect' ? 'bg-primary text-white shadow-md' : 'text-text-sub hover:bg-slate-50'}`}
+          >
+            Collect Fee
+          </button>
+          <button 
+            onClick={() => setActiveTab('master')}
+            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'master' ? 'bg-primary text-white shadow-md' : 'text-text-sub hover:bg-slate-50'}`}
+          >
+            Fee Master
+          </button>
+          <button 
+            onClick={() => setActiveTab('reports')}
+            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'reports' ? 'bg-primary text-white shadow-md' : 'text-text-sub hover:bg-slate-50'}`}
+          >
+            Reports
+          </button>
+        </div>
+      </div>
+
+      {activeTab === 'collect' && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 space-y-6">
+            <Card>
+              <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-primary">
+                <UserPlus size={20} />
+                Select Student & Fee
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <label className="label-text">Search Student</label>
+                  <select 
+                    className="input-field"
+                    onChange={(e) => {
+                      const student = students.find((s: any) => s.studentId === e.target.value);
+                      setSelectedStudent(student || null);
+                    }}
+                  >
+                    <option value="">Select Student</option>
+                    {students.map((s: any) => (
+                      <option key={s.studentId} value={s.studentId}>
+                        {s.name} {s.surname} ({s.class}-{s.section}) - {s.studentId}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <Select 
+                  label="Fee Type" 
+                  options={feeTypes.map(f => f.name)} 
+                  onChange={(e: any) => setSelectedFeeType(e.target.value)}
+                />
+              </div>
+            </Card>
+
+            <Card>
+              <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-primary">
+                <Wallet size={20} />
+                Payment Details
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <Select 
+                  label="Payment Mode" 
+                  options={['Cash', 'UPI', 'Bank Transfer']} 
+                  value={paymentDetails.mode}
+                  onChange={(e: any) => setPaymentDetails({...paymentDetails, mode: e.target.value})}
+                />
+                {paymentDetails.mode !== 'Cash' && (
+                  <Input 
+                    label="Transaction ID" 
+                    placeholder="Enter ID..." 
+                    value={paymentDetails.transactionId}
+                    onChange={(e: any) => setPaymentDetails({...paymentDetails, transactionId: e.target.value})}
+                  />
+                )}
+                <Input 
+                  label="Due Date" 
+                  type="date" 
+                  value={paymentDetails.dueDate}
+                  onChange={(e: any) => setPaymentDetails({...paymentDetails, dueDate: e.target.value})}
+                />
+                <Input 
+                  label="Discount Amount" 
+                  type="number" 
+                  value={paymentDetails.discount}
+                  onChange={(e: any) => setPaymentDetails({...paymentDetails, discount: parseFloat(e.target.value) || 0})}
+                />
+                <Input 
+                  label="Discount Reason" 
+                  placeholder="e.g. Sibling discount" 
+                  value={paymentDetails.discountReason}
+                  onChange={(e: any) => setPaymentDetails({...paymentDetails, discountReason: e.target.value})}
+                />
+                <Input 
+                  label="Scholarship" 
+                  type="number" 
+                  value={paymentDetails.scholarship}
+                  onChange={(e: any) => setPaymentDetails({...paymentDetails, scholarship: parseFloat(e.target.value) || 0})}
+                />
+              </div>
+              
+              <div className="mt-8 p-6 bg-primary/5 rounded-2xl border border-primary/10 flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-bold text-primary uppercase tracking-wider">Total Payable</p>
+                  <p className="text-3xl font-black text-primary">
+                    ₹{(() => {
+                      if (!selectedStudent || !selectedFeeType) return 0;
+                      const fee = feeMaster.find((f: any) => f.class === selectedStudent.class && f.feeType === selectedFeeType);
+                      return fee ? (fee.amount - paymentDetails.discount - paymentDetails.scholarship) : 0;
+                    })()}
+                  </p>
+                </div>
+                <button 
+                  onClick={handleCollectFee}
+                  className="btn-primary px-8 py-3 flex items-center gap-2"
+                >
+                  <Coins size={20} />
+                  Collect & Print
+                </button>
+              </div>
+            </Card>
+          </div>
+
+          <div className="space-y-6">
+            <Card className="text-center">
+              <h3 className="text-lg font-bold mb-4">Scan to Pay</h3>
+              <div className="aspect-square bg-slate-100 rounded-2xl flex items-center justify-center border-2 border-dashed border-slate-200 mb-4">
+                <QrCode size={120} className="text-slate-400" />
+              </div>
+              <p className="text-xs text-text-secondary">Accept payments via UPI QR Code</p>
+            </Card>
+
+            <Card>
+              <h3 className="text-sm font-bold mb-4 uppercase tracking-wider text-text-secondary">Recent Payments</h3>
+              <div className="space-y-3">
+                {feeTransactions.slice(0, 5).map(t => (
+                  <div key={t.id} className="p-3 bg-slate-50 rounded-xl border border-slate-100 flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-bold">{t.studentName}</p>
+                      <p className="text-[10px] text-text-sub uppercase">{t.feeType}</p>
+                    </div>
+                    <p className="text-sm font-black text-primary">₹{t.totalPaid}</p>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'master' && (
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <Card className="lg:col-span-1">
+              <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-primary">
+                <TagIcon size={20} />
+                Fee Types
+              </h3>
+              <div className="space-y-4">
+                <div className="flex gap-2">
+                  <Input placeholder="New Fee Type" id="newFeeType" />
+                  <button 
+                    onClick={() => {
+                      const input = document.getElementById('newFeeType') as HTMLInputElement;
+                      if (input.value) {
+                        setFeeTypes([...feeTypes, { id: Date.now().toString(), name: input.value, description: '' }]);
+                        input.value = '';
+                      }
+                    }}
+                    className="btn-primary px-4"
+                  >
+                    Add
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 gap-2">
+                  {feeTypes.map(f => (
+                    <div key={f.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
+                      <span className="font-medium">{f.name}</span>
+                      <button onClick={() => setFeeTypes(feeTypes.filter(t => t.id !== f.id))} className="text-red-500 hover:bg-red-50 p-1 rounded-lg">
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </Card>
+
+            <Card className="lg:col-span-2">
+              <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-primary">
+                <ArrowRightLeft size={20} />
+                Fee Master (Setup)
+              </h3>
+              <div className="space-y-6">
+                <div className="max-w-xs">
+                  <Select 
+                    label="Select Class" 
+                    options={masterData.classes} 
+                    value={masterClass}
+                    onChange={(e: any) => setMasterClass(e.target.value)}
+                  />
+                </div>
+
+                {masterClass && (
+                  <div className="space-y-4">
+                    <p className="text-sm font-bold text-text-secondary uppercase tracking-wider">Assign Fees for {masterClass}</p>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left">
+                        <thead>
+                          <tr className="border-b border-slate-200">
+                            <th className="pb-2 font-bold text-xs uppercase text-text-sub">Select</th>
+                            <th className="pb-2 font-bold text-xs uppercase text-text-sub">Fee Type</th>
+                            <th className="pb-2 font-bold text-xs uppercase text-text-sub">Amount</th>
+                            <th className="pb-2 font-bold text-xs uppercase text-text-sub">Frequency</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {feeTypes.map(ft => (
+                            <tr key={ft.id}>
+                              <td className="py-3">
+                                <input 
+                                  type="checkbox" 
+                                  checked={(masterSelections as any)[ft.name]?.selected || false}
+                                  onChange={(e) => setMasterSelections({
+                                    ...masterSelections,
+                                    [ft.name]: { ...(masterSelections as any)[ft.name], selected: e.target.checked }
+                                  })}
+                                  className="w-4 h-4 rounded border-slate-300 text-primary focus:ring-primary"
+                                />
+                              </td>
+                              <td className="py-3 font-medium text-sm">{ft.name}</td>
+                              <td className="py-3">
+                                <input 
+                                  type="number"
+                                  placeholder="Amount"
+                                  value={(masterSelections as any)[ft.name]?.amount || ''}
+                                  onChange={(e) => setMasterSelections({
+                                    ...masterSelections,
+                                    [ft.name]: { ...(masterSelections as any)[ft.name], amount: parseFloat(e.target.value) || 0 }
+                                  })}
+                                  className="w-24 px-2 py-1 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                                />
+                              </td>
+                              <td className="py-3">
+                                <select 
+                                  value={(masterSelections as any)[ft.name]?.frequency || 'Monthly'}
+                                  onChange={(e) => setMasterSelections({
+                                    ...masterSelections,
+                                    [ft.name]: { ...(masterSelections as any)[ft.name], frequency: e.target.value }
+                                  })}
+                                  className="px-2 py-1 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                                >
+                                  {['Monthly', 'Quarterly', 'Half-Yearly', 'Yearly'].map(opt => (
+                                    <option key={opt} value={opt}>{opt}</option>
+                                  ))}
+                                </select>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <button 
+                      onClick={handleAssignFees}
+                      className="btn-primary px-8 py-3"
+                    >
+                      Assign Selected Fees
+                    </button>
+                  </div>
+                )}
+              </div>
+            </Card>
+          </div>
+
+          <Card>
+            <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-primary">
+              <ClipboardList size={20} />
+              Assigned Fees List
+            </h3>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="border-b border-slate-200">
+                    <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Class</th>
+                    <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Fee Type</th>
+                    <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Amount</th>
+                    <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Frequency</th>
+                    <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {feeMaster.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="py-12 text-center text-text-sub">No fees assigned yet.</td>
+                    </tr>
+                  ) : (
+                    feeMaster.map(m => (
+                      <tr key={m.id} className="hover:bg-slate-50/50 transition-colors">
+                        <td className="py-4 text-sm font-bold">{m.class}</td>
+                        <td className="py-4 text-sm font-medium">{m.feeType}</td>
+                        <td className="py-4 text-sm font-black text-primary">₹{m.amount}</td>
+                        <td className="py-4 text-sm text-text-sub">{m.frequency}</td>
+                        <td className="py-4 text-right space-x-2">
+                          <button 
+                            onClick={() => setEditingFee(m)}
+                            className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-all"
+                          >
+                            <Edit2 size={16} />
+                          </button>
+                          <button 
+                            onClick={() => {
+                              showModal(
+                                'Confirm Delete',
+                                'Are you sure you want to delete this fee assignment?',
+                                () => setFeeMaster(feeMaster.filter(f => f.id !== m.id))
+                              );
+                            }}
+                            className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {editingFee && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <Card className="max-w-md w-full">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-bold">Edit Fee Master</h3>
+              <button onClick={() => setEditingFee(null)} className="p-2 hover:bg-slate-100 rounded-lg">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="space-y-4">
+              <Input label="Class" value={editingFee.class} disabled />
+              <Input label="Fee Type" value={editingFee.feeType} disabled />
+              <Input 
+                label="Amount" 
+                type="number" 
+                value={editingFee.amount} 
+                onChange={(e: any) => setEditingFee({...editingFee, amount: parseFloat(e.target.value) || 0})} 
+              />
+              <Select 
+                label="Frequency" 
+                options={['Monthly', 'Quarterly', 'Half-Yearly', 'Yearly']} 
+                value={editingFee.frequency} 
+                onChange={(e: any) => setEditingFee({...editingFee, frequency: e.target.value as any})} 
+              />
+              <button 
+                onClick={() => {
+                  setFeeMaster(feeMaster.map(f => f.id === editingFee.id ? editingFee : f));
+                  setEditingFee(null);
+                  alert('Fee updated successfully!');
+                }}
+                className="w-full btn-primary py-3"
+              >
+                Update Fee
+              </button>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {activeTab === 'reports' && (
+        <Card>
+          <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
+            <div className="flex flex-wrap items-center gap-4">
+              <div className="flex items-center gap-2 bg-slate-100 px-3 py-2 rounded-xl border border-slate-200">
+                <Calendar size={16} className="text-text-secondary" />
+                <input 
+                  type="date" 
+                  className="bg-transparent outline-none text-sm font-medium"
+                  onChange={(e) => setFilters({...filters, date: e.target.value})}
+                />
+              </div>
+              <select 
+                className="bg-slate-100 px-3 py-2 rounded-xl border border-slate-200 outline-none text-sm font-medium"
+                onChange={(e) => setFilters({...filters, class: e.target.value})}
+              >
+                <option value="">All Classes</option>
+                {masterData.classes.map((c: string) => <option key={c} value={c}>{c}</option>)}
+              </select>
+              <select 
+                className="bg-slate-100 px-3 py-2 rounded-xl border border-slate-200 outline-none text-sm font-medium"
+                onChange={(e) => setFilters({...filters, section: e.target.value})}
+              >
+                <option value="">All Sections</option>
+                {masterData.sections.map((s: string) => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+            <button 
+              onClick={exportToExcel}
+              className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-green-700 transition-all"
+            >
+              <FileSpreadsheet size={18} />
+              Export Excel
+            </button>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="text-left border-b border-slate-200">
+                  <th className="pb-4 font-bold text-text-secondary text-xs uppercase tracking-wider">Date</th>
+                  <th className="pb-4 font-bold text-text-secondary text-xs uppercase tracking-wider">Student</th>
+                  <th className="pb-4 font-bold text-text-secondary text-xs uppercase tracking-wider">Class</th>
+                  <th className="pb-4 font-bold text-text-secondary text-xs uppercase tracking-wider">Fee Type</th>
+                  <th className="pb-4 font-bold text-text-secondary text-xs uppercase tracking-wider">Mode</th>
+                  <th className="pb-4 font-bold text-text-secondary text-xs uppercase tracking-wider text-right">Amount</th>
+                  <th className="pb-4 font-bold text-text-secondary text-xs uppercase tracking-wider text-center">Receipt</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filteredTransactions.map(t => (
+                  <tr key={t.id} className="hover:bg-slate-50/50 transition-colors">
+                    <td className="py-4 text-sm font-medium text-text-sub">{t.date}</td>
+                    <td className="py-4">
+                      <p className="text-sm font-bold text-text-heading">{t.studentName}</p>
+                      <p className="text-[10px] text-text-sub uppercase">{t.studentId}</p>
+                    </td>
+                    <td className="py-4 text-sm font-medium text-text-sub">{t.class}-{t.section}</td>
+                    <td className="py-4 text-sm font-medium text-text-sub">{t.feeType}</td>
+                    <td className="py-4">
+                      <span className={`text-[10px] font-black px-2 py-1 rounded-full uppercase ${
+                        t.paymentMode === 'Cash' ? 'bg-green-100 text-green-700' : 
+                        t.paymentMode === 'UPI' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'
+                      }`}>
+                        {t.paymentMode}
+                      </span>
+                    </td>
+                    <td className="py-4 text-right font-black text-primary">₹{t.totalPaid}</td>
+                    <td className="py-4 text-center">
+                      <button 
+                        onClick={() => setShowReceipt(t)}
+                        className="p-2 text-primary hover:bg-primary/10 rounded-lg transition-all"
+                      >
+                        <Printer size={16} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {filteredTransactions.length === 0 && (
+              <div className="text-center py-12">
+                <p className="text-text-secondary font-medium">No transactions found matching your filters.</p>
+              </div>
+            )}
+          </div>
+        </Card>
+      )}
+
+      {showReceipt && (
+        <ReceiptModal 
+          transaction={showReceipt} 
+          schoolProfile={schoolProfile} 
+          onClose={() => setShowReceipt(null)} 
+        />
+      )}
+    </div>
+  );
+};
+
+// --- Fee Management Sub-components ---
+
+const ReceiptModal = ({ transaction, schoolProfile, onClose }: { transaction: FeeTransaction, schoolProfile: any, onClose: () => void }) => {
+  const receiptRef = React.useRef<HTMLDivElement>(null);
+
+  const handlePrint = () => {
+    window.print();
+  };
+
+  const handleDownloadPDF = async () => {
+    if (receiptRef.current) {
+      const canvas = await html2canvas(receiptRef.current);
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF();
+      const imgProps = pdf.getImageProperties(imgData);
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      pdf.save(`Receipt_${transaction.id}.pdf`);
+    }
+  };
+
+  const shareOnWhatsApp = () => {
+    const text = `*Fee Receipt - ${schoolProfile.name}*\n\nStudent: ${transaction.studentName}\nClass: ${transaction.class}-${transaction.section}\nFee Type: ${transaction.feeType}\nAmount Paid: ₹${transaction.totalPaid}\nDate: ${transaction.date}\nTransaction ID: ${transaction.transactionId || 'N/A'}\nStatus: ${transaction.status}`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+      <motion.div 
+        initial={{ scale: 0.9, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        className="bg-white rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl"
+      >
+        <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-primary text-white">
+          <h2 className="text-xl font-bold flex items-center gap-2">
+            <Receipt size={24} />
+            Fee Receipt
+          </h2>
+          <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-full transition-all">
+            <X size={20} />
+          </button>
+        </div>
+        
+        <div className="p-8 overflow-y-auto max-h-[70vh]" ref={receiptRef}>
+          <div className="text-center mb-8">
+            <h1 className="text-2xl font-black text-primary uppercase tracking-tighter">{schoolProfile.name}</h1>
+            <p className="text-sm text-text-secondary">{schoolProfile.address}</p>
+            <p className="text-sm text-text-secondary">Contact: {schoolProfile.contact} | Reg No: {schoolProfile.regNo}</p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-8 mb-8 p-6 bg-slate-50 rounded-2xl border border-slate-100">
+            <div className="space-y-2">
+              <p className="text-xs font-bold text-text-secondary uppercase tracking-wider">Student Details</p>
+              <p className="font-bold text-lg">{transaction.studentName}</p>
+              <p className="text-sm text-text-sub">Class: {transaction.class} | Section: {transaction.section}</p>
+              <p className="text-sm text-text-sub">ID: {transaction.studentId}</p>
+            </div>
+            <div className="space-y-2 text-right">
+              <p className="text-xs font-bold text-text-secondary uppercase tracking-wider">Receipt Info</p>
+              <p className="font-bold text-lg">#{transaction.id}</p>
+              <p className="text-sm text-text-sub">Date: {transaction.date}</p>
+              <p className="text-sm text-text-sub">Mode: {transaction.paymentMode}</p>
+            </div>
+          </div>
+
+          <table className="w-full mb-8">
+            <thead>
+              <tr className="border-b-2 border-slate-200">
+                <th className="text-left py-3 font-bold text-text-heading">Description</th>
+                <th className="text-right py-3 font-bold text-text-heading">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr className="border-b border-slate-100">
+                <td className="py-4 text-text-sub">{transaction.feeType}</td>
+                <td className="py-4 text-right font-medium">₹{transaction.amount}</td>
+              </tr>
+              {transaction.discount > 0 && (
+                <tr className="border-b border-slate-100 text-green-600">
+                  <td className="py-4 italic">Discount ({transaction.discountReason})</td>
+                  <td className="py-4 text-right font-medium">-₹{transaction.discount}</td>
+                </tr>
+              )}
+              {transaction.scholarship > 0 && (
+                <tr className="border-b border-slate-100 text-blue-600">
+                  <td className="py-4 italic">Scholarship</td>
+                  <td className="py-4 text-right font-medium">-₹{transaction.scholarship}</td>
+                </tr>
+              )}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td className="py-6 text-xl font-black text-text-heading uppercase">Total Paid</td>
+                <td className="py-6 text-right text-2xl font-black text-primary">₹{transaction.totalPaid}</td>
+              </tr>
+            </tfoot>
+          </table>
+
+          <div className="flex justify-between items-end pt-8 border-t border-dashed border-slate-200">
+            <div className="text-center">
+              <div className="w-24 h-24 bg-slate-100 rounded-lg mb-2 flex items-center justify-center border border-slate-200">
+                <QrCode size={48} className="text-slate-400" />
+              </div>
+              <p className="text-[10px] font-bold text-text-secondary uppercase">Scan to Verify</p>
+            </div>
+            <div className="text-center">
+              <div className="w-32 h-12 border-b border-slate-400 mb-2"></div>
+              <p className="text-[10px] font-bold text-text-secondary uppercase">Authorized Signatory</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="p-6 bg-slate-50 border-t border-slate-100 flex flex-wrap gap-3 justify-center">
+          <button onClick={handlePrint} className="flex items-center gap-2 bg-white border border-slate-200 px-4 py-2 rounded-xl text-sm font-bold hover:bg-slate-100 transition-all">
+            <Printer size={16} /> Print
+          </button>
+          <button onClick={handleDownloadPDF} className="flex items-center gap-2 bg-white border border-slate-200 px-4 py-2 rounded-xl text-sm font-bold hover:bg-slate-100 transition-all">
+            <Download size={16} /> PDF
+          </button>
+          <button onClick={shareOnWhatsApp} className="flex items-center gap-2 bg-green-500 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-green-600 transition-all">
+            <MessageCircle size={16} /> WhatsApp
+          </button>
+        </div>
+      </motion.div>
+    </div>
+  );
+};
+
+const TeacherPanel = ({ syllabuses, setSyllabuses, leaveRequests, setLeaveRequests, notifications, currentUser, teacherAssignments, activities, setActivities, masterData }: any) => {
+  const assignedClasses = teacherAssignments.filter((a: any) => 
+    a.classTeacher === currentUser.name || a.subjectTeachers.some((st: any) => st.teacher === currentUser.name)
+  );
+  
+  const filteredSyllabuses = syllabuses.filter((s: Syllabus) => 
+    assignedClasses.some(ac => ac.class === s.class)
+  );
+
+  const filteredLeaveRequests = leaveRequests.filter((l: LeaveRequest) => 
+    assignedClasses.some(ac => ac.class === l.class && ac.section === l.section)
+  );
+
+  const filteredActivities = activities.filter((a: Activity) => 
+    a.teacherName === currentUser.name || assignedClasses.some(ac => ac.class === a.class && ac.section === a.section)
+  );
+
+  const [activeTab, setActiveTab] = useState<'syllabus' | 'leaves' | 'notifications' | 'activities'>('syllabus');
+  const [showActivityModal, setShowActivityModal] = useState(false);
+  const [activityForm, setActivityForm] = useState({
+    class: '',
+    section: '',
+    subject: '',
+    title: '',
+    description: ''
+  });
+
+  const handleAddActivity = () => {
+    if (!activityForm.class || !activityForm.title) return;
+    const newActivity: Activity = {
+      id: Date.now().toString(),
+      ...activityForm,
+      date: new Date().toLocaleDateString(),
+      teacherName: currentUser.name
+    };
+    setActivities([...activities, newActivity]);
+    setShowActivityModal(false);
+    setActivityForm({ class: '', section: '', subject: '', title: '', description: '' });
+  };
+
+  const handleUpdateSyllabusStatus = (id: string, status: Syllabus['status']) => {
+    setSyllabuses(syllabuses.map((s: Syllabus) => s.id === id ? { ...s, status } : s));
+  };
+
+  const handleLeaveAction = (id: string, status: 'Approved' | 'Rejected') => {
+    setLeaveRequests(leaveRequests.map((l: LeaveRequest) => 
+      l.id === id ? { ...l, status, approvedBy: currentUser.name } : l
+    ));
+  };
+
+  return (
+    <div className="space-y-8 max-w-7xl mx-auto pb-20">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-black text-text-heading tracking-tight">Teacher Dashboard</h1>
+          <p className="text-text-sub font-medium">Manage your assigned classes: {assignedClasses.map(ac => `${ac.class}-${ac.section}`).join(', ')}</p>
+        </div>
+        {activeTab === 'activities' && (
+          <button 
+            onClick={() => setShowActivityModal(true)}
+            className="flex items-center gap-2 bg-primary text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-primary/20 hover:scale-105 transition-all"
+          >
+            <Plus size={20} /> Upload Activity
+          </button>
+        )}
+      </div>
+
+      <div className="flex gap-4 border-b border-slate-200">
+        {[
+          { id: 'syllabus', label: 'Syllabus Progress', icon: BookOpen },
+          { id: 'leaves', label: 'Leave Requests', icon: CalendarRange },
+          { id: 'activities', label: 'Class Activities', icon: ClipboardList },
+          { id: 'notifications', label: 'Notifications', icon: Bell },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id as any)}
+            className={`flex items-center gap-2 px-6 py-4 text-sm font-bold transition-all border-b-2 ${
+              activeTab === tab.id
+                ? 'border-primary text-primary'
+                : 'border-transparent text-text-secondary hover:text-primary'
+            }`}
+          >
+            <tab.icon size={18} />
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === 'syllabus' && (
+        <Card>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="border-b border-slate-200">
+                  <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Subject</th>
+                  <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Class</th>
+                  <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Topic</th>
+                  <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Status</th>
+                  <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filteredSyllabuses.map((s: Syllabus) => (
+                  <tr key={s.id} className="hover:bg-slate-50/50 transition-colors">
+                    <td className="py-4 text-sm font-bold">{s.subject}</td>
+                    <td className="py-4 text-sm font-medium text-text-sub">{s.class}</td>
+                    <td className="py-4">
+                      <p className="text-sm font-bold">{s.title}</p>
+                      <p className="text-[10px] text-text-sub">{s.description}</p>
+                    </td>
+                    <td className="py-4">
+                      <span className={`text-[10px] font-black px-2 py-1 rounded-full uppercase ${
+                        s.status === 'Completed' ? 'bg-green-100 text-green-700' : 
+                        s.status === 'Started' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-700'
+                      }`}>
+                        {s.status}
+                      </span>
+                    </td>
+                    <td className="py-4 text-right">
+                      <select 
+                        value={s.status}
+                        onChange={(e) => handleUpdateSyllabusStatus(s.id, e.target.value as any)}
+                        className="text-xs font-bold bg-slate-100 border-none rounded-lg focus:ring-2 focus:ring-primary/20"
+                      >
+                        <option value="Not Started">Not Started</option>
+                        <option value="Started">Started</option>
+                        <option value="Completed">Completed</option>
+                      </select>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {activeTab === 'leaves' && (
+        <Card>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="border-b border-slate-200">
+                  <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Student</th>
+                  <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Class/Sec</th>
+                  <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Duration</th>
+                  <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Reason</th>
+                  <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Status</th>
+                  <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {filteredLeaveRequests.map((l: LeaveRequest) => (
+                  <tr key={l.id} className="hover:bg-slate-50/50 transition-colors">
+                    <td className="py-4">
+                      <p className="text-sm font-bold">{l.studentName}</p>
+                      <p className="text-[10px] text-text-sub uppercase">{l.studentId}</p>
+                    </td>
+                    <td className="py-4 text-sm font-medium text-text-sub">{l.class}-{l.section}</td>
+                    <td className="py-4">
+                      <p className="text-sm font-bold">{l.duration} Days</p>
+                      <p className="text-[10px] text-text-sub">{l.startDate} to {l.endDate}</p>
+                    </td>
+                    <td className="py-4 text-sm text-text-sub max-w-xs truncate">{l.reason}</td>
+                    <td className="py-4">
+                      <span className={`text-[10px] font-black px-2 py-1 rounded-full uppercase ${
+                        l.status === 'Approved' ? 'bg-green-100 text-green-700' : 
+                        l.status === 'Rejected' ? 'bg-red-100 text-red-700' : 'bg-orange-100 text-orange-700'
+                      }`}>
+                        {l.status}
+                      </span>
+                    </td>
+                    <td className="py-4 text-right space-x-2">
+                      {l.status === 'Pending' && (
+                        <>
+                          <button 
+                            onClick={() => handleLeaveAction(l.id, 'Approved')}
+                            className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-all"
+                            title="Approve"
+                          >
+                            <CheckCircle2 size={18} />
+                          </button>
+                          <button 
+                            onClick={() => handleLeaveAction(l.id, 'Rejected')}
+                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                            title="Reject"
+                          >
+                            <XCircle size={18} />
+                          </button>
+                        </>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {activeTab === 'activities' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredActivities.map((a: Activity) => (
+            <Card key={a.id} className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <span className="text-[10px] font-black px-2 py-1 bg-primary/10 text-primary rounded-full uppercase">
+                  {a.class}-{a.section} | {a.subject}
+                </span>
+                <span className="text-[10px] font-bold text-text-sub uppercase">{a.date}</span>
+              </div>
+              <h3 className="text-lg font-bold text-text-heading mb-2">{a.title}</h3>
+              <p className="text-sm text-text-sub mb-4 line-clamp-3">{a.description}</p>
+              <div className="flex items-center justify-between pt-4 border-t border-slate-100">
+                <span className="text-xs font-bold text-text-secondary">By {a.teacherName}</span>
+                <button className="text-primary hover:underline text-xs font-bold">View Details</button>
+              </div>
+            </Card>
+          ))}
+          {filteredActivities.length === 0 && (
+            <div className="col-span-full text-center py-12 bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200">
+              <ClipboardList className="mx-auto text-slate-300 mb-4" size={48} />
+              <p className="text-text-sub font-medium">No activities uploaded yet for your assigned classes.</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {activeTab === 'notifications' && (
+        <div className="space-y-4">
+          {notifications.filter((n: Notification) => n.targetRoles.includes('teacher')).map((n: Notification) => (
+            <Card key={n.id} className="p-6">
+              <div className="flex items-start gap-4">
+                <div className={`p-3 rounded-xl ${
+                  n.type === 'Info' ? 'bg-blue-100 text-blue-600' :
+                  n.type === 'Warning' ? 'bg-orange-100 text-orange-600' :
+                  n.type === 'Success' ? 'bg-green-100 text-green-600' : 'bg-purple-100 text-purple-600'
+                }`}>
+                  <Bell size={20} />
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center justify-between mb-1">
+                    <h3 className="font-bold text-text-heading">{n.title}</h3>
+                    <span className="text-[10px] font-bold text-text-sub uppercase">{n.date}</span>
+                  </div>
+                  <p className="text-sm text-text-sub">{n.message}</p>
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Activity Upload Modal */}
+      <AnimatePresence>
+        {showActivityModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowActivityModal(false)}
+              className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="bg-white rounded-[24px] p-8 shadow-2xl relative z-10 w-full max-w-lg"
+            >
+              <h3 className="text-2xl font-black text-text-heading mb-6">Upload Class Activity</h3>
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <Select 
+                    label="Class" 
+                    options={assignedClasses.map(ac => ac.class)} 
+                    value={activityForm.class} 
+                    onChange={(e: any) => setActivityForm({...activityForm, class: e.target.value})} 
+                  />
+                  <Select 
+                    label="Section" 
+                    options={assignedClasses.filter(ac => ac.class === activityForm.class).map(ac => ac.section)} 
+                    value={activityForm.section} 
+                    onChange={(e: any) => setActivityForm({...activityForm, section: e.target.value})} 
+                  />
+                </div>
+                <Select 
+                  label="Subject" 
+                  options={assignedClasses.filter(ac => ac.class === activityForm.class && ac.section === activityForm.section).map(ac => ac.subject)} 
+                  value={activityForm.subject} 
+                  onChange={(e: any) => setActivityForm({...activityForm, subject: e.target.value})} 
+                />
+                <Input 
+                  label="Activity Title" 
+                  placeholder="e.g., Science Project, Math Quiz" 
+                  value={activityForm.title} 
+                  onChange={(e: any) => setActivityForm({...activityForm, title: e.target.value})} 
+                />
+                <div className="space-y-1">
+                  <label className="label-text">Description</label>
+                  <textarea 
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none min-h-[100px]"
+                    placeholder="Describe the activity details..."
+                    value={activityForm.description}
+                    onChange={(e) => setActivityForm({...activityForm, description: e.target.value})}
+                  />
+                </div>
+                <div className="pt-4 flex gap-3">
+                  <button 
+                    onClick={() => setShowActivityModal(false)}
+                    className="flex-1 py-4 rounded-xl font-bold text-text-secondary hover:bg-slate-100 transition-all"
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    onClick={handleAddActivity}
+                    className="flex-1 py-4 rounded-xl bg-primary text-white font-bold shadow-lg shadow-primary/20 hover:scale-[1.02] transition-all"
+                  >
+                    Upload Activity
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
+const ParentPanel = ({ students, examResults, homeworks, syllabuses, leaveRequests, setLeaveRequests, notifications, feeTransactions, feeMaster, currentUser }: any) => {
+  const [activeTab, setActiveTab] = useState<'progress' | 'homework' | 'syllabus' | 'leave' | 'fees' | 'notifications'>('progress');
+  const [leaveForm, setLeaveForm] = useState({
+    startDate: '',
+    endDate: '',
+    reason: ''
+  });
+
+  const myStudent = students.find((s: any) => s.studentId === currentUser.studentId) || students[0]; // Mocking for now
+
+  const handleApplyLeave = () => {
+    if (!leaveForm.startDate || !leaveForm.endDate || !leaveForm.reason) return;
+    
+    const start = new Date(leaveForm.startDate);
+    const end = new Date(leaveForm.endDate);
+    const duration = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+
+    const newRequest: LeaveRequest = {
+      id: Math.random().toString(36).substr(2, 9),
+      studentId: myStudent.studentId,
+      studentName: `${myStudent.name} ${myStudent.surname}`,
+      class: myStudent.class,
+      section: myStudent.section,
+      startDate: leaveForm.startDate,
+      endDate: leaveForm.endDate,
+      duration,
+      reason: leaveForm.reason,
+      status: 'Pending',
+      appliedDate: new Date().toISOString().split('T')[0]
+    };
+
+    setLeaveRequests([...leaveRequests, newRequest]);
+    setLeaveForm({ startDate: '', endDate: '', reason: '' });
+    alert('Leave application submitted successfully!');
+  };
+
+  const getDueFees = () => {
+    const classFee = feeMaster.find((f: any) => f.class === myStudent.class);
+    if (!classFee) return 0;
+    const paid = feeTransactions
+      .filter((t: any) => t.studentId === myStudent.studentId)
+      .reduce((sum: number, t: any) => sum + t.totalPaid, 0);
+    const total = classFee.frequency === 'Monthly' ? classFee.amount * 12 : classFee.amount;
+    return Math.max(0, total - paid);
+  };
+
+  return (
+    <div className="space-y-8 max-w-7xl mx-auto pb-20">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-black text-text-heading tracking-tight">Parent Portal</h1>
+          <p className="text-text-sub font-medium">Tracking progress for {myStudent.name} {myStudent.surname}</p>
+        </div>
+        <div className="flex items-center gap-3 bg-white p-2 rounded-2xl border border-slate-100 shadow-sm">
+          <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center font-bold text-primary">
+            {myStudent.name[0]}
+          </div>
+          <div className="pr-4">
+            <p className="text-sm font-bold">{myStudent.name}</p>
+            <p className="text-[10px] text-text-sub uppercase font-bold tracking-widest">Class {myStudent.class}-{myStudent.section}</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-2 border-b border-slate-200">
+        {[
+          { id: 'progress', label: 'Progress & Marks', icon: GraduationCap },
+          { id: 'homework', label: 'Homework', icon: BookOpen },
+          { id: 'syllabus', label: 'Syllabus', icon: ClipboardList },
+          { id: 'leave', label: 'Leave Management', icon: CalendarRange },
+          { id: 'fees', label: 'Fee Payment', icon: Wallet },
+          { id: 'notifications', label: 'Notifications', icon: Bell },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id as any)}
+            className={`flex items-center gap-2 px-6 py-4 text-sm font-bold transition-all border-b-2 ${
+              activeTab === tab.id
+                ? 'border-primary text-primary'
+                : 'border-transparent text-text-secondary hover:text-primary'
+            }`}
+          >
+            <tab.icon size={18} />
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === 'progress' && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <Card className="lg:col-span-2">
+            <h3 className="text-lg font-bold mb-6">Recent Exam Results</h3>
+            <div className="space-y-4">
+              {examResults.filter((r: any) => r.studentId === myStudent.studentId).map((r: any) => (
+                <div key={r.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                  <div>
+                    <p className="font-bold">{r.subject}</p>
+                    <p className="text-xs text-text-sub">{r.examName}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-lg font-black text-primary">{r.marks}/{r.totalMarks}</p>
+                    <p className="text-[10px] font-bold uppercase text-text-sub">{((r.marks/r.totalMarks)*100).toFixed(1)}%</p>
+                  </div>
+                </div>
+              ))}
+              {examResults.filter((r: any) => r.studentId === myStudent.studentId).length === 0 && (
+                <p className="text-center py-8 text-text-sub">No exam results available yet.</p>
+              )}
+            </div>
+          </Card>
+          <Card>
+            <h3 className="text-lg font-bold mb-6">Attendance Overview</h3>
+            <div className="text-center space-y-4">
+              <div className="w-32 h-32 rounded-full border-8 border-primary border-t-slate-100 flex items-center justify-center mx-auto">
+                <span className="text-2xl font-black text-primary">94%</span>
+              </div>
+              <p className="text-sm font-medium text-text-sub">Overall attendance for this term</p>
+              <div className="grid grid-cols-2 gap-4 pt-4">
+                <div className="p-3 bg-green-50 rounded-xl">
+                  <p className="text-xs font-bold text-green-600 uppercase">Present</p>
+                  <p className="text-xl font-black text-green-700">142</p>
+                </div>
+                <div className="p-3 bg-red-50 rounded-xl">
+                  <p className="text-xs font-bold text-red-600 uppercase">Absent</p>
+                  <p className="text-xl font-black text-red-700">8</p>
+                </div>
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {activeTab === 'homework' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {homeworks.filter((h: any) => h.class === myStudent.class).map((h: any) => (
+            <Card key={h.id} className="p-6">
+              <div className="flex justify-between items-start mb-4">
+                <div>
+                  <span className="text-[10px] font-black px-2 py-1 bg-primary/10 text-primary rounded-full uppercase mb-2 inline-block">
+                    {h.subject}
+                  </span>
+                  <h3 className="font-bold text-text-heading">{h.title}</h3>
+                </div>
+                <span className="text-[10px] font-bold text-red-500 uppercase">Due: {h.dueDate}</span>
+              </div>
+              <p className="text-sm text-text-sub mb-6 line-clamp-2">{h.description}</p>
+              <button className="w-full py-2 bg-slate-100 text-text-heading font-bold rounded-xl text-xs hover:bg-slate-200 transition-all">
+                View Details
+              </button>
+            </Card>
+          ))}
+          {homeworks.filter((h: any) => h.class === myStudent.class).length === 0 && (
+            <div className="col-span-2 text-center py-12">
+              <p className="text-text-sub">No homework assigned for this class.</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {activeTab === 'syllabus' && (
+        <Card>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="border-b border-slate-200">
+                  <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Subject</th>
+                  <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Topic</th>
+                  <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Status</th>
+                  <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Progress</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {syllabuses.filter((s: any) => s.class === myStudent.class).map((s: any) => (
+                  <tr key={s.id} className="hover:bg-slate-50/50 transition-colors">
+                    <td className="py-4 text-sm font-bold">{s.subject}</td>
+                    <td className="py-4">
+                      <p className="text-sm font-bold">{s.title}</p>
+                      <p className="text-[10px] text-text-sub">{s.description}</p>
+                    </td>
+                    <td className="py-4">
+                      <span className={`text-[10px] font-black px-2 py-1 rounded-full uppercase ${
+                        s.status === 'Completed' ? 'bg-green-100 text-green-700' : 
+                        s.status === 'Started' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-700'
+                      }`}>
+                        {s.status}
+                      </span>
+                    </td>
+                    <td className="py-4 w-48">
+                      <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                        <div className={`h-full ${s.status === 'Completed' ? 'bg-green-500' : s.status === 'Started' ? 'bg-blue-500' : 'bg-slate-300'}`} 
+                             style={{ width: s.status === 'Completed' ? '100%' : s.status === 'Started' ? '45%' : '0%' }}></div>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {activeTab === 'leave' && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <Card>
+            <h3 className="text-lg font-bold mb-6">Apply for Leave</h3>
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <Input 
+                  label="Start Date" 
+                  type="date" 
+                  value={leaveForm.startDate} 
+                  onChange={(e: any) => setLeaveForm({...leaveForm, startDate: e.target.value})} 
+                />
+                <Input 
+                  label="End Date" 
+                  type="date" 
+                  value={leaveForm.endDate} 
+                  onChange={(e: any) => setLeaveForm({...leaveForm, endDate: e.target.value})} 
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-text-secondary uppercase tracking-wider">Reason for Leave</label>
+                <textarea 
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none h-32"
+                  placeholder="Explain the reason for leave..."
+                  value={leaveForm.reason}
+                  onChange={(e) => setLeaveForm({...leaveForm, reason: e.target.value})}
+                ></textarea>
+              </div>
+              <button 
+                onClick={handleApplyLeave}
+                className="w-full btn-primary py-4"
+              >
+                Submit Application
+              </button>
+            </div>
+          </Card>
+          <Card>
+            <h3 className="text-lg font-bold mb-6">Leave History</h3>
+            <div className="space-y-4">
+              {leaveRequests.filter((l: any) => l.studentId === myStudent.studentId).map((l: any) => (
+                <div key={l.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                  <div className="flex justify-between items-start mb-2">
+                    <div>
+                      <p className="font-bold">{l.duration} Days Leave</p>
+                      <p className="text-xs text-text-sub">{l.startDate} to {l.endDate}</p>
+                    </div>
+                    <span className={`text-[10px] font-black px-2 py-1 rounded-full uppercase ${
+                      l.status === 'Approved' ? 'bg-green-100 text-green-700' : 
+                      l.status === 'Rejected' ? 'bg-red-100 text-red-700' : 'bg-orange-100 text-orange-700'
+                    }`}>
+                      {l.status}
+                    </span>
+                  </div>
+                  <p className="text-xs text-text-sub italic line-clamp-1">"{l.reason}"</p>
+                </div>
+              ))}
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {activeTab === 'fees' && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <Card className="flex flex-col items-center justify-center p-12 text-center space-y-6">
+            <div className="w-20 h-20 bg-primary/10 text-primary rounded-full flex items-center justify-center">
+              <Wallet size={40} />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-text-secondary uppercase tracking-widest mb-1">Total Due Fees</p>
+              <h2 className="text-4xl font-black text-text-heading">₹{getDueFees().toLocaleString()}</h2>
+            </div>
+            <div className="w-full pt-6 border-t border-slate-100">
+              <p className="text-sm font-bold text-text-heading mb-4">Scan QR to Pay via UPI</p>
+              <div className="bg-white p-4 rounded-2xl border-2 border-primary/20 inline-block">
+                <QrCode size={160} className="text-primary" />
+              </div>
+              <p className="text-[10px] text-text-sub mt-4 font-medium italic">Supports all UPI apps (GPay, PhonePe, Paytm)</p>
+            </div>
+          </Card>
+          <Card>
+            <h3 className="text-lg font-bold mb-6">Transaction History</h3>
+            <div className="space-y-4">
+              {feeTransactions.filter((t: any) => t.studentId === myStudent.studentId).map((t: any) => (
+                <div key={t.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center text-primary shadow-sm">
+                      <Receipt size={20} />
+                    </div>
+                    <div>
+                      <p className="font-bold">{t.feeType}</p>
+                      <p className="text-xs text-text-sub">{t.date} • {t.paymentMode}</p>
+                    </div>
+                  </div>
+                  <p className="font-black text-primary">₹{t.totalPaid}</p>
+                </div>
+              ))}
+              {feeTransactions.filter((t: any) => t.studentId === myStudent.studentId).length === 0 && (
+                <p className="text-center py-8 text-text-sub">No transaction history found.</p>
+              )}
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {activeTab === 'notifications' && (
+        <div className="space-y-4">
+          {notifications.filter((n: Notification) => n.targetRoles.includes('parent') && (!n.targetStudentId || n.targetStudentId === myStudent.studentId)).map((n: Notification) => (
+            <Card key={n.id} className="p-6">
+              <div className="flex items-start gap-4">
+                <div className={`p-3 rounded-xl ${
+                  n.type === 'Info' ? 'bg-blue-100 text-blue-600' :
+                  n.type === 'Warning' ? 'bg-orange-100 text-orange-600' :
+                  n.type === 'Success' ? 'bg-green-100 text-green-600' : 'bg-purple-100 text-purple-600'
+                }`}>
+                  <Bell size={20} />
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center justify-between mb-1">
+                    <h3 className="font-bold text-text-heading">{n.title}</h3>
+                    <span className="text-[10px] font-bold text-text-sub uppercase">{n.date}</span>
+                  </div>
+                  <p className="text-sm text-text-sub">{n.message}</p>
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// --- Main App ---
+
+const LiveCamera = ({ cameraUrls }: { cameraUrls: { id: string, name: string, url: string }[] }) => {
+  const [activeCamera, setActiveCamera] = useState(0);
+
+  return (
+    <div className="space-y-8 max-w-7xl mx-auto pb-20">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-black text-text-heading tracking-tight">Live Campus Monitoring</h1>
+          <p className="text-text-sub font-medium">Real-time surveillance of school campus and classrooms.</p>
+        </div>
+        <div className="flex gap-3">
+          <span className="flex items-center gap-2 px-4 py-2 bg-red-100 text-red-600 rounded-xl font-bold text-xs animate-pulse">
+            <div className="w-2 h-2 bg-red-600 rounded-full"></div>
+            LIVE
+          </span>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+        <div className="lg:col-span-3">
+          <Card className="p-0 overflow-hidden bg-black aspect-video relative group">
+            <div className="absolute inset-0 flex items-center justify-center">
+              <Video size={64} className="text-white/20" />
+              <p className="absolute bottom-10 text-white/40 font-bold uppercase tracking-widest text-xs">
+                Connecting to Camera {activeCamera + 1}...
+              </p>
+            </div>
+            {/* Mock Video Stream */}
+            <img 
+              src={cameraUrls[activeCamera]?.url || `https://picsum.photos/seed/camera${activeCamera}/1280/720`} 
+              alt="Live Stream" 
+              className="w-full h-full object-cover opacity-60"
+              referrerPolicy="no-referrer"
+            />
+            <div className="absolute top-6 left-6 flex items-center gap-3 bg-black/40 backdrop-blur-md px-4 py-2 rounded-xl border border-white/10">
+              <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+              <span className="text-white text-xs font-bold uppercase tracking-widest">CAM-0{activeCamera + 1} - {cameraUrls[activeCamera]?.name || 'Campus'}</span>
+            </div>
+            <div className="absolute bottom-6 right-6 flex gap-2 opacity-0 group-hover:opacity-100 transition-all">
+              <button className="p-3 bg-white/10 backdrop-blur-md rounded-xl text-white hover:bg-white/20 border border-white/10">
+                <ScanLine size={20} />
+              </button>
+              <button className="p-3 bg-white/10 backdrop-blur-md rounded-xl text-white hover:bg-white/20 border border-white/10">
+                <Camera size={20} />
+              </button>
+            </div>
+          </Card>
+        </div>
+
+        <div className="space-y-4">
+          <h3 className="font-bold text-text-heading px-2">Available Feeds</h3>
+          {cameraUrls.map((cam, i) => (
+            <button 
+              key={cam.id}
+              onClick={() => setActiveCamera(i)}
+              className={`w-full p-4 rounded-2xl border transition-all flex items-center gap-4 ${
+                activeCamera === i 
+                  ? 'bg-primary border-primary text-white shadow-lg shadow-primary/20' 
+                  : 'bg-white border-slate-100 text-text-heading hover:bg-slate-50'
+              }`}
+            >
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${activeCamera === i ? 'bg-white/20' : 'bg-slate-100'}`}>
+                <Video size={18} />
+              </div>
+              <div className="text-left">
+                <p className="font-bold text-sm">{cam.name}</p>
+                <p className={`text-[10px] uppercase font-bold tracking-widest ${activeCamera === i ? 'text-white/60' : 'text-text-secondary'}`}>Online</p>
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const DueFeesModule = ({ students, feeMaster, feeTransactions, currentUser }: any) => {
+  const isAdmin = currentUser?.role === 'admin';
+  
+  const getStudentDueFees = (student: any) => {
+    const classFee = feeMaster.find((f: any) => f.class === student.class);
+    if (!classFee) return 0;
+    
+    const paidAmount = feeTransactions
+      .filter((t: any) => t.studentId === student.studentId)
+      .reduce((sum: number, t: any) => sum + t.totalPaid, 0);
+      
+    // Simplified calculation: assume 12 months for monthly fees
+    const totalDue = classFee.frequency === 'Monthly' ? classFee.amount * 12 : classFee.amount;
+    return Math.max(0, totalDue - paidAmount);
+  };
+
+  const dueStudents = students.map((s: any) => ({
+    ...s,
+    dueAmount: getStudentDueFees(s)
+  })).filter((s: any) => s.dueAmount > 0);
+
+  if (!isAdmin) {
+    const myDue = getStudentDueFees(currentUser);
+    return (
+      <div className="space-y-8 max-w-4xl mx-auto pb-20">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-black text-text-heading tracking-tight">My Due Fees</h1>
+            <p className="text-text-sub font-medium">View and manage your pending fee payments.</p>
+          </div>
+        </div>
+
+        <Card className="p-12 text-center space-y-6">
+          <div className="w-24 h-24 bg-orange-100 text-orange-600 rounded-full flex items-center justify-center mx-auto">
+            <Wallet size={48} />
+          </div>
+          <div>
+            <h2 className="text-4xl font-black text-text-heading">₹{myDue.toLocaleString()}</h2>
+            <p className="text-text-sub font-bold uppercase tracking-widest text-xs mt-2">Total Pending Amount</p>
+          </div>
+          <div className="flex flex-col gap-3 max-w-xs mx-auto">
+            <button className="btn-primary py-4">Pay Now</button>
+            <button className="text-primary font-bold text-sm hover:underline">View Payment History</button>
+          </div>
+        </Card>
+
+        <Card className="p-6">
+          <h3 className="font-bold text-text-heading mb-6">Fee Breakdown</h3>
+          <div className="space-y-4">
+            <div className="flex justify-between items-center p-4 bg-slate-50 rounded-xl border border-slate-100">
+              <div>
+                <p className="font-bold">Tuition Fee</p>
+                <p className="text-xs text-text-sub">Academic Year 2024-25</p>
+              </div>
+              <p className="font-black text-primary">₹{myDue.toLocaleString()}</p>
+            </div>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-8 max-w-7xl mx-auto pb-20">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <div>
+          <h1 className="text-3xl font-black text-text-heading tracking-tight">Due Fees Management</h1>
+          <p className="text-text-sub font-medium">Monitor and manage pending fees across all classes.</p>
+        </div>
+        <div className="flex gap-3">
+          <button className="flex items-center gap-2 bg-primary text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-primary/20 hover:scale-105 transition-all">
+            <Bell size={20} /> Send Reminders
+          </button>
+          <button className="flex items-center gap-2 bg-white border border-slate-200 px-6 py-3 rounded-xl font-bold hover:bg-slate-50 transition-all">
+            <FileSpreadsheet size={20} /> Export List
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <Card className="p-6 bg-red-50 border-red-100">
+          <p className="text-xs font-bold text-red-600 uppercase tracking-widest mb-1">Total Due Amount</p>
+          <p className="text-3xl font-black text-red-700">₹{dueStudents.reduce((sum: number, s: any) => sum + s.dueAmount, 0).toLocaleString()}</p>
+        </Card>
+        <Card className="p-6 bg-orange-50 border-orange-100">
+          <p className="text-xs font-bold text-orange-600 uppercase tracking-widest mb-1">Students with Dues</p>
+          <p className="text-3xl font-black text-orange-700">{dueStudents.length}</p>
+        </Card>
+        <Card className="p-6 bg-emerald-50 border-emerald-100">
+          <p className="text-xs font-bold text-emerald-600 uppercase tracking-widest mb-1">Collection Rate</p>
+          <p className="text-3xl font-black text-emerald-700">84%</p>
+        </Card>
+      </div>
+
+      <Card className="p-6">
+        <div className="flex items-center justify-between mb-8">
+          <h3 className="font-bold text-text-heading">Pending Fee List</h3>
+          <div className="flex gap-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+              <input type="text" placeholder="Search student..." className="input-field pl-10 py-2 text-sm w-64" />
+            </div>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="text-[10px] font-bold text-text-secondary uppercase tracking-wider border-b border-slate-200">
+                <th className="pb-4 px-4">Student</th>
+                <th className="pb-4 px-4">Class/Sec</th>
+                <th className="pb-4 px-4">Due Amount</th>
+                <th className="pb-4 px-4">Last Payment</th>
+                <th className="pb-4 px-4 text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody className="text-sm">
+              {dueStudents.map((s: any) => (
+                <tr key={s.id} className="border-b border-slate-100 hover:bg-slate-50 transition-all">
+                  <td className="py-4 px-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center font-bold text-primary">
+                        {s.name[0]}
+                      </div>
+                      <div>
+                        <p className="font-bold">{s.name} {s.surname}</p>
+                        <p className="text-[10px] text-text-secondary">{s.studentId}</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="py-4 px-4 font-medium">{s.class} - {s.section}</td>
+                  <td className="py-4 px-4 font-black text-red-600">₹{s.dueAmount.toLocaleString()}</td>
+                  <td className="py-4 px-4 text-text-sub">
+                    {feeTransactions.find((t: any) => t.studentId === s.studentId)?.date || 'No payments'}
+                  </td>
+                  <td className="py-4 px-4 text-right">
+                    <button className="text-primary font-bold text-xs hover:underline">Send Reminder</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+    </div>
+  );
+};
+
+const Admin360View = ({ students, masterData, feeTransactions, attendance }: any) => {
+  const revenueData = [
+    { month: 'Jan', amount: 450000 },
+    { month: 'Feb', amount: 520000 },
+    { month: 'Mar', amount: 480000 },
+    { month: 'Apr', amount: 610000 },
+    { month: 'May', amount: 550000 },
+    { month: 'Jun', amount: 670000 },
+  ];
+
+  const attendanceData = [
+    { day: 'Mon', rate: 92 },
+    { day: 'Tue', rate: 94 },
+    { day: 'Wed', rate: 89 },
+    { day: 'Thu', rate: 95 },
+    { day: 'Fri', rate: 91 },
+    { day: 'Sat', rate: 85 },
+  ];
+
+  const COLORS = ['#4F46E5', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'];
+
+  return (
+    <div className="space-y-8 max-w-7xl mx-auto pb-20">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-black text-text-heading tracking-tight">Admin 360° View</h1>
+          <p className="text-text-sub font-medium">Comprehensive overview of school operations and performance.</p>
+        </div>
+        <div className="flex gap-3">
+          <button className="flex items-center gap-2 bg-white border border-slate-200 px-6 py-3 rounded-xl font-bold hover:bg-slate-50 transition-all">
+            <Printer size={20} /> Print Report
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <Card className="p-6">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-blue-500 text-white rounded-xl flex items-center justify-center shadow-lg">
+              <Users size={24} />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-text-secondary uppercase tracking-wider">Total Students</p>
+              <p className="text-2xl font-black text-text-heading">{students.length}</p>
+            </div>
+          </div>
+        </Card>
+        <Card className="p-6">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-emerald-500 text-white rounded-xl flex items-center justify-center shadow-lg">
+              <UserCog size={24} />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-text-secondary uppercase tracking-wider">Total Staff</p>
+              <p className="text-2xl font-black text-text-heading">{masterData.teachers.length + 12}</p>
+            </div>
+          </div>
+        </Card>
+        <Card className="p-6">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-orange-500 text-white rounded-xl flex items-center justify-center shadow-lg">
+              <Receipt size={24} />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-text-secondary uppercase tracking-wider">Fees Collected</p>
+              <p className="text-2xl font-black text-text-heading">₹{feeTransactions.reduce((sum: number, t: any) => sum + t.totalPaid, 0).toLocaleString()}</p>
+            </div>
+          </div>
+        </Card>
+        <Card className="p-6">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-purple-500 text-white rounded-xl flex items-center justify-center shadow-lg">
+              <UserCheck size={24} />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-text-secondary uppercase tracking-wider">Avg Attendance</p>
+              <p className="text-2xl font-black text-text-heading">92%</p>
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <Card className="p-6">
+          <h3 className="font-bold text-text-heading mb-6 flex items-center gap-2">
+            <BarChart3 size={18} className="text-primary" />
+            Fee Collection Trend
+          </h3>
+          <div className="h-64 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={revenueData}>
+                <defs>
+                  <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#4F46E5" stopOpacity={0.1}/>
+                    <stop offset="95%" stopColor="#4F46E5" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+                <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748B' }} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748B' }} />
+                <Tooltip 
+                  contentStyle={{ backgroundColor: '#fff', borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                  itemStyle={{ color: '#4F46E5', fontWeight: 'bold' }}
+                />
+                <Area type="monotone" dataKey="amount" stroke="#4F46E5" strokeWidth={3} fillOpacity={1} fill="url(#colorRevenue)" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+
+        <Card className="p-6">
+          <h3 className="font-bold text-text-heading mb-6 flex items-center gap-2">
+            <UserCheck size={18} className="text-primary" />
+            Weekly Attendance Rate (%)
+          </h3>
+          <div className="h-64 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={attendanceData}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+                <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748B' }} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748B' }} domain={[0, 100]} />
+                <Tooltip 
+                  cursor={{ fill: '#F1F5F9' }}
+                  contentStyle={{ backgroundColor: '#fff', borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                />
+                <Bar dataKey="rate" fill="#10B981" radius={[6, 6, 0, 0]} barSize={40} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <Card className="p-6">
+          <h3 className="font-bold text-text-heading mb-6 flex items-center gap-2">
+            <BarChart3 size={18} className="text-primary" />
+            Class-wise Performance
+          </h3>
+          <div className="space-y-4">
+            {masterData.classes.slice(0, 6).map((c: string) => (
+              <div key={c} className="space-y-2">
+                <div className="flex justify-between items-center text-sm">
+                  <span className="font-bold">{c}</span>
+                  <span className="text-text-secondary">88% Avg Score</span>
+                </div>
+                <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                  <div className="h-full bg-primary" style={{ width: '88%' }}></div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        <Card className="p-6">
+          <h3 className="font-bold text-text-heading mb-6 flex items-center gap-2">
+            <Clock size={18} className="text-primary" />
+            Recent Activities
+          </h3>
+          <div className="space-y-4">
+            {[
+              { text: 'New student registered in Class 5', time: '2 mins ago', icon: UserPlus, color: 'text-blue-500' },
+              { text: 'Fee payment received from DS-102938', time: '15 mins ago', icon: Receipt, color: 'text-emerald-500' },
+              { text: 'Attendance marked for Class 10-A', time: '1 hour ago', icon: UserCheck, color: 'text-orange-500' },
+              { text: 'New exam schedule published', time: '3 hours ago', icon: ClipboardList, color: 'text-purple-500' }
+            ].map((activity, i) => (
+              <div key={i} className="flex items-start gap-4 p-3 hover:bg-slate-50 rounded-xl transition-all">
+                <div className={`w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center ${activity.color}`}>
+                  <activity.icon size={16} />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-text-heading">{activity.text}</p>
+                  <p className="text-[10px] text-text-secondary uppercase font-bold">{activity.time}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
+    </div>
+  );
+};
+
+const Class360View = ({ students, masterData, attendance, feeTransactions }: any) => {
+  const [selectedClass, setSelectedClass] = useState(masterData.classes[0]);
+  const [selectedSection, setSelectedSection] = useState(masterData.sections[0]);
+
+  const classStudents = students.filter((s: any) => s.class === selectedClass && s.section === selectedSection);
+  
+  const performanceData = [
+    { subject: 'Math', avg: 82, top: 98 },
+    { subject: 'Science', avg: 78, top: 95 },
+    { subject: 'English', avg: 85, top: 97 },
+    { subject: 'History', avg: 72, top: 90 },
+    { subject: 'Geography', avg: 75, top: 92 },
+  ];
+
+  return (
+    <div className="space-y-8 max-w-7xl mx-auto pb-20">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <div>
+          <h1 className="text-3xl font-black text-text-heading tracking-tight">Class 360° View</h1>
+          <p className="text-text-sub font-medium">Deep dive into specific class performance and metrics.</p>
+        </div>
+        <div className="flex gap-4">
+          <div className="w-48">
+            <label className="label-text">Select Class</label>
+            <select className="input-field" value={selectedClass} onChange={(e) => setSelectedClass(e.target.value)}>
+              {masterData.classes.map((c: string) => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          <div className="w-32">
+            <label className="label-text">Section</label>
+            <select className="input-field" value={selectedSection} onChange={(e) => setSelectedSection(e.target.value)}>
+              {masterData.sections.map((s: string) => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <Card className="p-6">
+          <p className="text-xs font-bold text-text-secondary uppercase tracking-widest mb-1">Total Students</p>
+          <p className="text-3xl font-black text-text-heading">{classStudents.length}</p>
+        </Card>
+        <Card className="p-6">
+          <p className="text-xs font-bold text-text-secondary uppercase tracking-widest mb-1">Class Teacher</p>
+          <p className="text-xl font-black text-primary">{masterData.teachers[Math.floor(Math.random() * masterData.teachers.length)]}</p>
+        </Card>
+        <Card className="p-6">
+          <p className="text-xs font-bold text-text-secondary uppercase tracking-widest mb-1">Attendance</p>
+          <p className="text-3xl font-black text-emerald-600">94%</p>
+        </Card>
+        <Card className="p-6">
+          <p className="text-xs font-bold text-text-secondary uppercase tracking-widest mb-1">Fee Clearance</p>
+          <p className="text-3xl font-black text-orange-600">78%</p>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <Card className="p-6 lg:col-span-2">
+          <h3 className="font-bold text-text-heading mb-6">Subject Performance Analysis</h3>
+          <div className="h-80 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={performanceData}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+                <XAxis dataKey="subject" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748B' }} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748B' }} domain={[0, 100]} />
+                <Tooltip 
+                  cursor={{ fill: '#F1F5F9' }}
+                  contentStyle={{ backgroundColor: '#fff', borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                />
+                <Bar dataKey="avg" name="Average Score" fill="#4F46E5" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="top" name="Top Score" fill="#10B981" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+
+        <Card className="p-6">
+          <h3 className="font-bold text-text-heading mb-6">Top Performers</h3>
+          <div className="space-y-6">
+            {classStudents.slice(0, 3).map((s: any, i: number) => (
+              <div key={s.id} className="flex items-center gap-4">
+                <div className="relative">
+                  <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center text-xl font-black">
+                    {s.name[0]}
+                  </div>
+                  <div className="absolute -top-2 -right-2 w-6 h-6 bg-yellow-400 text-white rounded-full flex items-center justify-center text-[10px] font-bold border-2 border-white">
+                    {i + 1}
+                  </div>
+                </div>
+                <div>
+                  <p className="font-bold text-sm">{s.name} {s.surname}</p>
+                  <p className="text-[10px] text-text-secondary uppercase font-bold">Score: {98 - i * 2}%</p>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-8 pt-8 border-t border-slate-100">
+            <h4 className="text-xs font-bold text-text-secondary uppercase tracking-widest mb-4">Subject Averages</h4>
+            <div className="space-y-3">
+              {['Math', 'Science', 'English'].map(sub => (
+                <div key={sub} className="flex justify-between items-center text-xs">
+                  <span className="font-medium">{sub}</span>
+                  <span className="font-bold text-primary">82%</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      <Card className="p-6">
+        <h3 className="font-bold text-text-heading mb-6">Student Roster</h3>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="text-[10px] font-bold text-text-secondary uppercase tracking-wider border-b border-slate-200">
+                <th className="pb-4 px-4">Student</th>
+                <th className="pb-4 px-4">Roll No</th>
+                <th className="pb-4 px-4">Attendance</th>
+                <th className="pb-4 px-4">Performance</th>
+              </tr>
+            </thead>
+            <tbody className="text-sm">
+              {classStudents.map((s: any, i: number) => (
+                <tr key={s.id} className="border-b border-slate-100 hover:bg-slate-50 transition-all">
+                  <td className="py-4 px-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center font-bold text-primary">
+                        {s.name[0]}
+                      </div>
+                      <div>
+                        <p className="font-bold">{s.name} {s.surname}</p>
+                        <p className="text-[10px] text-text-secondary">{s.studentId}</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="py-4 px-4 font-medium">{i + 1}</td>
+                  <td className="py-4 px-4">
+                    <span className="px-2 py-1 bg-emerald-100 text-emerald-600 rounded text-[10px] font-bold">96%</span>
+                  </td>
+                  <td className="py-4 px-4">
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                        <div className="h-full bg-primary" style={{ width: '85%' }}></div>
+                      </div>
+                      <span className="text-[10px] font-bold">A</span>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+    </div>
+  );
+};
+
+export default function App() {
+  const [view, setView] = useState<View>('login');
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [students, setStudents] = useState<Student[]>([]);
+  const [editingStudentId, setEditingStudentId] = useState<string | null>(null);
+  const [schoolProfile, setSchoolProfile] = useState({
+    name: 'Digital School System',
+    logo: 'https://storage.googleapis.com/cortex-dev-cortex-build-public-assets/ais-dev-qwpf4dfgd7b2nhd2genpku-212916940376/nehatripathifreelance%40gmail.com/1742561480073-image-0.png',
+    signature: null,
+    stamp: null,
+    contact: '+91 9876543210',
+    address: '123 Education Hub, New Delhi, India',
+    gstNo: '22AAAAA0000A1Z5',
+    regNo: 'SCH/2024/001',
+    wardenPanelId: 'WARDEN001',
+    wardenPanelPassword: 'password123',
+    cameraUrls: [
+      { id: '1', name: 'Main Gate', url: 'https://picsum.photos/seed/gate/640/480' },
+      { id: '2', name: 'Hostel Block A', url: 'https://picsum.photos/seed/hostel/640/480' },
+      { id: '3', name: 'Playground', url: 'https://picsum.photos/seed/play/640/480' },
+      { id: '4', name: 'Library', url: 'https://picsum.photos/seed/library/640/480' }
+    ]
+  });
+  const [formData, setFormData] = useState<any>({});
+  
+  // Master Data State
+  const [masterData, setMasterData] = useState({
+    categories: ['General', 'OBC', 'SC', 'ST'],
+    castes: ['Hindu', 'Muslim', 'Sikh', 'Christian'],
+    religions: ['Hinduism', 'Islam', 'Sikhism', 'Christianity', 'Buddhism', 'Jainism'],
+    titles: ['Mr.', 'Miss', 'Mrs.'],
+    classes: ['LKG', 'UKG', 'Class 1', 'Class 2', 'Class 3', 'Class 4', 'Class 5', 'Class 6', 'Class 7', 'Class 8', 'Class 9', 'Class 10', 'Class 11', 'Class 12'],
+    sections: ['A', 'B', 'C', 'D'],
+    subjects: ['Mathematics', 'Science', 'English', 'Social Studies', 'Hindi', 'Computer Science'],
+    genders: ['Male', 'Female', 'Others'],
+    teachers: ['Rajesh Kumar', 'Sunita Devi', 'Amit Shah', 'Priyanka Sharma', 'Vikram Singh', 'Neha Gupta', 'Sanjay Verma', 'Meera Nair', 'Rahul Sharma', 'Sachin Gupta'],
+    sessions: ['2023-24', '2024-25', '2025-26']
+  });
+
+  const [taxes, setTaxes] = useState(0);
+  const [generatedCredentials, setGeneratedCredentials] = useState<any[]>([]);
+  
+  // Fee Management State
+  const [feeTypes, setFeeTypes] = useState<FeeType[]>([
+    { id: '1', name: 'Tuition Fee', description: 'Monthly tuition fee' },
+    { id: '2', name: 'Library Fee', description: 'Annual library fee' },
+    { id: '3', name: 'Transport Fee', description: 'Monthly transport fee' }
+  ]);
+  const [feeMaster, setFeeMaster] = useState<FeeMaster[]>([
+    { id: '1', class: 'Class 1', feeType: 'Tuition Fee', amount: 2500, frequency: 'Monthly' },
+    { id: '2', class: 'Class 2', feeType: 'Tuition Fee', amount: 2600, frequency: 'Monthly' }
+  ]);
+  const [feeTransactions, setFeeTransactions] = useState<FeeTransaction[]>([]);
+  
+  // Academics State
+  const [timeTables, setTimeTables] = useState<ClassTimeTable[]>([]);
+  const [syllabuses, setSyllabuses] = useState<Syllabus[]>([
+    { id: '1', class: '10', subject: 'Mathematics', title: 'Algebra', description: 'Quadratic equations and functions', date: '2024-03-20', status: 'Started' },
+    { id: '2', class: '10', subject: 'Science', title: 'Physics', description: 'Light and Optics', date: '2024-03-15', status: 'Completed' },
+    { id: '3', class: '9', subject: 'English', title: 'Grammar', description: 'Tenses and Voices', date: '2024-03-18', status: 'Not Started' },
+  ]);
+  const [homeworks, setHomeworks] = useState<Homework[]>([]);
+  const [activities, setActivities] = useState<Activity[]>([]);
+  const [teacherAssignments, setTeacherAssignments] = useState<ClassAssignment[]>([
+    { id: '1', class: 'Class 10', section: 'A', classTeacher: 'Rajesh Kumar', subjectTeachers: [{ subject: 'Mathematics', teacher: 'Rajesh Kumar' }], session: '2024-25' },
+    { id: '2', class: 'Class 9', section: 'B', classTeacher: 'Sunita Devi', subjectTeachers: [{ subject: 'Science', teacher: 'Rajesh Kumar' }], session: '2024-25' },
+    { id: '3', class: 'Class 1', section: 'A', classTeacher: 'Rajesh Kumar', subjectTeachers: [{ subject: 'English', teacher: 'Rajesh Kumar' }], session: '2024-25' },
+  ]);
+  const [attendance, setAttendance] = useState<Attendance[]>([]);
+  
+  // Examination State
+  const [exams, setExams] = useState<Exam[]>([]);
+  const [examSchedules, setExamSchedules] = useState<ExamSchedule[]>([]);
+  const [examResults, setExamResults] = useState<ExamResult[]>([]);
+  const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([
+    { id: '1', studentId: 'ST-102938', studentName: 'John Doe', class: '10', section: 'A', startDate: '2024-03-25', endDate: '2024-03-26', duration: 2, reason: 'Family function', status: 'Pending', appliedDate: '2024-03-20' },
+    { id: '2', studentId: 'ST-102939', studentName: 'Jane Smith', class: '10', section: 'B', startDate: '2024-03-22', endDate: '2024-03-22', duration: 1, reason: 'Medical checkup', status: 'Approved', appliedDate: '2024-03-19', approvedBy: 'Teacher A' },
+  ]);
+  const [notifications, setNotifications] = useState<Notification[]>([
+    { id: '1', title: 'Fee Reminder', message: 'Your tuition fee for March is due.', date: '2024-03-20', type: 'Fee', targetRoles: ['parent'], targetStudentId: 'ST-102938' },
+    { id: '2', title: 'Holiday Notice', message: 'School will be closed on 25th March for Holi.', date: '2024-03-18', type: 'Info', targetRoles: ['admin', 'teacher', 'student', 'parent'] },
+  ]);
+  
+  // Hostel State
+  const [hostelRooms, setHostelRooms] = useState<HostelRoom[]>([]);
+  const [hostelBeds, setHostelBeds] = useState<HostelBed[]>([]);
+  const [hostelStaff, setHostelStaff] = useState<HostelStaff[]>([]);
+  const [hostelAttendance, setHostelAttendance] = useState<HostelAttendance[]>([]);
+  
+  // Modal State
+  const [modal, setModal] = useState<{ isOpen: boolean, title: string, message: string, onConfirm?: () => void } | null>(null);
+
+  useEffect(() => {
+    if (students.length === 0) {
+      const indianStudents: Student[] = [
+        { 
+          id: '1', studentId: 'DS-100001', name: 'Aarav', surname: 'Sharma', class: 'Class 1', section: 'A', gender: 'Male', address: 'New Delhi', category: 'General', religion: 'Hinduism', caste: 'Brahmin',
+          fatherName: 'Rajesh Sharma', motherName: 'Sunita Sharma', fatherMobile: '9876543210', motherMobile: '9876543211', bloodGroup: 'A+', emergencyContact: '9876543212', localGuardianContact: '9876543213', email: 'aarav@example.com', allergy: 'None', hasDisability: false, disabilityDetails: '', relationInSchool: { name: '', class: '', section: '' }
+        },
+        { 
+          id: '2', studentId: 'DS-100002', name: 'Vihaan', surname: 'Gupta', class: 'Class 2', section: 'B', gender: 'Male', address: 'Mumbai', category: 'General', religion: 'Hinduism', caste: 'Vaishya',
+          fatherName: 'Amit Gupta', motherName: 'Neha Gupta', fatherMobile: '9876543214', motherMobile: '9876543215', bloodGroup: 'B+', emergencyContact: '9876543216', localGuardianContact: '9876543217', email: 'vihaan@example.com', allergy: 'None', hasDisability: false, disabilityDetails: '', relationInSchool: { name: '', class: '', section: '' }
+        },
+        { 
+          id: '3', studentId: 'DS-100003', name: 'Advik', surname: 'Verma', class: 'Class 3', section: 'C', gender: 'Male', address: 'Bangalore', category: 'OBC', religion: 'Hinduism', caste: 'Kshatriya',
+          fatherName: 'Sanjay Verma', motherName: 'Meera Verma', fatherMobile: '9876543218', motherMobile: '9876543219', bloodGroup: 'O+', emergencyContact: '9876543220', localGuardianContact: '9876543221', email: 'advik@example.com', allergy: 'None', hasDisability: false, disabilityDetails: '', relationInSchool: { name: '', class: '', section: '' }
+        },
+        { 
+          id: '4', studentId: 'DS-100004', name: 'Ananya', surname: 'Iyer', class: 'Class 4', section: 'D', gender: 'Female', address: 'Chennai', category: 'General', religion: 'Hinduism', caste: 'Brahmin',
+          fatherName: 'Subramanian Iyer', motherName: 'Lakshmi Iyer', fatherMobile: '9876543222', motherMobile: '9876543223', bloodGroup: 'AB+', emergencyContact: '9876543224', localGuardianContact: '9876543225', email: 'ananya@example.com', allergy: 'None', hasDisability: false, disabilityDetails: '', relationInSchool: { name: '', class: '', section: '' }
+        },
+        { 
+          id: '5', studentId: 'DS-100005', name: 'Ishani', surname: 'Reddy', class: 'Class 5', section: 'A', gender: 'Female', address: 'Hyderabad', category: 'General', religion: 'Hinduism', caste: 'Reddy',
+          fatherName: 'Venkat Reddy', motherName: 'Kavitha Reddy', fatherMobile: '9876543226', motherMobile: '9876543227', bloodGroup: 'A-', emergencyContact: '9876543228', localGuardianContact: '9876543229', email: 'ishani@example.com', allergy: 'None', hasDisability: false, disabilityDetails: '', relationInSchool: { name: '', class: '', section: '' }
+        },
+      ];
+      setStudents(indianStudents);
+    }
+
+    if (hostelRooms.length === 0) {
+      const initialRooms: HostelRoom[] = [
+        { id: '1', roomNumber: '101', floor: '1st', type: 'AC', category: 'Deluxe', capacity: 2, gender: 'Male', price: 5000 },
+        { id: '2', roomNumber: '102', floor: '1st', type: 'Non-AC', category: 'Standard', capacity: 4, gender: 'Male', price: 3000 },
+        { id: '3', roomNumber: '201', floor: '2nd', type: 'AC', category: 'Deluxe', capacity: 2, gender: 'Female', price: 5500 },
+      ];
+      setHostelRooms(initialRooms);
+      
+      const initialBeds: HostelBed[] = [
+        { id: '1', roomId: '1', bedNumber: '101-A', status: 'Occupied', studentId: 'DS-100001' },
+        { id: '2', roomId: '1', bedNumber: '101-B', status: 'Available' },
+        { id: '3', roomId: '2', bedNumber: '102-A', status: 'Occupied', studentId: 'DS-100002' },
+        { id: '4', roomId: '2', bedNumber: '102-B', status: 'Available' },
+        { id: '5', roomId: '2', bedNumber: '102-C', status: 'Available' },
+        { id: '6', roomId: '2', bedNumber: '102-D', status: 'Available' },
+      ];
+      setHostelBeds(initialBeds);
+    }
+  }, []);
+
+  const showModal = (title: string, message: string, onConfirm?: () => void) => {
+    setModal({ isOpen: true, title, message, onConfirm });
+  };
+
+  // Master Data Handlers
+  const addMasterItem = (key: string, value: string) => {
+    if (!value) return;
+    setMasterData(prev => ({
+      ...prev,
+      [key]: [...(prev as any)[key], value]
+    }));
+  };
+
+  const deleteMasterItem = (key: string, index: number) => {
+    setMasterData(prev => ({
+      ...prev,
+      [key]: (prev as any)[key].filter((_: any, i: number) => i !== index)
+    }));
+  };
+
+  const editMasterItem = (key: string, index: number, newValue: string) => {
+    if (!newValue) return;
+    setMasterData(prev => ({
+      ...prev,
+      [key]: (prev as any)[key].map((v: any, i: number) => i === index ? newValue : v)
+    }));
+  };
+
+  const generateCredentials = (type: 'Student' | 'Teacher', count: number = 1) => {
+    const newCreds = [];
+    for (let i = 0; i < count; i++) {
+      const id = (type === 'Student' ? 'STU' : 'TCH') + Math.floor(10000 + Math.random() * 90000);
+      const password = Math.random().toString(36).slice(-8);
+      newCreds.push({ type, id, password, date: new Date().toLocaleString() });
+    }
+    setGeneratedCredentials(prev => [...prev, ...newCreds]);
+  };
+
+  // Login State
+  const [loginId, setLoginId] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (loginId === 'admin' && loginPassword === '12345678') {
+      setLoginError('');
+      setCurrentUser({ role: 'admin', name: 'Administrator' });
+      setView('dashboard');
+    } else if (loginId === schoolProfile.wardenPanelId && loginPassword === schoolProfile.wardenPanelPassword) {
+      setLoginError('');
+      setCurrentUser({ role: 'warden', name: 'Hostel Warden' });
+      setView('hostel');
+    } else if (loginId.startsWith('TCH-')) {
+      // Mock teacher login
+      setLoginError('');
+      const teacherName = loginId === 'TCH-12345' ? 'Rajesh Kumar' : 'Teacher ' + loginId.split('-')[1];
+      setCurrentUser({ role: 'teacher', name: teacherName, id: loginId });
+      setView('teacher-panel');
+    } else if (loginId.startsWith('PAR-')) {
+      // Mock parent login - linked to a student
+      const studentId = loginId.replace('PAR-', 'DS-');
+      const student = students.find(s => s.studentId === studentId);
+      if (student) {
+        setLoginError('');
+        setCurrentUser({ role: 'parent', ...student });
+        setView('parent-panel');
+      } else {
+        setLoginError('No student found for this parent ID.');
+      }
+    } else {
+      // Check if it's a student ID
+      const student = students.find(s => s.studentId === loginId);
+      if (student) {
+        setLoginError('');
+        setCurrentUser({ role: 'student', ...student });
+        setView('dashboard');
+      } else {
+        setLoginError('Invalid ID or Password. Please try again.');
+      }
+    }
+  };
+
+  const generateStudentId = () => {
+    return 'DS-' + Math.floor(100000 + Math.random() * 900000);
+  };
+
+  const handleRegister = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (editingStudentId) {
+      const updatedStudents = students.map(s => 
+        s.id === editingStudentId ? { ...formData, id: s.id, studentId: s.studentId } : s
+      );
+      setStudents(updatedStudents);
+      showModal('Success', 'Student Details Updated Successfully!');
+    } else {
+      const newStudent = {
+        ...formData,
+        id: Date.now().toString(),
+        studentId: generateStudentId(),
+      };
+      setStudents([...students, newStudent]);
+      showModal('Success', `Student Registered Successfully! ID: ${newStudent.studentId}`);
+    }
+    setEditingStudentId(null);
+    setFormData({});
+    setView('dashboard');
+  };
+
+  if (view === 'login') {
+    return (
+      <div 
+        className="min-h-screen flex flex-col items-center justify-center p-6 bg-cover bg-center relative"
+        style={{ backgroundImage: 'url("https://images.unsplash.com/photo-1541339907198-e08756ebafe3?q=80&w=2070&auto=format&fit=crop")' }}
+      >
+        {/* Overlay for better readability */}
+        <div className="absolute inset-0 bg-blue-900/20 backdrop-blur-[2px]"></div>
+
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="w-full max-w-md relative z-10"
+        >
+          {/* Central Illustration Area */}
+          <div className="text-center mb-6 relative">
+            <div className="relative inline-block">
+              {/* Mocking the illustration with icons and shapes */}
+              <div className="relative z-20 flex flex-col items-center">
+                <div className="bg-white p-4 rounded-2xl shadow-2xl mb-[-20px] relative z-30 border border-slate-100">
+                  <div className="flex items-center justify-center gap-2 mb-2">
+                    <Building2 className="text-primary" size={32} />
+                    <div className="h-8 w-[1px] bg-slate-200"></div>
+                    <GraduationCap className="text-primary" size={32} />
+                  </div>
+                  <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                    <BookOpen className="text-primary" size={40} />
+                  </div>
+                </div>
+                <div className="bg-slate-800 w-48 h-32 rounded-t-xl shadow-2xl flex items-center justify-center border-x-4 border-t-4 border-slate-700">
+                  <div className="w-40 h-24 bg-blue-500/20 rounded-lg border border-blue-400/30 flex items-center justify-center overflow-hidden">
+                     <div className="grid grid-cols-3 gap-1 opacity-30">
+                        {[...Array(9)].map((_, i) => <div key={i} className="w-4 h-4 bg-white rounded-sm"></div>)}
+                     </div>
+                  </div>
+                </div>
+                <div className="bg-slate-700 w-56 h-3 rounded-b-xl shadow-lg"></div>
+              </div>
+              
+              {/* Decorative elements */}
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-primary/20 rounded-full blur-3xl -z-10"></div>
+            </div>
+          </div>
+
+          <div className="login-glass rounded-[24px] overflow-hidden shadow-2xl border-white/40">
+            <div className="bg-primary/10 py-6 text-center border-b border-white/20">
+              <h1 className="text-4xl font-black text-primary tracking-tight">School Login</h1>
+              <p className="text-slate-600 font-medium text-sm mt-1">Digital System powered by <span className="font-bold text-primary">JOSHODA.</span></p>
+            </div>
+
+            <form onSubmit={handleLogin} className="p-8 space-y-5">
+              <div className="space-y-1">
+                <div className="relative">
+                  <UserCircle className="absolute left-4 top-1/2 -translate-y-1/2 text-primary" size={20} />
+                  <input 
+                    type="text" 
+                    className="w-full pl-12 pr-4 py-4 rounded-xl border border-slate-200 focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none transition-all bg-white/90 placeholder:text-slate-400 text-base font-medium" 
+                    placeholder="Username"
+                    value={loginId}
+                    onChange={(e) => setLoginId(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <div className="relative">
+                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-primary" size={20} />
+                  <input 
+                    type={showPassword ? "text" : "password"} 
+                    className="w-full pl-12 pr-12 py-4 rounded-xl border border-slate-200 focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none transition-all bg-white/90 placeholder:text-slate-400 text-base font-medium" 
+                    placeholder="Password"
+                    value={loginPassword}
+                    onChange={(e) => setLoginPassword(e.target.value)}
+                  />
+                  <button 
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-primary transition-colors"
+                  >
+                    {showPassword ? <Eye size={20} /> : <ScanLine size={20} />}
+                  </button>
+                </div>
+              </div>
+
+              {loginError && (
+                <motion.div 
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  className="p-4 bg-red-50 text-red-600 text-sm font-bold rounded-xl border border-red-100 flex items-center gap-2"
+                >
+                  <AlertCircle size={18} />
+                  {loginError}
+                </motion.div>
+              )}
+
+              <button 
+                type="submit" 
+                className="w-full py-4 rounded-xl bg-primary text-white font-bold text-lg shadow-lg shadow-primary/30 hover:bg-primary-hover hover:shadow-xl hover:-translate-y-0.5 transition-all active:scale-[0.98]"
+              >
+                Login
+              </button>
+
+              <div className="flex items-center justify-between pt-2">
+                <label className="flex items-center gap-2 cursor-pointer group">
+                  <div className="relative flex items-center justify-center">
+                    <input type="checkbox" className="peer sr-only" />
+                    <div className="w-5 h-5 border-2 border-slate-300 rounded peer-checked:bg-primary peer-checked:border-primary transition-all"></div>
+                    <CheckCircle2 className="absolute text-white opacity-0 peer-checked:opacity-100 transition-opacity" size={14} />
+                  </div>
+                  <span className="text-sm font-semibold text-slate-600 group-hover:text-primary transition-colors">Remember Me</span>
+                </label>
+                <button type="button" className="text-sm font-bold text-primary hover:underline">Forgot Password?</button>
+              </div>
+            </form>
+
+            <div className="bg-primary py-3 text-center">
+              <p className="text-[10px] text-white/80 font-bold uppercase tracking-[0.2em]">
+                — A Digital Communique Product —
+              </p>
+            </div>
+          </div>
+        </motion.div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen flex bg-slate-50">
+      {/* Sidebar */}
+      <aside className={`bg-white border-r border-slate-200 transition-all duration-300 ${isSidebarOpen ? 'w-64' : 'w-20'} flex flex-col`}>
+        <div className="p-6 flex items-center gap-3">
+          <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center text-white shrink-0">
+            <School size={24} />
+          </div>
+          {isSidebarOpen && (
+            <div className="overflow-hidden whitespace-nowrap">
+              <h2 className="font-bold text-sm leading-tight">Digital School</h2>
+              <p className="text-[10px] text-text-secondary uppercase tracking-wider">JOSHODA</p>
+            </div>
+          )}
+        </div>
+
+        <nav className="flex-1 px-4 space-y-2">
+          <SidebarItem 
+            icon={LayoutDashboard} 
+            label={isSidebarOpen ? "Dashboard" : ""} 
+            active={view === 'dashboard'} 
+            onClick={() => setView('dashboard')} 
+          />
+          {currentUser?.role === 'teacher' && (
+            <SidebarItem 
+              icon={UserCog} 
+              label={isSidebarOpen ? "Teacher Panel" : ""} 
+              active={view === 'teacher-panel'} 
+              onClick={() => setView('teacher-panel')} 
+            />
+          )}
+          {currentUser?.role === 'parent' && (
+            <SidebarItem 
+              icon={Users} 
+              label={isSidebarOpen ? "Parent Portal" : ""} 
+              active={view === 'parent-panel'} 
+              onClick={() => setView('parent-panel')} 
+            />
+          )}
+          {currentUser?.role === 'admin' && (
+            <>
+              <SidebarItem 
+                icon={BarChart3} 
+                label={isSidebarOpen ? "Admin 360" : ""} 
+                active={view === 'admin-360'} 
+                onClick={() => setView('admin-360')} 
+              />
+              <SidebarItem 
+                icon={Users} 
+                label={isSidebarOpen ? "Class 360" : ""} 
+                active={view === 'class-360'} 
+                onClick={() => setView('class-360')} 
+              />
+              <SidebarItem 
+                icon={UserPlus} 
+                label={isSidebarOpen ? "Register Student" : ""} 
+                active={view === 'register-student'} 
+                onClick={() => setView('register-student')} 
+              />
+              <SidebarItem 
+                icon={Users} 
+                label={isSidebarOpen ? "Student List" : ""} 
+                active={view === 'student-list'} 
+                onClick={() => setView('student-list')} 
+              />
+              <SidebarItem 
+                icon={Receipt} 
+                label={isSidebarOpen ? "Fee Management" : ""} 
+                active={view === 'fee-management'} 
+                onClick={() => setView('fee-management')} 
+              />
+              <SidebarItem 
+                icon={Wallet} 
+                label={isSidebarOpen ? "Due Fees" : ""} 
+                active={view === 'due-fees'} 
+                onClick={() => setView('due-fees')} 
+              />
+              <SidebarItem 
+                icon={CalendarRange} 
+                label={isSidebarOpen ? "Leave Management" : ""} 
+                active={view === 'leave-management'} 
+                onClick={() => setView('leave-management')} 
+              />
+            </>
+          )}
+          {currentUser?.role === 'student' && (
+            <SidebarItem 
+              icon={Wallet} 
+              label={isSidebarOpen ? "My Due Fees" : ""} 
+              active={view === 'due-fees'} 
+              onClick={() => setView('due-fees')} 
+            />
+          )}
+          <SidebarItem 
+            icon={BookOpen} 
+            label={isSidebarOpen ? "Academics" : ""} 
+            active={view === 'academics'} 
+            onClick={() => setView('academics')} 
+          />
+          <SidebarItem 
+            icon={UserCheck} 
+            label={isSidebarOpen ? "Attendance" : ""} 
+            active={view === 'attendance'} 
+            onClick={() => setView('attendance')} 
+          />
+          <SidebarItem 
+            icon={ClipboardList} 
+            label={isSidebarOpen ? "Examination" : ""} 
+            active={view === 'examination'} 
+            onClick={() => setView('examination')} 
+          />
+          <SidebarItem 
+            icon={UserPlus} 
+            label={isSidebarOpen ? "ID Cards & Certs" : ""} 
+            active={view === 'id-cards'} 
+            onClick={() => setView('id-cards')} 
+          />
+          <SidebarItem 
+            icon={Home} 
+            label={isSidebarOpen ? "Hostel" : ""} 
+            active={view === 'hostel'} 
+            onClick={() => setView('hostel')} 
+          />
+          <SidebarItem 
+            icon={Camera} 
+            label={isSidebarOpen ? "Live Camera" : ""} 
+            active={view === 'live-camera'} 
+            onClick={() => setView('live-camera')} 
+          />
+          <SidebarItem 
+            icon={Settings} 
+            label={isSidebarOpen ? "Settings" : ""} 
+            active={view === 'settings'} 
+            onClick={() => setView('settings')} 
+          />
+          <div className="mt-auto p-4 text-center border-t border-slate-100">
+            <p className="text-[8px] font-black text-slate-400 uppercase tracking-[0.2em]">A Digital Communique Product</p>
+          </div>
+        </nav>
+
+        <div className="p-4 border-t border-slate-100">
+          <button 
+            onClick={() => setView('login')}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-red-500 hover:bg-red-50 transition-all"
+          >
+            <LogOut size={20} />
+            {isSidebarOpen && <span className="font-medium">Logout</span>}
+          </button>
+        </div>
+        <div className="p-4 text-center border-t border-slate-50">
+          <p className="text-[8px] font-black text-slate-400 uppercase tracking-[0.2em]">A Digital Communique Product</p>
+        </div>
+      </aside>
+
+      {/* Main Content */}
+      <main className="flex-1 flex flex-col overflow-hidden">
+        {/* Header */}
+        <header className="h-16 bg-white border-bottom border-slate-200 flex items-center justify-between px-8 shrink-0">
+          <div className="flex items-center gap-4">
+            <button 
+              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+              className="p-2 hover:bg-slate-100 rounded-lg text-text-secondary"
+            >
+              <Users size={20} />
+            </button>
+            <div className="relative hidden md:block">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+              <input 
+                type="text" 
+                placeholder="Search students, records..." 
+                className="bg-slate-100 border-none rounded-xl pl-10 pr-4 py-2 text-sm focus:ring-2 focus:ring-primary/20 w-64"
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center gap-4">
+            <button className="p-2 hover:bg-slate-100 rounded-full text-text-secondary relative">
+              <Bell size={20} />
+              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-accent-warning rounded-full border-2 border-white"></span>
+            </button>
+            <div className="flex items-center gap-3 pl-4 border-l border-slate-200">
+              <div className="text-right hidden sm:block">
+                <p className="text-sm font-semibold">Admin User</p>
+                <p className="text-[10px] text-text-secondary uppercase">Super Admin</p>
+              </div>
+              <img 
+                src="https://api.dicebear.com/7.x/avataaars/svg?seed=admin" 
+                alt="Avatar" 
+                className="w-10 h-10 rounded-xl bg-slate-100"
+              />
+            </div>
+          </div>
+        </header>
+
+        {/* Content Area */}
+        <div className="flex-1 overflow-y-auto p-8">
+          <AnimatePresence mode="wait">
+            {view === 'dashboard' && (
+              <motion.div
+                key="dashboard"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                className="space-y-8"
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h1 className="text-3xl font-bold">Welcome Back! 🌿</h1>
+                    <p className="text-text-secondary">Here's what's happening in your school today.</p>
+                  </div>
+                  <button 
+                    onClick={() => {
+                      setEditingStudentId(null);
+                      setFormData({});
+                      setView('register-student');
+                    }} 
+                    className="btn-primary flex items-center gap-2"
+                  >
+                    <UserPlus size={20} />
+                    New Registration
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                  {[
+                    { label: 'Total Students', value: students.length + 1240, icon: Users, color: 'bg-primary' },
+                    { label: 'Attendance', value: '94%', icon: CheckCircle2, color: 'bg-secondary' },
+                    { label: 'Pending Fees', value: '12', icon: AlertCircle, color: 'bg-accent' },
+                    { label: 'New Admissions', value: students.length, icon: GraduationCap, color: 'bg-purple-600' },
+                  ].map((stat, i) => (
+                    <Card key={i} className="flex items-center gap-4 p-6">
+                      <div className={`w-12 h-12 ${stat.color} rounded-xl flex items-center justify-center text-white shadow-lg shadow-black/5`}>
+                        <stat.icon size={24} />
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-text-sub uppercase font-bold tracking-wider">{stat.label}</p>
+                        <p className="text-2xl font-bold text-text-heading">{stat.value}</p>
+                      </div>
+                    </Card>
+                  ))}
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                  <Card className="lg:col-span-2">
+                    <h3 className="text-lg font-bold mb-6 flex items-center gap-2">
+                      <Users size={20} className="text-primary" />
+                      Recent Registrations
+                    </h3>
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead>
+                          <tr className="text-left text-xs text-text-secondary uppercase border-b border-slate-100">
+                            <th className="pb-4 font-bold">Student</th>
+                            <th className="pb-4 font-bold">ID</th>
+                            <th className="pb-4 font-bold">Class</th>
+                            <th className="pb-4 font-bold">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-50">
+                          {students.length === 0 ? (
+                            <tr>
+                              <td colSpan={4} className="py-8 text-center text-text-secondary italic">No recent registrations</td>
+                            </tr>
+                          ) : (
+                            students.slice(-5).reverse().map((s) => (
+                              <tr key={s.id} className="text-sm">
+                                <td className="py-4">
+                                  <div className="flex items-center gap-3">
+                                    <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-primary font-bold">
+                                      {s.name[0]}
+                                    </div>
+                                    <span className="font-medium">{s.name} {s.surname}</span>
+                                  </div>
+                                </td>
+                                <td className="py-4 font-mono text-xs">{s.studentId}</td>
+                                <td className="py-4">{s.class} - {s.section}</td>
+                                <td className="py-4">
+                                  <span className="px-2 py-1 bg-green-100 text-green-600 rounded-md text-[10px] font-bold uppercase">Active</span>
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </Card>
+
+                  <Card>
+                    <h3 className="text-lg font-bold mb-6">School Calendar</h3>
+                    <div className="space-y-4">
+                      {[
+                        { title: 'Mid-term Exams', date: 'Oct 15 - Oct 22', type: 'Exams' },
+                        { title: 'Annual Sports Day', date: 'Nov 05', type: 'Event' },
+                        { title: 'Parent Teacher Meeting', date: 'Nov 12', type: 'Meeting' },
+                      ].map((event, i) => (
+                        <div key={i} className="p-4 rounded-xl bg-slate-50 border border-slate-100">
+                          <p className="text-xs font-bold text-primary uppercase mb-1">{event.type}</p>
+                          <p className="font-semibold text-sm">{event.title}</p>
+                          <p className="text-xs text-text-secondary mt-1">{event.date}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </Card>
+                </div>
+              </motion.div>
+            )}
+
+            {view === 'register-student' && (
+              <motion.div
+                key="register"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                className="max-w-5xl mx-auto"
+              >
+                <div className="mb-8">
+                  <h1 className="text-3xl font-bold">{editingStudentId ? 'Edit Student Details' : 'Student Registration'}</h1>
+                  <p className="text-text-secondary">{editingStudentId ? 'Update the details below.' : 'Fill in the details to enroll a new student.'}</p>
+                </div>
+
+                <form onSubmit={handleRegister} className="space-y-8">
+                  {/* Basic Information */}
+                  <Card>
+                    <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-primary">
+                      <Users size={20} />
+                      Basic Information
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                      <div className="flex gap-2">
+                        <div className="w-1/3">
+                          <Select 
+                            label="Title" 
+                            options={masterData.titles} 
+                            value={formData.title || ''}
+                            onChange={(e: any) => setFormData({...formData, title: e.target.value})} 
+                          />
+                        </div>
+                        <div className="flex-1">
+                          <Input 
+                            label="First Name" 
+                            required 
+                            value={formData.name || ''}
+                            onChange={(e: any) => setFormData({...formData, name: e.target.value})} 
+                          />
+                        </div>
+                      </div>
+                      <Input 
+                        label="Surname" 
+                        required 
+                        value={formData.surname || ''}
+                        onChange={(e: any) => setFormData({...formData, surname: e.target.value})} 
+                      />
+                      <Select 
+                        label="Class" 
+                        options={masterData.classes} 
+                        required 
+                        value={formData.class || ''}
+                        onChange={(e: any) => setFormData({...formData, class: e.target.value})} 
+                      />
+                      <Select 
+                        label="Section" 
+                        options={masterData.sections} 
+                        required 
+                        value={formData.section || ''}
+                        onChange={(e: any) => setFormData({...formData, section: e.target.value})} 
+                      />
+                      <Select 
+                        label="Caste" 
+                        options={masterData.castes} 
+                        value={formData.caste || ''}
+                        onChange={(e: any) => setFormData({...formData, caste: e.target.value})} 
+                      />
+                      <Select 
+                        label="Category" 
+                        options={masterData.categories} 
+                        value={formData.category || ''}
+                        onChange={(e: any) => setFormData({...formData, category: e.target.value})} 
+                      />
+                      <Select 
+                        label="Religion" 
+                        options={masterData.religions} 
+                        value={formData.religion || ''}
+                        onChange={(e: any) => setFormData({...formData, religion: e.target.value})} 
+                      />
+                      <Select 
+                        label="Gender" 
+                        options={masterData.genders} 
+                        required 
+                        value={formData.gender || ''}
+                        onChange={(e: any) => setFormData({...formData, gender: e.target.value})} 
+                      />
+                      <Select 
+                        label="Blood Group" 
+                        options={['A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-']} 
+                        value={formData.bloodGroup || ''}
+                        onChange={(e: any) => setFormData({...formData, bloodGroup: e.target.value})} 
+                      />
+                      <Input 
+                        label="Email ID" 
+                        type="email" 
+                        value={formData.email || ''}
+                        onChange={(e: any) => setFormData({...formData, email: e.target.value})} 
+                      />
+                    </div>
+                  </Card>
+
+                  {/* Family Details */}
+                  <Card>
+                    <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-primary">
+                      <HeartPulse size={20} />
+                      Family & Contact Details
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <Input 
+                        label="Father's Name" 
+                        required 
+                        value={formData.fatherName || ''}
+                        onChange={(e: any) => setFormData({...formData, fatherName: e.target.value})} 
+                      />
+                      <Input 
+                        label="Mother's Name" 
+                        required 
+                        value={formData.motherName || ''}
+                        onChange={(e: any) => setFormData({...formData, motherName: e.target.value})} 
+                      />
+                      <Input 
+                        label="Father's Mobile Number" 
+                        type="tel" 
+                        required 
+                        value={formData.fatherMobile || ''}
+                        onChange={(e: any) => setFormData({...formData, fatherMobile: e.target.value})} 
+                      />
+                      <Input 
+                        label="Mother's Mobile Number" 
+                        type="tel" 
+                        required 
+                        value={formData.motherMobile || ''}
+                        onChange={(e: any) => setFormData({...formData, motherMobile: e.target.value})} 
+                      />
+                      <Input 
+                        label="Emergency Contact Number" 
+                        type="tel" 
+                        required 
+                        value={formData.emergencyContact || ''}
+                        onChange={(e: any) => setFormData({...formData, emergencyContact: e.target.value})} 
+                      />
+                      <Input 
+                        label="Local Guardian Contact Number" 
+                        type="tel" 
+                        value={formData.localGuardianContact || ''}
+                        onChange={(e: any) => setFormData({...formData, localGuardianContact: e.target.value})} 
+                      />
+                    </div>
+                    <div className="mt-6">
+                      <label className="label-text">Residential Address</label>
+                      <textarea 
+                        className="input-field min-h-[100px]" 
+                        placeholder="Enter full address..."
+                        value={formData.address || ''}
+                        onChange={(e: any) => setFormData({...formData, address: e.target.value})}
+                      ></textarea>
+                    </div>
+                  </Card>
+
+                  {/* Health & Relations */}
+                  <Card>
+                    <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-primary">
+                      <AlertCircle size={20} />
+                      Health & School Relations
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <Input 
+                        label="Any Allergies?" 
+                        placeholder="Mention if any..." 
+                        value={formData.allergy || ''}
+                        onChange={(e: any) => setFormData({...formData, allergy: e.target.value})} 
+                      />
+                      <div className="flex flex-col gap-4">
+                        <Select 
+                          label="Any Disability?" 
+                          options={['No', 'Yes']} 
+                          value={formData.hasDisability ? 'Yes' : 'No'}
+                          onChange={(e: any) => setFormData({...formData, hasDisability: e.target.value === 'Yes'})} 
+                        />
+                        {formData.hasDisability && (
+                          <Input 
+                            label="Disability Details" 
+                            placeholder="Please mention details..." 
+                            required 
+                            value={formData.disabilityDetails || ''}
+                            onChange={(e: any) => setFormData({...formData, disabilityDetails: e.target.value})} 
+                          />
+                        )}
+                      </div>
+                      <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 space-y-4">
+                        <p className="text-sm font-bold text-text-secondary uppercase">Relation in School (Sibling/Relative)</p>
+                        <div className="grid grid-cols-2 gap-4">
+                          <Input 
+                            label="Relation Name" 
+                            placeholder="Name" 
+                            value={formData.relationInSchool?.name || ''}
+                            onChange={(e: any) => setFormData({
+                              ...formData, 
+                              relationInSchool: { ...formData.relationInSchool, name: e.target.value }
+                            })}
+                          />
+                          <Input 
+                            label="Class/Section" 
+                            placeholder="e.g. 8-A" 
+                            value={formData.relationInSchool?.classSection || ''}
+                            onChange={(e: any) => setFormData({
+                              ...formData, 
+                              relationInSchool: { ...formData.relationInSchool, classSection: e.target.value }
+                            })}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
+
+                  {/* Document Uploads */}
+                  <Card>
+                    <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-primary">
+                      <FileText size={20} />
+                      Document Uploads
+                    </h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                      <FileUpload label="Student Photo" required />
+                      <FileUpload label="Student Aadhaar Card" required />
+                      <FileUpload label="Parents Documents" required />
+                      <FileUpload label="Student Signature" icon={Signature} required />
+                    </div>
+                  </Card>
+
+                  <div className="flex items-center justify-end gap-4 pb-12">
+                    <button 
+                      type="button" 
+                      onClick={() => {
+                        setEditingStudentId(null);
+                        setFormData({});
+                        setView('dashboard');
+                      }}
+                      className="px-6 py-2.5 rounded-xl font-medium text-text-secondary hover:bg-slate-200 transition-all"
+                    >
+                      Cancel
+                    </button>
+                    <button type="submit" className="btn-primary">
+                      {editingStudentId ? 'Update Student' : 'Register Student'}
+                    </button>
+                  </div>
+                </form>
+              </motion.div>
+            )}
+
+            {view === 'student-list' && (
+              <motion.div
+                key="list"
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 20 }}
+              >
+                <div className="flex items-center justify-between mb-8">
+                  <div>
+                    <h1 className="text-3xl font-bold">Student Directory</h1>
+                    <p className="text-text-secondary">Manage and view all enrolled students.</p>
+                  </div>
+                  <div className="flex gap-3">
+                    <button className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium hover:bg-slate-50 transition-all flex items-center gap-2">
+                      <FileText size={18} />
+                      Export PDF
+                    </button>
+                    <button 
+                      onClick={() => {
+                        setEditingStudentId(null);
+                        setFormData({});
+                        setView('register-student');
+                      }} 
+                      className="btn-primary flex items-center gap-2"
+                    >
+                      <UserPlus size={20} />
+                      Add New
+                    </button>
+                  </div>
+                </div>
+
+                <Card>
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="text-left text-xs text-text-secondary uppercase border-b border-slate-100">
+                          <th className="pb-4 font-bold">Student ID</th>
+                          <th className="pb-4 font-bold">Name</th>
+                          <th className="pb-4 font-bold">Class</th>
+                          <th className="pb-4 font-bold">Father's Name</th>
+                          <th className="pb-4 font-bold">Contact</th>
+                          <th className="pb-4 font-bold">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-50">
+                        {students.length === 0 ? (
+                          <tr>
+                            <td colSpan={6} className="py-12 text-center text-text-secondary italic">
+                              No students found. Start by registering a new student.
+                            </td>
+                          </tr>
+                        ) : (
+                          students.map((s) => (
+                            <tr key={s.id} className="text-sm hover:bg-slate-50/50 transition-all">
+                              <td className="py-4 font-mono text-xs text-primary font-bold">{s.studentId}</td>
+                              <td className="py-4">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center font-bold">
+                                    {s.name[0]}
+                                  </div>
+                                  <span className="font-semibold">{s.name} {s.surname}</span>
+                                </div>
+                              </td>
+                              <td className="py-4">{s.class} - {s.section}</td>
+                              <td className="py-4">{s.fatherName}</td>
+                              <td className="py-4">
+                                <div className="flex items-center gap-1 text-text-secondary">
+                                  <Phone size={14} />
+                                  {s.fatherMobile}
+                                </div>
+                              </td>
+                              <td className="py-4">
+                                <div className="flex items-center gap-2">
+                                  <button className="p-2 hover:bg-primary/10 hover:text-primary rounded-lg transition-all" title="View Details">
+                                    <FileText size={18} />
+                                  </button>
+                                  <button 
+                                    onClick={() => {
+                                      setEditingStudentId(s.id);
+                                      setFormData(s);
+                                      setView('register-student');
+                                    }}
+                                    className="p-2 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-all" 
+                                    title="Edit Student"
+                                  >
+                                    <Edit2 size={18} />
+                                  </button>
+                                  <button 
+                                    onClick={() => {
+                                      showModal(
+                                        'Confirm Delete', 
+                                        `Are you sure you want to delete ${s.name}? This action cannot be undone.`,
+                                        () => setStudents(students.filter(std => std.id !== s.id))
+                                      );
+                                    }}
+                                    className="p-2 hover:bg-red-50 hover:text-red-600 rounded-lg transition-all" 
+                                    title="Delete Student"
+                                  >
+                                    <Trash2 size={18} />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </Card>
+              </motion.div>
+            )}
+
+            {view === 'attendance' && (
+              <motion.div
+                key="attendance"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+              >
+                <Attendance 
+                  students={students} 
+                  attendance={attendance} 
+                  setAttendance={setAttendance} 
+                  masterData={masterData} 
+                  currentUser={currentUser}
+                />
+              </motion.div>
+            )}
+
+            {view === 'live-camera' && (
+              <motion.div
+                key="live-camera"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+              >
+                <LiveCamera cameraUrls={schoolProfile.cameraUrls} />
+              </motion.div>
+            )}
+
+            {view === 'teacher-panel' && (
+              <motion.div key="teacher-panel" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
+                <TeacherPanel 
+                  syllabuses={syllabuses} 
+                  setSyllabuses={setSyllabuses} 
+                  leaveRequests={leaveRequests} 
+                  setLeaveRequests={setLeaveRequests} 
+                  notifications={notifications}
+                  currentUser={currentUser}
+                  teacherAssignments={teacherAssignments}
+                  activities={activities}
+                  setActivities={setActivities}
+                  masterData={masterData}
+                />
+              </motion.div>
+            )}
+
+            {view === 'parent-panel' && (
+              <motion.div key="parent-panel" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
+                <ParentPanel 
+                  students={students}
+                  examResults={examResults}
+                  homeworks={homeworks}
+                  syllabuses={syllabuses}
+                  leaveRequests={leaveRequests}
+                  setLeaveRequests={setLeaveRequests}
+                  notifications={notifications}
+                  feeTransactions={feeTransactions}
+                  feeMaster={feeMaster}
+                  currentUser={currentUser}
+                />
+              </motion.div>
+            )}
+
+            {view === 'leave-management' && (
+              <motion.div key="leave-management" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
+                <div className="space-y-8 max-w-7xl mx-auto pb-20">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h1 className="text-3xl font-black text-text-heading tracking-tight">Leave Management</h1>
+                      <p className="text-text-sub font-medium">Overview of all student leave requests and approvals.</p>
+                    </div>
+                  </div>
+                  <Card>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left">
+                        <thead>
+                          <tr className="border-b border-slate-200">
+                            <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Student</th>
+                            <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Class/Sec</th>
+                            <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Duration</th>
+                            <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Reason</th>
+                            <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Status</th>
+                            <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Approved By</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {leaveRequests.map((l: LeaveRequest) => (
+                            <tr key={l.id} className="hover:bg-slate-50/50 transition-colors">
+                              <td className="py-4">
+                                <p className="text-sm font-bold">{l.studentName}</p>
+                                <p className="text-[10px] text-text-sub uppercase">{l.studentId}</p>
+                              </td>
+                              <td className="py-4 text-sm font-medium text-text-sub">{l.class}-{l.section}</td>
+                              <td className="py-4">
+                                <p className="text-sm font-bold">{l.duration} Days</p>
+                                <p className="text-[10px] text-text-sub">{l.startDate} to {l.endDate}</p>
+                              </td>
+                              <td className="py-4 text-sm text-text-sub max-w-xs truncate">{l.reason}</td>
+                              <td className="py-4">
+                                <span className={`text-[10px] font-black px-2 py-1 rounded-full uppercase ${
+                                  l.status === 'Approved' ? 'bg-green-100 text-green-700' : 
+                                  l.status === 'Rejected' ? 'bg-red-100 text-red-700' : 'bg-orange-100 text-orange-700'
+                                }`}>
+                                  {l.status}
+                                </span>
+                              </td>
+                              <td className="py-4 text-sm font-medium text-text-sub">{l.approvedBy || '-'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </Card>
+                </div>
+              </motion.div>
+            )}
+
+            {view === 'settings' && (
+              <motion.div
+                key="settings"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                className="space-y-8 max-w-6xl mx-auto pb-20"
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h1 className="text-3xl font-bold text-text-heading">System Settings</h1>
+                    <p className="text-text-sub">Configure school profile, master data, and user credentials.</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                  {/* School Profile */}
+                  <div className="lg:col-span-2 space-y-8">
+                    <Card>
+                      <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-primary">
+                        <School size={20} />
+                        School Profile
+                      </h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <Input 
+                          label="School Name" 
+                          value={schoolProfile.name} 
+                          onChange={(e: any) => setSchoolProfile({...schoolProfile, name: e.target.value})} 
+                        />
+                        <Input 
+                          label="Contact Number" 
+                          value={schoolProfile.contact} 
+                          onChange={(e: any) => setSchoolProfile({...schoolProfile, contact: e.target.value})} 
+                        />
+                        <Input 
+                          label="GST Number" 
+                          value={schoolProfile.gstNo} 
+                          onChange={(e: any) => setSchoolProfile({...schoolProfile, gstNo: e.target.value})} 
+                        />
+                        <Input 
+                          label="Registration Number" 
+                          value={schoolProfile.regNo} 
+                          onChange={(e: any) => setSchoolProfile({...schoolProfile, regNo: e.target.value})} 
+                        />
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+                        <Input 
+                          label="Warden Panel ID" 
+                          value={schoolProfile.wardenPanelId} 
+                          onChange={(e: any) => setSchoolProfile({...schoolProfile, wardenPanelId: e.target.value})} 
+                        />
+                        <Input 
+                          label="Warden Panel Password" 
+                          type="password"
+                          value={schoolProfile.wardenPanelPassword} 
+                          onChange={(e: any) => setSchoolProfile({...schoolProfile, wardenPanelPassword: e.target.value})} 
+                        />
+                      </div>
+                      <div className="mt-6">
+                        <label className="label-text">School Address</label>
+                        <textarea 
+                          className="input-field min-h-[100px]" 
+                          value={schoolProfile.address}
+                          onChange={(e: any) => setSchoolProfile({...schoolProfile, address: e.target.value})}
+                        ></textarea>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mt-8">
+                        <FileUpload label="School Logo" icon={ImageIcon} />
+                        <FileUpload label="Authorized Signature" icon={Signature} />
+                        <FileUpload label="Official Stamp" icon={Stamp} />
+                      </div>
+                    </Card>
+
+                    <Card>
+                      <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-primary">
+                        <Percent size={20} />
+                        Financial Settings
+                      </h3>
+                      <div className="max-w-xs">
+                        <Input 
+                          label="Set Tax (%)" 
+                          type="number" 
+                          value={taxes} 
+                          onChange={(e: any) => setTaxes(e.target.value)} 
+                        />
+                        <p className="helper-text">This tax percentage will be applied to all fee structures.</p>
+                      </div>
+                    </Card>
+
+                    <Card>
+                      <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-primary">
+                        <Video size={20} />
+                        Live Camera Settings
+                      </h3>
+                      <div className="space-y-4">
+                        {(schoolProfile as any).cameraUrls.map((cam: any, index: number) => (
+                          <div key={cam.id} className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-slate-50 rounded-xl border border-slate-100">
+                            <Input 
+                              label={`Camera ${index + 1} Name`} 
+                              value={cam.name} 
+                              onChange={(e: any) => {
+                                const newUrls = [...(schoolProfile as any).cameraUrls];
+                                newUrls[index].name = e.target.value;
+                                setSchoolProfile({...schoolProfile, cameraUrls: newUrls});
+                              }} 
+                            />
+                            <Input 
+                              label={`Camera ${index + 1} URL`} 
+                              value={cam.url} 
+                              onChange={(e: any) => {
+                                const newUrls = [...(schoolProfile as any).cameraUrls];
+                                newUrls[index].url = e.target.value;
+                                setSchoolProfile({...schoolProfile, cameraUrls: newUrls});
+                              }} 
+                            />
+                          </div>
+                        ))}
+                        <p className="helper-text">Configure the RTSP or HTTP stream URLs for your school's live cameras.</p>
+                      </div>
+                    </Card>
+
+                    <Card>
+                      <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-primary">
+                        <BookOpenCheck size={20} />
+                        Master Data Management
+                      </h3>
+                      <div className="space-y-8">
+                        {[
+                          { key: 'categories', label: 'Categories', icon: TagIcon },
+                          { key: 'castes', label: 'Castes', icon: Users },
+                          { key: 'religions', label: 'Religions', icon: HeartPulse },
+                          { key: 'titles', label: 'Titles', icon: UserCheck },
+                          { key: 'classes', label: 'Classes', icon: GraduationCap },
+                          { key: 'sections', label: 'Sections', icon: Hash },
+                          { key: 'subjects', label: 'Subjects', icon: BookOpen },
+                          { key: 'genders', label: 'Genders', icon: UserPlus }
+                        ].map((section) => (
+                          <div key={section.key} className="p-6 bg-slate-50 rounded-2xl border border-slate-100">
+                            <div className="flex items-center justify-between mb-4">
+                              <div className="flex items-center gap-2">
+                                <section.icon size={18} className="text-primary" />
+                                <h4 className="font-bold text-text-heading">{section.label}</h4>
+                              </div>
+                              <button 
+                                onClick={() => {
+                                  const val = prompt(`Enter new ${section.label.toLowerCase()}:`);
+                                  if (val) addMasterItem(section.key, val);
+                                }}
+                                className="flex items-center gap-1 text-xs font-bold text-primary hover:underline"
+                              >
+                                <Plus size={14} />
+                                Add New
+                              </button>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              {(masterData as any)[section.key].map((item: string, idx: number) => (
+                                <div key={idx} className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm">
+                                  <span className="text-sm font-medium">{item}</span>
+                                  <div className="flex items-center gap-1 border-l border-slate-100 ml-1 pl-1">
+                                    <button 
+                                      onClick={() => {
+                                        const val = prompt(`Edit ${section.label.toLowerCase()}:`, item);
+                                        if (val) editMasterItem(section.key, idx, val);
+                                      }}
+                                      className="p-1 text-slate-400 hover:text-primary transition-colors"
+                                    >
+                                      <Edit2 size={12} />
+                                    </button>
+                                    <button 
+                                      onClick={() => {
+                                        showModal(
+                                          'Confirm Delete',
+                                          `Are you sure you want to delete "${item}" from ${section.label}?`,
+                                          () => deleteMasterItem(section.key, idx)
+                                        );
+                                      }}
+                                      className="p-1 text-slate-400 hover:text-red-500 transition-colors"
+                                    >
+                                      <Trash2 size={12} />
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </Card>
+                  </div>
+
+                  {/* User Management */}
+                  <div className="space-y-8">
+                    <Card>
+                      <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-primary">
+                        <Lock size={20} />
+                        User Credentials
+                      </h3>
+                      <div className="space-y-4">
+                        <p className="text-sm text-text-sub mb-4">Generate secure login credentials for new users.</p>
+                        
+                        <div className="grid grid-cols-2 gap-3">
+                          <button 
+                            onClick={() => generateCredentials('Student')}
+                            className="flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-text-heading py-3 rounded-xl font-bold transition-all text-sm"
+                          >
+                            <Plus size={16} />
+                            Student
+                          </button>
+                          <button 
+                            onClick={() => {
+                              const count = prompt('How many student IDs to generate?', '5');
+                              if (count) generateCredentials('Student', parseInt(count));
+                            }}
+                            className="flex items-center justify-center gap-2 bg-primary/10 hover:bg-primary/20 text-primary py-3 rounded-xl font-bold transition-all text-sm"
+                          >
+                            <Hash size={16} />
+                            Multiple
+                          </button>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                          <button 
+                            onClick={() => generateCredentials('Teacher')}
+                            className="flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-text-heading py-3 rounded-xl font-bold transition-all text-sm"
+                          >
+                            <Plus size={16} />
+                            Teacher
+                          </button>
+                          <button 
+                            onClick={() => {
+                              const count = prompt('How many teacher IDs to generate?', '5');
+                              if (count) generateCredentials('Teacher', parseInt(count));
+                            }}
+                            className="flex items-center justify-center gap-2 bg-primary/10 hover:bg-primary/20 text-primary py-3 rounded-xl font-bold transition-all text-sm"
+                          >
+                            <Hash size={16} />
+                            Multiple
+                          </button>
+                        </div>
+                      </div>
+
+                      {generatedCredentials.length > 0 && (
+                        <div className="mt-8 space-y-4">
+                          <h4 className="text-xs font-bold text-text-sub uppercase tracking-wider">Recently Generated</h4>
+                          <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2">
+                            {generatedCredentials.slice().reverse().map((cred, i) => (
+                              <div key={i} className="p-4 bg-slate-50 rounded-xl border border-slate-100 relative group">
+                                <div className="flex items-center justify-between mb-2">
+                                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${cred.type === 'Student' ? 'bg-blue-100 text-blue-600' : 'bg-green-100 text-green-600'}`}>
+                                    {cred.type}
+                                  </span>
+                                  <span className="text-[10px] text-text-sub">{cred.date}</span>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                  <div>
+                                    <p className="text-[10px] text-text-sub uppercase font-bold">ID</p>
+                                    <p className="text-sm font-mono font-bold text-primary">{cred.id}</p>
+                                  </div>
+                                  <div className="text-right">
+                                    <p className="text-[10px] text-text-sub uppercase font-bold">Password</p>
+                                    <p className="text-sm font-mono font-bold">{cred.password}</p>
+                                  </div>
+                                </div>
+                                <button className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity text-text-sub hover:text-red-500">
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </Card>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
+            {view === 'fee-management' && (
+              <motion.div
+                key="fee-management"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+              >
+                <FeeManagement 
+                  students={students}
+                  feeTypes={feeTypes}
+                  setFeeTypes={setFeeTypes}
+                  feeMaster={feeMaster}
+                  setFeeMaster={setFeeMaster}
+                  feeTransactions={feeTransactions}
+                  setFeeTransactions={setFeeTransactions}
+                  schoolProfile={schoolProfile}
+                  masterData={masterData}
+                  showModal={showModal}
+                />
+              </motion.div>
+            )}
+
+            {view === 'academics' && (
+              <motion.div
+                key="academics"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+              >
+                <Academics 
+                  students={students}
+                  setStudents={setStudents}
+                  masterData={masterData}
+                  timeTables={timeTables}
+                  setTimeTables={setTimeTables}
+                  syllabuses={syllabuses}
+                  setSyllabuses={setSyllabuses}
+                  homeworks={homeworks}
+                  setHomeworks={setHomeworks}
+                  teacherAssignments={teacherAssignments}
+                  setTeacherAssignments={setTeacherAssignments}
+                  currentUser={currentUser}
+                />
+              </motion.div>
+            )}
+
+            {view === 'examination' && (
+              <motion.div
+                key="examination"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+              >
+                <ExaminationModule 
+                  exams={exams}
+                  setExams={setExams}
+                  examSchedules={examSchedules}
+                  setExamSchedules={setExamSchedules}
+                  examResults={examResults}
+                  setExamResults={setExamResults}
+                  students={students}
+                  masterData={masterData}
+                  currentUser={currentUser}
+                />
+              </motion.div>
+            )}
+
+            {view === 'id-cards' && (
+              <motion.div
+                key="id-cards"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+              >
+                <IDCardsModule 
+                  students={students}
+                  masterData={masterData}
+                  schoolProfile={schoolProfile}
+                />
+              </motion.div>
+            )}
+
+            {view === 'hostel' && (
+              <motion.div
+                key="hostel"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+              >
+                <HostelModule 
+                  students={students}
+                  rooms={hostelRooms}
+                  setRooms={setHostelRooms}
+                  beds={hostelBeds}
+                  setBeds={setHostelBeds}
+                  staff={hostelStaff}
+                  setStaff={setHostelStaff}
+                  attendance={hostelAttendance}
+                  setAttendance={setHostelAttendance}
+                  feeTransactions={feeTransactions}
+                  masterData={masterData}
+                  currentUser={currentUser}
+                  showModal={showModal}
+                />
+              </motion.div>
+            )}
+
+            {view === 'admin-360' && (
+              <motion.div
+                key="admin-360"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+              >
+                <Admin360View 
+                  students={students}
+                  feeTransactions={feeTransactions}
+                  attendance={attendance}
+                  masterData={masterData}
+                />
+              </motion.div>
+            )}
+
+            {view === 'class-360' && (
+              <motion.div
+                key="class-360"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+              >
+                <Class360View 
+                  students={students}
+                  feeTransactions={feeTransactions}
+                  attendance={attendance}
+                  masterData={masterData}
+                />
+              </motion.div>
+            )}
+
+            {view === 'due-fees' && (
+              <motion.div
+                key="due-fees"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+              >
+                <DueFeesModule 
+                  students={students}
+                  feeTransactions={feeTransactions}
+                  feeMaster={feeMaster}
+                  currentUser={currentUser}
+                  masterData={masterData}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        <footer className="p-4 bg-white border-t border-slate-100 text-center shrink-0">
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">A Digital Communique Product</p>
+        </footer>
+      </main>
+
+      {/* Custom Modal */}
+      <AnimatePresence>
+        {modal?.isOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setModal(null)}
+              className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="bg-white rounded-[24px] p-8 shadow-2xl relative z-10 w-full max-w-md"
+            >
+              <div className="flex items-center gap-4 mb-6">
+                <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${modal.onConfirm ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}`}>
+                  {modal.onConfirm ? <AlertCircle size={24} /> : <CheckCircle2 size={24} />}
+                </div>
+                <h3 className="text-xl font-bold text-text-heading">{modal.title}</h3>
+              </div>
+              <p className="text-text-sub mb-8 leading-relaxed">{modal.message}</p>
+              <div className="flex gap-3">
+                {modal.onConfirm ? (
+                  <>
+                    <button 
+                      onClick={() => setModal(null)}
+                      className="flex-1 py-3 rounded-xl font-bold text-text-sub hover:bg-slate-100 transition-all"
+                    >
+                      Cancel
+                    </button>
+                    <button 
+                      onClick={() => {
+                        modal.onConfirm?.();
+                        setModal(null);
+                      }}
+                      className="flex-1 py-3 rounded-xl font-bold bg-red-500 text-white hover:bg-red-600 transition-all shadow-lg shadow-red-500/20"
+                    >
+                      Confirm
+                    </button>
+                  </>
+                ) : (
+                  <button 
+                    onClick={() => setModal(null)}
+                    className="w-full py-3 rounded-xl font-bold bg-primary text-white hover:bg-primary/90 transition-all shadow-lg shadow-primary/20"
+                  >
+                    Got it
+                  </button>
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+const HostelModule = ({ 
+  students, 
+  rooms, 
+  setRooms, 
+  beds, 
+  setBeds, 
+  staff, 
+  setStaff, 
+  attendance, 
+  setAttendance, 
+  feeTransactions,
+  masterData,
+  currentUser,
+  showModal
+}: any) => {
+  const [activeTab, setActiveTab] = useState('dashboard');
+  const [showRoomModal, setShowRoomModal] = useState(false);
+  const [showStaffModal, setShowStaffModal] = useState(false);
+  const [showEnrollModal, setShowEnrollModal] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  
+  // Form states
+  const [roomForm, setRoomForm] = useState<any>({ roomNumber: '', floor: '', capacity: 4, type: 'Non-AC', gender: 'Male', category: 'Standard', price: 0 });
+  const [staffForm, setStaffForm] = useState<any>({ name: '', role: 'Warden', mobile: '', email: '', shift: 'Day' });
+  const [enrollForm, setEnrollForm] = useState<any>({ studentId: '', roomId: '', bedId: '' });
+
+  // Filters
+  const [filterClass, setFilterClass] = useState('');
+  const [filterSection, setFilterSection] = useState('');
+  const [filterSearch, setFilterSearch] = useState('');
+
+  useEffect(() => {
+    let html5QrCode: any = null;
+    
+    const startScanner = async () => {
+      if (scanning) {
+        try {
+          // Small delay to ensure DOM element is ready
+          await new Promise(resolve => setTimeout(resolve, 300));
+          
+          const element = document.getElementById("qr-reader");
+          if (!element) return;
+
+          html5QrCode = new Html5Qrcode("qr-reader");
+          await html5QrCode.start(
+            { facingMode: "environment" },
+            {
+              fps: 10,
+              qrbox: { width: 250, height: 250 },
+            },
+            (decodedText: string) => {
+              handleAttendance(decodedText, 'Present');
+              setScanning(false);
+            },
+            (errorMessage: string) => {
+              // Ignore constant scan errors
+            }
+          ).catch((err: any) => {
+            console.error("Scanner start error:", err);
+          });
+        } catch (err) {
+          console.error("Scanner initialization error:", err);
+        }
+      }
+    };
+
+    startScanner();
+
+    return () => {
+      if (html5QrCode) {
+        if (html5QrCode.isScanning) {
+          html5QrCode.stop().then(() => {
+            html5QrCode.clear();
+          }).catch((err: any) => console.error("Scanner stop error:", err));
+        } else {
+          try {
+            html5QrCode.clear();
+          } catch (e) {}
+        }
+      }
+    };
+  }, [scanning]);
+
+  const handleAddRoom = () => {
+    if (roomForm.id) {
+      setRooms(rooms.map((r: any) => r.id === roomForm.id ? roomForm : r));
+    } else {
+      const newRoom = { ...roomForm, id: Date.now().toString() };
+      setRooms([...rooms, newRoom]);
+      
+      // Auto-create beds for the room
+      const newBeds: HostelBed[] = [];
+      for (let i = 1; i <= roomForm.capacity; i++) {
+        newBeds.push({
+          id: `${newRoom.id}-bed-${i}`,
+          roomId: newRoom.id,
+          bedNumber: `${newRoom.roomNumber}-${i}`,
+          status: 'Available'
+        });
+      }
+      setBeds([...beds, ...newBeds]);
+    }
+    setShowRoomModal(false);
+    setRoomForm({ roomNumber: '', floor: '', capacity: 4, type: 'Non-AC', gender: 'Male', category: 'Standard', price: 0 });
+  };
+
+  const handleAddStaff = () => {
+    if (staffForm.id) {
+      setStaff(staff.map((s: any) => s.id === staffForm.id ? staffForm : s));
+    } else {
+      setStaff([...staff, { ...staffForm, id: Date.now().toString() }]);
+    }
+    setShowStaffModal(false);
+    setStaffForm({ name: '', role: 'Warden', mobile: '', email: '', shift: 'Day' });
+  };
+
+  const handleEnrollStudent = () => {
+    const updatedBeds = beds.map((b: HostelBed) => 
+      b.id === enrollForm.bedId ? { ...b, status: 'Occupied', studentId: enrollForm.studentId } : b
+    );
+    setBeds(updatedBeds);
+    setShowEnrollModal(false);
+    setEnrollForm({ studentId: '', roomId: '', bedId: '' });
+  };
+
+  const getStudentFeeStatus = (studentId: string) => {
+    const transactions = feeTransactions.filter((t: any) => t.studentId === studentId);
+    if (transactions.length === 0) return { status: 'Due', color: 'text-red-500' };
+    return { status: 'Paid', color: 'text-green-500' };
+  };
+
+  const handleAttendance = (studentId: string, status: any) => {
+    const newRecord = {
+      id: Date.now().toString(),
+      studentId,
+      date: new Date().toISOString().split('T')[0],
+      time: new Date().toLocaleTimeString(),
+      status
+    };
+    setAttendance([...attendance, newRecord]);
+  };
+
+  const filteredStudents = students.filter((s: any) => 
+    (!filterClass || s.class === filterClass) &&
+    (!filterSection || s.section === filterSection) &&
+    (!filterSearch || s.name.toLowerCase().includes(filterSearch.toLowerCase()) || s.studentId.includes(filterSearch))
+  );
+
+  const stats = {
+    totalRooms: rooms.length,
+    totalBeds: beds.length,
+    occupiedBeds: beds.filter((b: any) => b.status === 'Occupied').length,
+    availableBeds: beds.filter((b: any) => b.status === 'Available').length,
+    staffCount: staff.length
+  };
+
+  return (
+    <div className="space-y-8 max-w-7xl mx-auto pb-20">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <div>
+          <h1 className="text-3xl font-black text-text-heading tracking-tight">Hostel Management</h1>
+          <p className="text-text-sub font-medium">Manage rooms, beds, student enrollment, and attendance.</p>
+        </div>
+        <div className="flex gap-3">
+          <button 
+            onClick={() => setShowRoomModal(true)}
+            className="flex items-center gap-2 bg-primary text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-primary/20 hover:scale-105 transition-all"
+          >
+            <Plus size={20} /> Add Room
+          </button>
+          <button 
+            onClick={() => setShowStaffModal(true)}
+            className="flex items-center gap-2 bg-white border border-slate-200 px-6 py-3 rounded-xl font-bold hover:bg-slate-50 transition-all"
+          >
+            <UserCog size={20} /> Add Staff
+          </button>
+        </div>
+      </div>
+
+      {/* Stats Overview */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
+        {[
+          { label: 'Total Rooms', value: stats.totalRooms, icon: DoorOpen, color: 'bg-blue-500' },
+          { label: 'Total Beds', value: stats.totalBeds, icon: Bed, color: 'bg-indigo-500' },
+          { label: 'Occupied', value: stats.occupiedBeds, icon: Users, color: 'bg-orange-500' },
+          { label: 'Available', value: stats.availableBeds, icon: CheckCircle2, color: 'bg-emerald-500' },
+          { label: 'Hostel Staff', value: stats.staffCount, icon: ShieldCheck, color: 'bg-purple-500' }
+        ].map((stat, i) => (
+          <Card key={i} className="p-6 relative overflow-hidden group">
+            <div className={`absolute top-0 right-0 w-16 h-16 ${stat.color} opacity-10 rounded-bl-full -mr-4 -mt-4 transition-all group-hover:scale-150`}></div>
+            <div className="flex items-center gap-4">
+              <div className={`w-12 h-12 ${stat.color} text-white rounded-xl flex items-center justify-center shadow-lg`}>
+                <stat.icon size={24} />
+              </div>
+              <div>
+                <p className="text-xs font-bold text-text-secondary uppercase tracking-wider">{stat.label}</p>
+                <p className="text-2xl font-black text-text-heading">{stat.value}</p>
+              </div>
+            </div>
+          </Card>
+        ))}
+      </div>
+
+      {/* Tabs */}
+      <div className="flex flex-wrap gap-2 p-1.5 bg-slate-100 rounded-2xl w-fit">
+        {[
+          { id: 'dashboard', label: 'Overview', icon: LayoutDashboard },
+          { id: 'rooms', label: 'Rooms & Beds', icon: Building2 },
+          { id: 'enrollment', label: 'Enrollment', icon: UserPlus },
+          { id: 'attendance', label: 'Attendance', icon: ScanLine },
+          { id: 'staff', label: 'Staff', icon: UserCog }
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`flex items-center gap-2 px-6 py-3 rounded-xl font-bold transition-all ${
+              activeTab === tab.id 
+                ? 'bg-white text-primary shadow-sm' 
+                : 'text-text-sub hover:text-text-heading hover:bg-white/50'
+            }`}
+          >
+            <tab.icon size={18} />
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      <AnimatePresence mode="wait">
+        {activeTab === 'dashboard' && (
+          <motion.div key="dashboard" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-8">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              <Card className="p-6 lg:col-span-2">
+                <h3 className="font-bold text-text-heading mb-6 flex items-center gap-2">
+                  <BarChart3 size={18} className="text-primary" />
+                  Occupancy Overview
+                </h3>
+                <div className="h-[300px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={[
+                      { name: 'Occupied', value: stats.occupiedBeds, fill: '#f97316' },
+                      { name: 'Vacant', value: stats.availableBeds, fill: '#10b981' },
+                      { name: 'Maintenance', value: beds.filter((b: any) => b.status === 'Maintenance').length, fill: '#ef4444' }
+                    ]}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                      <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fontWeight: 600 }} />
+                      <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fontWeight: 600 }} />
+                      <Tooltip 
+                        contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                        cursor={{ fill: '#f8fafc' }}
+                      />
+                      <Bar dataKey="value" radius={[8, 8, 0, 0]} barSize={60} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </Card>
+
+              <Card className="p-6">
+                <h3 className="font-bold text-text-heading mb-6 flex items-center gap-2">
+                  <PieChartIcon size={18} className="text-primary" />
+                  Bed Distribution
+                </h3>
+                <div className="h-[250px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={[
+                          { name: 'Occupied', value: stats.occupiedBeds },
+                          { name: 'Vacant', value: stats.availableBeds }
+                        ]}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={80}
+                        paddingAngle={5}
+                        dataKey="value"
+                      >
+                        <Cell fill="#f97316" />
+                        <Cell fill="#10b981" />
+                      </Pie>
+                      <Tooltip />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="flex justify-center gap-6 mt-4">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-orange-500"></div>
+                    <span className="text-xs font-bold">Occupied</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-emerald-500"></div>
+                    <span className="text-xs font-bold">Vacant</span>
+                  </div>
+                </div>
+              </Card>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              <Card className="p-6">
+                <h3 className="font-bold text-text-heading mb-6 flex items-center gap-2">
+                  <Clock size={18} className="text-primary" />
+                  Recent Attendance
+                </h3>
+                <div className="space-y-4">
+                  {attendance.length === 0 ? (
+                    <p className="text-center py-12 text-text-secondary italic">No attendance records found for today.</p>
+                  ) : (
+                    attendance.slice(-5).reverse().map((record: any) => {
+                      const student = students.find((s: any) => s.studentId === record.studentId);
+                      return (
+                        <div key={record.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-100">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-lg bg-white border border-slate-200 flex items-center justify-center font-bold text-primary">
+                              {student?.name[0]}
+                            </div>
+                            <div>
+                              <p className="font-bold text-sm">{student?.name} {student?.surname}</p>
+                              <p className="text-[10px] text-text-secondary uppercase">{record.time}</p>
+                            </div>
+                          </div>
+                          <span className={`px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-widest ${
+                            record.status === 'Present' ? 'bg-green-100 text-green-600' :
+                            record.status === 'Late' ? 'bg-orange-100 text-orange-600' :
+                            record.status === 'Leave' ? 'bg-blue-100 text-blue-600' : 'bg-red-100 text-red-600'
+                          }`}>
+                            {record.status}
+                          </span>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </Card>
+
+              <Card className="p-6">
+                <h3 className="font-bold text-text-heading mb-6 flex items-center gap-2">
+                  <Building2 size={18} className="text-primary" />
+                  Room Occupancy
+                </h3>
+                <div className="space-y-4">
+                  {rooms.map((room: any) => {
+                    const roomBeds = beds.filter((b: any) => b.roomId === room.id);
+                    const occupied = roomBeds.filter((b: any) => b.status === 'Occupied').length;
+                    const percentage = (occupied / room.capacity) * 100;
+                    return (
+                      <div key={room.id} className="space-y-2">
+                        <div className="flex justify-between items-center text-sm">
+                          <span className="font-bold">Room {room.roomNumber} ({room.type})</span>
+                          <span className="text-text-secondary">{occupied} / {room.capacity} Beds</span>
+                        </div>
+                        <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                          <div 
+                            className={`h-full transition-all duration-500 ${percentage > 90 ? 'bg-red-500' : percentage > 50 ? 'bg-orange-500' : 'bg-emerald-500'}`}
+                            style={{ width: `${percentage}%` }}
+                          ></div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </Card>
+            </div>
+          </motion.div>
+        )}
+
+        {activeTab === 'rooms' && (
+          <motion.div key="rooms" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {rooms.map((room: any) => (
+              <Card key={room.id} className="overflow-hidden group">
+                <div className="bg-slate-900 p-6 text-white flex justify-between items-center">
+                  <div>
+                    <h3 className="text-2xl font-black tracking-tighter">ROOM {room.roomNumber}</h3>
+                    <p className="text-[10px] font-bold uppercase tracking-widest opacity-60">{room.floor} Floor · {room.type} · {room.category}</p>
+                    <p className="text-xs font-black text-emerald-400 mt-1">₹{room.price} / Month</p>
+                  </div>
+                  <div className={`px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-widest ${room.gender === 'Male' ? 'bg-blue-500/20 text-blue-400' : 'bg-pink-500/20 text-pink-400'}`}>
+                    {room.gender}
+                  </div>
+                </div>
+                <div className="p-6">
+                  <div className="grid grid-cols-2 gap-3 mb-6">
+                    {beds.filter((b: any) => b.roomId === room.id).map((bed: any) => {
+                      const student = students.find((s: any) => s.studentId === bed.studentId);
+                      return (
+                        <div key={bed.id} className={`p-3 rounded-xl border transition-all ${
+                          bed.status === 'Occupied' 
+                            ? 'bg-orange-50 border-orange-100' 
+                            : bed.status === 'Maintenance'
+                            ? 'bg-red-50 border-red-100'
+                            : 'bg-emerald-50 border-emerald-100'
+                        }`}>
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-[10px] font-black uppercase tracking-widest opacity-40">Bed {bed.bedNumber.split('-').pop()}</span>
+                            <Bed size={14} className={bed.status === 'Occupied' ? 'text-orange-500' : bed.status === 'Maintenance' ? 'text-red-500' : 'text-emerald-500'} />
+                          </div>
+                          <p className="text-xs font-bold truncate">
+                            {bed.status === 'Occupied' ? student?.name || 'Assigned' : bed.status}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <button 
+                    onClick={() => {
+                      setRoomForm(room);
+                      setShowRoomModal(true);
+                    }}
+                    className="w-full py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-text-heading font-bold text-sm transition-all"
+                  >
+                    Manage Room
+                  </button>
+                </div>
+              </Card>
+            ))}
+          </motion.div>
+        )}
+
+        {activeTab === 'enrollment' && (
+          <motion.div key="enrollment" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-8">
+            <Card className="p-6">
+              <div className="flex flex-wrap gap-4 items-end mb-8">
+                <div className="flex-1 min-w-[200px]">
+                  <label className="label-text">Search Student</label>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                    <input 
+                      type="text" 
+                      className="input-field pl-10" 
+                      placeholder="Name or ID..." 
+                      value={filterSearch}
+                      onChange={(e) => setFilterSearch(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="w-40">
+                  <label className="label-text">Class</label>
+                  <select className="input-field" value={filterClass} onChange={(e) => setFilterClass(e.target.value)}>
+                    <option value="">All</option>
+                    {masterData.classes.map((c: string) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div className="w-40">
+                  <label className="label-text">Section</label>
+                  <select className="input-field" value={filterSection} onChange={(e) => setFilterSection(e.target.value)}>
+                    <option value="">All</option>
+                    {masterData.sections.map((s: string) => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+                <button 
+                  onClick={() => setShowEnrollModal(true)}
+                  className="bg-primary text-white px-6 py-3 rounded-xl font-bold shadow-lg"
+                >
+                  Assign New Bed
+                </button>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="text-[10px] font-bold text-text-secondary uppercase tracking-wider border-b border-slate-200">
+                      <th className="pb-4 px-4">Student</th>
+                      <th className="pb-4 px-4">Class/Sec</th>
+                      <th className="pb-4 px-4">Room/Bed</th>
+                      <th className="pb-4 px-4">Fee Status</th>
+                      <th className="pb-4 px-4 text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="text-sm">
+                    {beds.filter((b: any) => b.status === 'Occupied').map((bed: any) => {
+                      const student = students.find((s: any) => s.studentId === bed.studentId);
+                      const room = rooms.find((r: any) => r.id === bed.roomId);
+                      const fee = getStudentFeeStatus(student?.studentId);
+                      
+                      if (filterClass && student?.class !== filterClass) return null;
+                      if (filterSection && student?.section !== filterSection) return null;
+                      if (filterSearch && !student?.name.toLowerCase().includes(filterSearch.toLowerCase()) && !student?.studentId.includes(filterSearch)) return null;
+
+                      return (
+                        <tr key={bed.id} className="border-b border-slate-100 hover:bg-slate-50 transition-all">
+                          <td className="py-4 px-4">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center font-bold">
+                                {student?.name[0]}
+                              </div>
+                              <div>
+                                <p className="font-bold">{student?.name} {student?.surname}</p>
+                                <p className="text-[10px] text-text-secondary">{student?.studentId}</p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-4 px-4 font-medium">{student?.class} - {student?.section}</td>
+                          <td className="py-4 px-4">
+                            <div className="flex items-center gap-2">
+                              <span className="px-2 py-1 bg-slate-100 rounded text-xs font-bold">Room {room?.roomNumber}</span>
+                              <span className="px-2 py-1 bg-primary/10 text-primary rounded text-xs font-bold">Bed {bed.bedNumber.split('-').pop()}</span>
+                            </div>
+                          </td>
+                          <td className="py-4 px-4">
+                            <span className={`font-bold ${fee.color}`}>{fee.status}</span>
+                          </td>
+                          <td className="py-4 px-4 text-right">
+                            <button 
+                              onClick={() => {
+                                showModal(
+                                  'Confirm De-enrollment',
+                                  `Are you sure you want to remove ${student?.name} from Room ${room?.roomNumber}, Bed ${bed.bedNumber.split('-').pop()}?`,
+                                  () => {
+                                    const updatedBeds = beds.map((b: HostelBed) => 
+                                      b.id === bed.id ? { ...b, status: 'Available', studentId: undefined } : b
+                                    );
+                                    setBeds(updatedBeds);
+                                  }
+                                );
+                              }}
+                              className="p-2 hover:bg-red-50 hover:text-red-600 rounded-lg transition-all"
+                            >
+                              <Trash2 size={18} />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          </motion.div>
+        )}
+
+        {activeTab === 'attendance' && (
+          <motion.div key="attendance" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-8">
+            <div className="flex flex-col items-center justify-center py-10 space-y-8">
+              <div className="w-full max-w-md text-center space-y-6">
+                <div className="w-32 h-32 bg-primary/10 rounded-3xl flex items-center justify-center mx-auto text-primary">
+                  <ScanLine size={64} />
+                </div>
+                <div>
+                  <h3 className="text-2xl font-black text-text-heading">QR Attendance Scanner</h3>
+                  <p className="text-text-sub">Scan student ID card to mark hostel attendance.</p>
+                </div>
+                
+                <div className="p-8 bg-white rounded-[32px] shadow-2xl border border-slate-100">
+                  {scanning ? (
+                    <div className="space-y-6">
+                      <div id="qr-reader" className="w-full rounded-2xl overflow-hidden bg-slate-900 aspect-square flex items-center justify-center">
+                        <p className="text-white/50 text-xs font-bold uppercase tracking-widest">Initializing Camera...</p>
+                      </div>
+                      <button 
+                        onClick={() => setScanning(false)}
+                        className="w-full py-4 rounded-2xl bg-red-500 text-white font-bold hover:bg-red-600 transition-all"
+                      >
+                        Stop Scanner
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <button 
+                        onClick={() => setScanning(true)}
+                        className="w-full py-6 rounded-2xl bg-primary text-white font-black text-lg shadow-xl shadow-primary/20 hover:scale-105 transition-all flex items-center justify-center gap-3"
+                      >
+                        <QrCode size={24} />
+                        Start Scanning
+                      </button>
+                      <p className="text-[10px] font-bold text-text-secondary uppercase tracking-widest">Supports Late, Present, Absent, Leave</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <Card className="p-6">
+              <h3 className="font-bold text-text-heading mb-6 flex items-center gap-2">
+                <UserCheck2 size={18} className="text-primary" />
+                Manual Attendance / Leave Marking
+              </h3>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="text-[10px] font-bold text-text-secondary uppercase tracking-wider border-b border-slate-200">
+                      <th className="pb-4 px-4">Student</th>
+                      <th className="pb-4 px-4">Room/Bed</th>
+                      <th className="pb-4 px-4 text-right">Mark Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="text-sm">
+                    {beds.filter((b: any) => b.status === 'Occupied').map((bed: any) => {
+                      const student = students.find((s: any) => s.studentId === bed.studentId);
+                      const room = rooms.find((r: any) => r.id === bed.roomId);
+                      const todayRecord = attendance.find((a: any) => a.studentId === student?.studentId && a.date === new Date().toISOString().split('T')[0]);
+
+                      return (
+                        <tr key={bed.id} className="border-b border-slate-100 hover:bg-slate-50 transition-all">
+                          <td className="py-4 px-4">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center font-bold">
+                                {student?.name[0]}
+                              </div>
+                              <div>
+                                <p className="font-bold">{student?.name} {student?.surname}</p>
+                                <p className="text-[10px] text-text-secondary">{student?.studentId}</p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-4 px-4">
+                            <span className="px-2 py-1 bg-slate-100 rounded text-xs font-bold">Room {room?.roomNumber} - Bed {bed.bedNumber.split('-').pop()}</span>
+                          </td>
+                          <td className="py-4 px-4 text-right">
+                            <div className="flex justify-end gap-2">
+                              <button 
+                                onClick={() => handleAttendance(student.studentId, 'Present')}
+                                className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all ${
+                                  todayRecord?.status === 'Present' ? 'bg-green-500 text-white' : 'bg-green-100 text-green-600 hover:bg-green-200'
+                                }`}
+                              >
+                                Present
+                              </button>
+                              <button 
+                                onClick={() => handleAttendance(student.studentId, 'Leave')}
+                                className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-all flex items-center gap-2 ${
+                                  todayRecord?.status === 'Leave' ? 'bg-blue-500 text-white' : 'bg-blue-100 text-blue-600 hover:bg-blue-200'
+                                }`}
+                              >
+                                <img 
+                                  src="https://storage.googleapis.com/cortex-dev-cortex-build-public-assets/ais-dev-qwpf4dfgd7b2nhd2genpku-212916940376/nehatripathifreelance%40gmail.com/1742561480073-image-1.png" 
+                                  alt="L" 
+                                  className="w-4 h-4 object-contain"
+                                  referrerPolicy="no-referrer"
+                                />
+                                Leave
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          </motion.div>
+        )}
+
+        {activeTab === 'staff' && (
+          <motion.div key="staff" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {staff.map((s: any) => (
+              <Card key={s.id} className="p-6 relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-24 h-24 bg-primary/5 rounded-bl-full -mr-12 -mt-12"></div>
+                <div className="flex items-center gap-4 mb-6">
+                  <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center text-primary font-black text-2xl">
+                    {s.name[0]}
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-black text-text-heading uppercase tracking-tight">{s.name}</h3>
+                    <p className="text-xs font-bold text-primary uppercase tracking-widest">{s.role}</p>
+                  </div>
+                </div>
+                <div className="space-y-3 mb-6">
+                  <div className="flex items-center gap-3 text-sm text-text-sub">
+                    <Phone size={16} />
+                    <span className="font-medium">{s.mobile}</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-sm text-text-sub">
+                    <Mail size={16} />
+                    <span className="font-medium">{s.email}</span>
+                  </div>
+                  <div className="flex items-center gap-3 text-sm text-text-sub">
+                    <Clock size={16} />
+                    <span className="font-medium">Shift: {s.shift}</span>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button 
+                    onClick={() => {
+                      setStaffForm(s);
+                      setShowStaffModal(true);
+                    }}
+                    className="flex-1 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-text-heading font-bold text-xs transition-all"
+                  >
+                    Edit
+                  </button>
+                  <button 
+                    onClick={() => {
+                      showModal(
+                        'Confirm Delete',
+                        `Are you sure you want to remove ${s.name} from hostel staff?`,
+                        () => setStaff(staff.filter((st: any) => st.id !== s.id))
+                      );
+                    }}
+                    className="p-2 rounded-lg bg-red-50 text-red-500 hover:bg-red-100 transition-all"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              </Card>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modals */}
+      {showRoomModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setShowRoomModal(false)} />
+          <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="bg-white rounded-[32px] p-8 shadow-2xl relative z-10 w-full max-w-md">
+            <h3 className="text-2xl font-black text-text-heading mb-6">{roomForm.id ? 'Edit Room' : 'Add New Room'}</h3>
+            <div className="space-y-4">
+              <Input label="Room Number" value={roomForm.roomNumber} onChange={(e: any) => setRoomForm({ ...roomForm, roomNumber: e.target.value })} />
+              <Input label="Floor" value={roomForm.floor} onChange={(e: any) => setRoomForm({ ...roomForm, floor: e.target.value })} />
+              <div className="grid grid-cols-2 gap-4">
+                <Input label="Category" placeholder="e.g. Deluxe" value={roomForm.category} onChange={(e: any) => setRoomForm({ ...roomForm, category: e.target.value })} />
+                <Input label="Price / Month" type="number" value={roomForm.price} onChange={(e: any) => setRoomForm({ ...roomForm, price: parseFloat(e.target.value) })} />
+              </div>
+              <Input label="Capacity (Beds)" type="number" value={roomForm.capacity} onChange={(e: any) => setRoomForm({ ...roomForm, capacity: parseInt(e.target.value) })} />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="label-text">Type</label>
+                  <select className="input-field" value={roomForm.type} onChange={(e) => setRoomForm({ ...roomForm, type: e.target.value })}>
+                    <option value="Non-AC">Non-AC</option>
+                    <option value="AC">AC</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="label-text">Gender</label>
+                  <select className="input-field" value={roomForm.gender} onChange={(e) => setRoomForm({ ...roomForm, gender: e.target.value })}>
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                  </select>
+                </div>
+              </div>
+              <button onClick={handleAddRoom} className="w-full py-4 rounded-2xl bg-primary text-white font-black shadow-xl shadow-primary/20 mt-4">
+                {roomForm.id ? 'Update Room' : 'Create Room'}
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {showStaffModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setShowStaffModal(false)} />
+          <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="bg-white rounded-[32px] p-8 shadow-2xl relative z-10 w-full max-w-md">
+            <h3 className="text-2xl font-black text-text-heading mb-6">{staffForm.id ? 'Edit Staff' : 'Add Hostel Staff'}</h3>
+            <div className="space-y-4">
+              <Input label="Full Name" value={staffForm.name} onChange={(e: any) => setStaffForm({ ...staffForm, name: e.target.value })} />
+              <div>
+                <label className="label-text">Role</label>
+                <select className="input-field" value={staffForm.role} onChange={(e) => setStaffForm({ ...staffForm, role: e.target.value })}>
+                  <option value="Warden">Warden</option>
+                  <option value="Assistant Warden">Assistant Warden</option>
+                  <option value="Security">Security</option>
+                  <option value="Cleaning Staff">Cleaning Staff</option>
+                </select>
+              </div>
+              <Input label="Mobile Number" value={staffForm.mobile} onChange={(e: any) => setStaffForm({ ...staffForm, mobile: e.target.value })} />
+              <Input label="Email Address" value={staffForm.email} onChange={(e: any) => setStaffForm({ ...staffForm, email: e.target.value })} />
+              <div>
+                <label className="label-text">Shift</label>
+                <select className="input-field" value={staffForm.shift} onChange={(e) => setStaffForm({ ...staffForm, shift: e.target.value })}>
+                  <option value="Day">Day</option>
+                  <option value="Night">Night</option>
+                </select>
+              </div>
+              <button onClick={handleAddStaff} className="w-full py-4 rounded-2xl bg-primary text-white font-black shadow-xl shadow-primary/20 mt-4">
+                {staffForm.id ? 'Update Staff Member' : 'Add Staff Member'}
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {showEnrollModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setShowEnrollModal(false)} />
+          <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="bg-white rounded-[32px] p-8 shadow-2xl relative z-10 w-full max-w-md">
+            <h3 className="text-2xl font-black text-text-heading mb-6">Assign Bed to Student</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="label-text">Select Student</label>
+                <select className="input-field" value={enrollForm.studentId} onChange={(e) => setEnrollForm({ ...enrollForm, studentId: e.target.value })}>
+                  <option value="">Choose Student...</option>
+                  {students.map((s: any) => (
+                    <option key={s.id} value={s.studentId}>{s.name} {s.surname} ({s.studentId})</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="label-text">Select Room</label>
+                <select className="input-field" value={enrollForm.roomId} onChange={(e) => setEnrollForm({ ...enrollForm, roomId: e.target.value, bedId: '' })}>
+                  <option value="">Choose Room...</option>
+                  {rooms.map((r: any) => <option key={r.id} value={r.id}>Room {r.roomNumber} ({r.floor} Floor)</option>)}
+                </select>
+              </div>
+              {enrollForm.roomId && (
+                <div>
+                  <label className="label-text">Select Bed</label>
+                  <select className="input-field" value={enrollForm.bedId} onChange={(e) => setEnrollForm({ ...enrollForm, bedId: e.target.value })}>
+                    <option value="">Choose Bed...</option>
+                    {beds.filter((b: any) => b.roomId === enrollForm.roomId && b.status === 'Available').map((b: any) => (
+                      <option key={b.id} value={b.id}>Bed {b.bedNumber.split('-').pop()}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              <button 
+                onClick={handleEnrollStudent} 
+                disabled={!enrollForm.studentId || !enrollForm.bedId}
+                className="w-full py-4 rounded-2xl bg-primary text-white font-black shadow-xl shadow-primary/20 mt-4 disabled:opacity-50"
+              >
+                Confirm Assignment
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const IDCardsModule = ({ students, masterData, schoolProfile }: any) => {
+  const [activeTab, setActiveTab] = useState('student');
+  const [selectedClass, setSelectedClass] = useState('');
+  const [selectedSection, setSelectedSection] = useState('');
+  const [selectedStudent, setSelectedStudent] = useState<any>(null);
+
+  const filteredStudents = students.filter((s: any) => 
+    (!selectedClass || s.class === selectedClass) && 
+    (!selectedSection || s.section === selectedSection)
+  );
+
+  const tabs = [
+    { id: 'student', label: 'Student ID', icon: UserCircle },
+    { id: 'hostel', label: 'Hostel Card', icon: Home },
+    { id: 'transfer', label: 'Transfer Cert', icon: FileOutput },
+    { id: 'migration', label: 'Migration Cert', icon: FileSpreadsheet },
+    { id: 'awards', label: 'Awards', icon: Trophy },
+    { id: 'teacher', label: 'Teacher ID', icon: UserCheck }
+  ];
+
+  const IDCard = ({ person, type = 'student' }: { person: any, type?: string }) => (
+    <div className="w-[350px] h-[500px] bg-white rounded-3xl shadow-2xl overflow-hidden border border-slate-200 relative flex flex-col">
+      {/* Header */}
+      <div className="bg-primary p-6 text-white text-center relative overflow-hidden">
+        <div className="absolute top-0 left-0 w-full h-full opacity-10">
+          <div className="absolute -top-10 -left-10 w-32 h-32 bg-white rounded-full blur-2xl"></div>
+          <div className="absolute -bottom-10 -right-10 w-32 h-32 bg-white rounded-full blur-2xl"></div>
+        </div>
+        <div className="relative z-10">
+          <h2 className="text-lg font-black tracking-tight uppercase leading-tight">{schoolProfile.name}</h2>
+          <p className="text-[10px] opacity-80 font-medium mt-1 uppercase tracking-widest">Identity Card</p>
+        </div>
+      </div>
+
+      {/* Profile Image */}
+      <div className="flex-1 flex flex-col items-center pt-8 px-6">
+        <div className="w-32 h-32 rounded-2xl border-4 border-primary/10 p-1 mb-6">
+          <div className="w-full h-full rounded-xl bg-slate-100 flex items-center justify-center text-primary font-black text-4xl overflow-hidden">
+            {person.photo ? <img src={person.photo} alt="" className="w-full h-full object-cover" /> : person.name[0]}
+          </div>
+        </div>
+
+        <h3 className="text-xl font-black text-text-heading text-center uppercase tracking-tight">{person.name} {person.surname}</h3>
+        <p className="text-primary font-bold text-sm mb-6 uppercase tracking-widest">{type === 'teacher' ? 'Faculty Member' : 'Student'}</p>
+
+        <div className="w-full space-y-3 bg-slate-50 p-4 rounded-2xl border border-slate-100">
+          <div className="flex justify-between items-center">
+            <span className="text-[10px] font-bold text-text-secondary uppercase tracking-wider">ID Number</span>
+            <span className="text-xs font-black text-text-heading font-mono">{person.studentId || person.teacherId || 'TCH-12345'}</span>
+          </div>
+          {type !== 'teacher' && (
+            <>
+              <div className="flex justify-between items-center">
+                <span className="text-[10px] font-bold text-text-secondary uppercase tracking-wider">Class & Sec</span>
+                <span className="text-xs font-black text-text-heading">{person.class} - {person.section}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-[10px] font-bold text-text-secondary uppercase tracking-wider">Blood Group</span>
+                <span className="text-xs font-black text-red-600">{person.bloodGroup || 'B+'}</span>
+              </div>
+            </>
+          )}
+          <div className="flex justify-between items-center">
+            <span className="text-[10px] font-bold text-text-secondary uppercase tracking-wider">Contact</span>
+            <span className="text-xs font-black text-text-heading">{person.fatherMobile || person.mobile || '+91 98765 43210'}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Footer with QR */}
+      <div className="p-6 bg-white border-t border-slate-100 flex items-center justify-between">
+        <div className="flex flex-col gap-1">
+          <div className="w-20 h-8 border-b border-slate-300"></div>
+          <p className="text-[8px] font-bold text-text-secondary uppercase tracking-widest">Principal</p>
+        </div>
+        <div className="w-16 h-16 bg-slate-50 rounded-lg p-2 border border-slate-100 flex items-center justify-center">
+          <img 
+            src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${person.studentId || person.teacherId || 'TCH-12345'}`} 
+            alt="QR Code" 
+            className="w-full h-full object-contain"
+            referrerPolicy="no-referrer"
+          />
+        </div>
+      </div>
+      
+      {/* Card Strip */}
+      <div className="h-2 bg-primary w-full"></div>
+    </div>
+  );
+
+  const HostelCard = ({ student }: { student: any }) => (
+    <div className="w-[350px] h-[500px] bg-white rounded-3xl shadow-2xl overflow-hidden border border-slate-200 relative flex flex-col">
+      <div className="bg-emerald-600 p-6 text-white text-center">
+        <h2 className="text-lg font-black uppercase tracking-tight">{schoolProfile.name}</h2>
+        <p className="text-[10px] opacity-80 font-medium mt-1 uppercase tracking-widest">Hostel Identity Card</p>
+      </div>
+      <div className="flex-1 flex flex-col items-center pt-8 px-6">
+        <div className="w-28 h-28 rounded-full border-4 border-emerald-100 p-1 mb-6">
+          <div className="w-full h-full rounded-full bg-emerald-50 flex items-center justify-center text-emerald-600 font-black text-3xl overflow-hidden">
+            {student.photo ? <img src={student.photo} alt="" className="w-full h-full object-cover" /> : student.name[0]}
+          </div>
+        </div>
+        <h3 className="text-xl font-black text-text-heading text-center uppercase">{student.name} {student.surname}</h3>
+        <div className="w-full mt-6 space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+              <p className="text-[9px] font-bold text-text-secondary uppercase mb-1">Room No</p>
+              <p className="text-sm font-black text-emerald-600">H-402</p>
+            </div>
+            <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+              <p className="text-[9px] font-bold text-text-secondary uppercase mb-1">Block</p>
+              <p className="text-sm font-black text-emerald-600">A-Block</p>
+            </div>
+          </div>
+          <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+            <p className="text-[9px] font-bold text-text-secondary uppercase mb-1">Warden Contact</p>
+            <p className="text-sm font-black text-text-heading">+91 99887 76655</p>
+          </div>
+        </div>
+      </div>
+      <div className="p-6 flex justify-center">
+        <QrCode size={60} className="text-emerald-600 opacity-20" />
+      </div>
+      <div className="h-2 bg-emerald-600 w-full"></div>
+    </div>
+  );
+
+  const TransferCertificate = ({ student }: { student: any }) => (
+    <div className="w-[800px] min-h-[1000px] bg-white p-16 shadow-2xl border-[12px] border-double border-primary/20 relative mx-auto">
+      <div className="text-center mb-12">
+        <h1 className="text-4xl font-black text-primary uppercase tracking-tighter mb-2">{schoolProfile.name}</h1>
+        <p className="text-text-sub font-bold uppercase tracking-widest text-sm">{schoolProfile.address}</p>
+        <div className="w-32 h-1 bg-primary mx-auto mt-6"></div>
+        <h2 className="text-3xl font-black text-text-heading mt-8 uppercase underline underline-offset-8">Transfer Certificate</h2>
+      </div>
+
+      <div className="space-y-8 text-lg leading-loose">
+        <div className="flex justify-between font-bold text-text-secondary">
+          <span>Sl. No: TC/2024/042</span>
+          <span>Admission No: {student.studentId}</span>
+        </div>
+
+        <p>This is to certify that <span className="font-black border-b-2 border-slate-300 px-4">{student.name} {student.surname}</span>, 
+        Son/Daughter of <span className="font-black border-b-2 border-slate-300 px-4">{student.fatherName}</span> and 
+        <span className="font-black border-b-2 border-slate-300 px-4">{student.motherName || 'N/A'}</span> was admitted to this school on 
+        <span className="font-black border-b-2 border-slate-300 px-4">01/04/2022</span> on a Transfer Certificate from 
+        <span className="font-black border-b-2 border-slate-300 px-4">Global Public School</span> and left on 
+        <span className="font-black border-b-2 border-slate-300 px-4">15/03/2024</span> with a <span className="font-black border-b-2 border-slate-300 px-4">Good</span> character.</p>
+
+        <p>He/She was then studying in the <span className="font-black border-b-2 border-slate-300 px-4">{student.class}</span> class. 
+        All sums due to the school on his/her account have been remitted.</p>
+
+        <div className="grid grid-cols-2 gap-12 mt-20">
+          <div>
+            <p className="font-bold text-text-secondary uppercase text-xs mb-1">Date of Issue</p>
+            <p className="font-black text-text-heading">18/03/2024</p>
+          </div>
+          <div className="text-right">
+            <div className="w-48 h-12 border-b-2 border-slate-300 ml-auto mb-2"></div>
+            <p className="font-bold text-text-secondary uppercase text-xs">Principal's Signature</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  const AwardCertificate = ({ student, awardTitle = "Excellence in Academics" }: { student: any, awardTitle?: string }) => (
+    <div className="w-[1000px] h-[700px] bg-white p-12 shadow-2xl border-[20px] border-double border-amber-400 relative mx-auto overflow-hidden">
+      <div className="absolute top-0 left-0 w-full h-full opacity-5 pointer-events-none">
+        <Trophy className="w-full h-full scale-150 rotate-12" />
+      </div>
+      
+      <div className="border-4 border-amber-200 h-full w-full p-12 flex flex-col items-center justify-center text-center relative z-10">
+        <Trophy size={80} className="text-amber-500 mb-8" />
+        <h1 className="text-5xl font-black text-amber-600 uppercase tracking-tighter mb-4">Certificate of Achievement</h1>
+        <p className="text-xl font-bold text-text-sub uppercase tracking-[0.3em] mb-12">This award is proudly presented to</p>
+        
+        <h2 className="text-6xl font-black text-text-heading mb-8 font-serif italic">{student.name} {student.surname}</h2>
+        
+        <div className="w-64 h-1 bg-amber-400 mb-8"></div>
+        
+        <p className="text-2xl font-bold text-text-sub max-w-2xl leading-relaxed">
+          In recognition of your outstanding <span className="text-amber-600 font-black">{awardTitle}</span> during the academic session 2023-24.
+        </p>
+
+        <div className="flex justify-between w-full mt-16 px-12">
+          <div className="text-center">
+            <div className="w-48 h-px bg-slate-300 mb-2"></div>
+            <p className="text-xs font-bold text-text-secondary uppercase">Class Teacher</p>
+          </div>
+          <div className="text-center">
+            <div className="w-48 h-px bg-slate-300 mb-2"></div>
+            <p className="text-xs font-bold text-text-secondary uppercase">Principal</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  const MigrationCertificate = ({ student }: { student: any }) => (
+    <div className="w-[800px] min-h-[1000px] bg-white p-16 shadow-2xl border-[12px] border-double border-indigo-400/20 relative mx-auto">
+      <div className="text-center mb-12">
+        <h1 className="text-4xl font-black text-indigo-600 uppercase tracking-tighter mb-2">{schoolProfile.name}</h1>
+        <p className="text-text-sub font-bold uppercase tracking-widest text-sm">{schoolProfile.address}</p>
+        <div className="w-32 h-1 bg-indigo-600 mx-auto mt-6"></div>
+        <h2 className="text-3xl font-black text-text-heading mt-8 uppercase underline underline-offset-8">Migration Certificate</h2>
+      </div>
+
+      <div className="space-y-8 text-lg leading-loose">
+        <div className="flex justify-between font-bold text-text-secondary">
+          <span>Sl. No: MC/2024/{Math.floor(Math.random() * 1000)}</span>
+          <span>Admission No: {student.studentId}</span>
+        </div>
+
+        <p className="mt-10">This is to certify that <span className="font-black border-b-2 border-slate-300 px-4">{student.name} {student.surname}</span>, 
+        Son/Daughter of <span className="font-black border-b-2 border-slate-300 px-4">{student.fatherName}</span>, 
+        a student of this school in <span className="font-black border-b-2 border-slate-300 px-4">{student.class}</span>, 
+        is hereby granted this Migration Certificate at his/her own request.</p>
+
+        <p>The school has no objection to his/her continuing his/her studies in any other recognized University/Board.</p>
+        
+        <p>His/Her date of birth as per school records is <span className="font-black border-b-2 border-slate-300 px-4">{student.dob || '01/01/2010'}</span>.</p>
+
+        <div className="grid grid-cols-2 gap-12 mt-32">
+          <div>
+            <p className="font-bold text-text-secondary uppercase text-xs mb-1">Date of Issue</p>
+            <p className="font-black text-text-heading">{new Date().toLocaleDateString()}</p>
+          </div>
+          <div className="text-right">
+            <div className="w-48 h-12 border-b-2 border-slate-300 ml-auto mb-2"></div>
+            <p className="font-bold text-text-secondary uppercase text-xs">Principal's Signature</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  const [bulkMode, setBulkMode] = useState(false);
+
+  const handlePrint = () => {
+    window.print();
+  };
+
+  return (
+    <div className="space-y-8 max-w-7xl mx-auto pb-20">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <div>
+          <h1 className="text-3xl font-black text-text-heading tracking-tight">ID Cards & Certificates</h1>
+          <p className="text-text-sub font-medium">Generate and print official school documents.</p>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-2 p-1.5 bg-slate-100 rounded-2xl w-fit">
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => {
+              setActiveTab(tab.id);
+              setSelectedStudent(null);
+            }}
+            className={`flex items-center gap-2 px-6 py-3 rounded-xl font-bold transition-all ${
+              activeTab === tab.id 
+                ? 'bg-white text-primary shadow-sm' 
+                : 'text-text-sub hover:text-text-heading hover:bg-white/50'
+            }`}
+          >
+            <tab.icon size={18} />
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+        {/* Selection Sidebar */}
+        <div className="lg:col-span-1 space-y-6">
+          <Card className="p-6">
+            <h3 className="font-bold text-text-heading mb-4 flex items-center gap-2">
+              <Filter size={18} className="text-primary" />
+              Selection Filter
+            </h3>
+            <div className="space-y-4">
+              <div>
+                <label className="label-text">Select Class</label>
+                <select 
+                  className="input-field"
+                  value={selectedClass}
+                  onChange={(e) => setSelectedClass(e.target.value)}
+                >
+                  <option value="">All Classes</option>
+                  {masterData.classes.map((c: string) => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="label-text">Select Section</label>
+                <select 
+                  className="input-field"
+                  value={selectedSection}
+                  onChange={(e) => setSelectedSection(e.target.value)}
+                >
+                  <option value="">All Sections</option>
+                  {masterData.sections.map((s: string) => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+              {selectedClass && (
+                <button 
+                  onClick={() => {
+                    setBulkMode(!bulkMode);
+                    setSelectedStudent(null);
+                  }}
+                  className={`w-full py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 ${
+                    bulkMode 
+                      ? 'bg-primary text-white shadow-lg' 
+                      : 'bg-white border border-slate-200 text-text-heading hover:bg-slate-50'
+                  }`}
+                >
+                  <FileOutput size={18} />
+                  {bulkMode ? 'Exit Bulk Mode' : 'Generate All Certs'}
+                </button>
+              )}
+            </div>
+          </Card>
+
+          <Card className="p-6">
+            <h3 className="font-bold text-text-heading mb-4">Select {activeTab === 'teacher' ? 'Teacher' : 'Student'}</h3>
+            <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2">
+              {activeTab === 'teacher' ? (
+                masterData.teachers.map((teacher: string, idx: number) => (
+                  <button
+                    key={idx}
+                    onClick={() => setSelectedStudent({ name: teacher.split(' ')[0], surname: teacher.split(' ')[1] || '', teacherId: `TCH-${1000 + idx}` })}
+                    className={`w-full text-left p-3 rounded-xl font-bold text-sm transition-all border ${
+                      selectedStudent?.name === teacher.split(' ')[0]
+                        ? 'bg-primary/10 border-primary text-primary'
+                        : 'bg-slate-50 border-transparent text-text-sub hover:border-slate-200'
+                    }`}
+                  >
+                    {teacher}
+                  </button>
+                ))
+              ) : (
+                filteredStudents.map((s: any) => (
+                  <button
+                    key={s.id}
+                    onClick={() => setSelectedStudent(s)}
+                    className={`w-full text-left p-3 rounded-xl font-bold text-sm transition-all border ${
+                      selectedStudent?.id === s.id
+                        ? 'bg-primary/10 border-primary text-primary'
+                        : 'bg-slate-50 border-transparent text-text-sub hover:border-slate-200'
+                    }`}
+                  >
+                    <div className="flex justify-between items-center">
+                      <span>{s.name} {s.surname}</span>
+                      <span className="text-[10px] opacity-60">{s.studentId}</span>
+                    </div>
+                  </button>
+                ))
+              )}
+            </div>
+          </Card>
+        </div>
+
+        {/* Preview Area */}
+        <div className="lg:col-span-3">
+          {bulkMode ? (
+            <div className="space-y-8">
+              <div className="flex items-center justify-between bg-white p-6 rounded-3xl border border-slate-200 shadow-sm sticky top-0 z-20 no-print">
+                <div>
+                  <h3 className="font-black text-text-heading">Bulk Generation Mode</h3>
+                  <p className="text-xs text-text-sub">Generating {filteredStudents.length} {activeTab}s for Class {selectedClass}</p>
+                </div>
+                <button onClick={handlePrint} className="btn-primary flex items-center gap-2">
+                  <Printer size={20} />
+                  Print All
+                </button>
+              </div>
+              <div className="space-y-12">
+                {filteredStudents.map((s: any) => (
+                  <div key={s.id} className="flex flex-col items-center">
+                    <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-xl">
+                      {activeTab === 'student' && <IDCard person={s} />}
+                      {activeTab === 'hostel' && <HostelCard student={s} />}
+                      {activeTab === 'transfer' && <TransferCertificate student={s} />}
+                      {activeTab === 'migration' && <MigrationCertificate student={s} />}
+                      {activeTab === 'awards' && <AwardCertificate student={s} />}
+                    </div>
+                    <div className="w-full border-b-2 border-dashed border-slate-300 my-8 no-print"></div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <Card className="p-12 min-h-[600px] flex flex-col items-center justify-center bg-slate-50/50 border-dashed border-2 border-slate-200">
+              {selectedStudent ? (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="flex flex-col items-center gap-8"
+                >
+                  <div className="bg-white p-4 rounded-[32px] shadow-2xl">
+                    {activeTab === 'student' && <IDCard person={selectedStudent} />}
+                    {activeTab === 'teacher' && <IDCard person={selectedStudent} type="teacher" />}
+                    {activeTab === 'hostel' && <HostelCard student={selectedStudent} />}
+                    {activeTab === 'transfer' && <TransferCertificate student={selectedStudent} />}
+                    {activeTab === 'migration' && <MigrationCertificate student={selectedStudent} />}
+                    {activeTab === 'awards' && <AwardCertificate student={selectedStudent} />}
+                  </div>
+
+                  <div className="flex gap-4 no-print">
+                    <button 
+                      onClick={() => window.print()}
+                      className="flex items-center gap-2 bg-primary text-white px-8 py-4 rounded-2xl font-black shadow-xl shadow-primary/20 hover:scale-105 transition-all"
+                    >
+                      <Printer size={20} />
+                      Print Document
+                    </button>
+                    <button className="flex items-center gap-2 bg-white border border-slate-200 px-8 py-4 rounded-2xl font-black hover:bg-slate-50 transition-all">
+                      <Download size={20} />
+                      Download PDF
+                    </button>
+                  </div>
+                </motion.div>
+              ) : (
+                <div className="text-center space-y-4">
+                  <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mx-auto text-slate-400">
+                    <UserCircle size={40} />
+                  </div>
+                  <div>
+                    <h4 className="text-xl font-bold text-text-heading">No Selection</h4>
+                    <p className="text-text-sub max-w-xs mx-auto">Please select a {activeTab === 'teacher' ? 'teacher' : 'student'} from the sidebar to preview their {tabs.find(t => t.id === activeTab)?.label}.</p>
+                  </div>
+                </div>
+              )}
+            </Card>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const ExaminationModule = ({ 
+  students, 
+  masterData, 
+  currentUser, 
+  exams, 
+  setExams, 
+  examSchedules, 
+  setExamSchedules, 
+  examResults, 
+  setExamResults 
+}: any) => {
+  const [activeTab, setActiveTab] = useState<'setup' | 'schedule' | 'marks' | 'report' | 'stats'>('setup');
+  
+  // Exam Setup Form
+  const [examForm, setExamForm] = useState({
+    name: '',
+    type: 'Main',
+    startDate: '',
+    endDate: '',
+    status: 'Upcoming' as Exam['status']
+  });
+
+  // Exam Schedule Form
+  const [scheduleForm, setScheduleForm] = useState({
+    examId: '',
+    class: '',
+    section: '',
+    subject: '',
+    date: '',
+    startTime: '',
+    endTime: '',
+    room: ''
+  });
+
+  // Marks Entry Form
+  const [marksForm, setMarksForm] = useState<any>({});
+
+  const handleAddExam = () => {
+    if (!examForm.name || !examForm.startDate) return;
+    const newExam: Exam = {
+      ...examForm,
+      id: Date.now().toString()
+    };
+    setExams([...exams, newExam]);
+    setExamForm({ name: '', type: 'Main', startDate: '', endDate: '', status: 'Upcoming' });
+  };
+
+  const handleAddSchedule = () => {
+    if (!scheduleForm.examId || !scheduleForm.class || !scheduleForm.subject) return;
+    const newSchedule: ExamSchedule = {
+      ...scheduleForm,
+      id: Date.now().toString()
+    };
+    setExamSchedules([...examSchedules, newSchedule]);
+    setScheduleForm({ examId: '', class: '', section: '', subject: '', date: '', startTime: '', endTime: '', room: '' });
+  };
+
+  const handleSaveMarks = (scheduleId: string, studentId: string, studentName: string) => {
+    const data = marksForm[`${scheduleId}_${studentId}`] || {};
+    if (data.marks === undefined) return;
+
+    const passMarks = 33; // Mock pass marks
+    const status = data.marks >= passMarks ? 'Pass' : 'Fail';
+    
+    // Simple grading logic
+    let grade = 'F';
+    if (data.marks >= 90) grade = 'A+';
+    else if (data.marks >= 80) grade = 'A';
+    else if (data.marks >= 70) grade = 'B';
+    else if (data.marks >= 60) grade = 'C';
+    else if (data.marks >= 50) grade = 'D';
+    else if (data.marks >= 33) grade = 'E';
+
+    const newResult: ExamResult = {
+      id: Date.now().toString(),
+      examScheduleId: scheduleId,
+      studentId,
+      studentName,
+      marks: Number(data.marks),
+      maxMarks: 100,
+      grade,
+      status,
+      feedback: data.feedback || '',
+      teacherId: currentUser.id
+    };
+
+    // Update or add result
+    const existingIdx = examResults.findIndex((r: any) => r.examScheduleId === scheduleId && r.studentId === studentId);
+    if (existingIdx > -1) {
+      const updated = [...examResults];
+      updated[existingIdx] = newResult;
+      setExamResults(updated);
+    } else {
+      setExamResults([...examResults, newResult]);
+    }
+  };
+
+  const filteredSchedules = currentUser?.role === 'student'
+    ? examSchedules.filter((s: any) => s.class === currentUser.class && s.section === currentUser.section)
+    : examSchedules;
+
+  // Statistics Calculation
+  const getStats = () => {
+    const stats: any = {
+      byClass: {},
+      bySection: {},
+      bySubject: {}
+    };
+
+    examResults.forEach((res: any) => {
+      const schedule = examSchedules.find((s: any) => s.id === res.examScheduleId);
+      if (!schedule) return;
+
+      const keys = [
+        { type: 'byClass', key: schedule.class },
+        { type: 'bySection', key: `${schedule.class}-${schedule.section}` },
+        { type: 'bySubject', key: schedule.subject }
+      ];
+
+      keys.forEach(({ type, key }) => {
+        if (!stats[type][key]) {
+          stats[type][key] = { total: 0, pass: 0, fail: 0 };
+        }
+        stats[type][key].total++;
+        if (res.status === 'Pass') stats[type][key].pass++;
+        else stats[type][key].fail++;
+      });
+    });
+
+    return stats;
+  };
+
+  const stats = getStats();
+
+  return (
+    <div className="space-y-8">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">Examination Management 📝</h1>
+          <p className="text-text-secondary">Manage exams, schedules, question papers, and results.</p>
+        </div>
+      </div>
+
+      <div className="flex gap-4 p-1 bg-slate-100 rounded-2xl w-fit">
+        {[
+          { id: 'setup', label: 'Exam Setup', icon: Settings, adminOnly: true },
+          { id: 'schedule', label: 'Schedule & Papers', icon: Calendar },
+          { id: 'marks', label: 'Marks Entry', icon: FileEdit, teacherOnly: true },
+          { id: 'report', label: 'Report Cards', icon: ClipboardList },
+          { id: 'stats', label: 'Statistics', icon: BarChart3, adminOnly: true }
+        ].filter(tab => {
+          if (tab.adminOnly && currentUser?.role !== 'admin') return false;
+          if (tab.teacherOnly && currentUser?.role !== 'admin' && currentUser?.role !== 'teacher') return false;
+          return true;
+        }).map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id as any)}
+            className={`flex items-center gap-2 px-6 py-3 rounded-xl font-bold transition-all ${
+              activeTab === tab.id 
+                ? 'bg-white text-primary shadow-sm' 
+                : 'text-text-sub hover:bg-white/50'
+            }`}
+          >
+            <tab.icon size={18} />
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      <AnimatePresence mode="wait">
+        {activeTab === 'setup' && (
+          <motion.div key="setup" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              <Card className="lg:col-span-1">
+                <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-primary">
+                  <Plus size={20} /> Create New Exam
+                </h3>
+                <div className="space-y-4">
+                  <Input label="Exam Name" placeholder="e.g. First Terminal" value={examForm.name} onChange={(e: any) => setExamForm({...examForm, name: e.target.value})} />
+                  <Select label="Exam Type" options={['Main', 'Unit Test', 'Practical', 'Viva']} value={examForm.type} onChange={(e: any) => setExamForm({...examForm, type: e.target.value})} />
+                  <div className="grid grid-cols-2 gap-4">
+                    <Input label="Start Date" type="date" value={examForm.startDate} onChange={(e: any) => setExamForm({...examForm, startDate: e.target.value})} />
+                    <Input label="End Date" type="date" value={examForm.endDate} onChange={(e: any) => setExamForm({...examForm, endDate: e.target.value})} />
+                  </div>
+                  <Select label="Status" options={['Upcoming', 'Ongoing', 'Completed']} value={examForm.status} onChange={(e: any) => setExamForm({...examForm, status: e.target.value})} />
+                  <button onClick={handleAddExam} className="btn-primary w-full py-3 mt-4">Create Exam</button>
+                </div>
+              </Card>
+
+              <Card className="lg:col-span-2">
+                <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-primary">
+                  <ClipboardList size={20} /> Exam List
+                </h3>
+                <div className="space-y-4">
+                  {exams.length === 0 ? (
+                    <div className="text-center py-12 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                      <p className="text-text-sub">No exams created yet.</p>
+                    </div>
+                  ) : (
+                    exams.map((exam: any) => (
+                      <div key={exam.id} className="p-6 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between">
+                        <div>
+                          <h4 className="font-bold text-lg">{exam.name}</h4>
+                          <p className="text-sm text-text-sub">{exam.type} | {exam.startDate} to {exam.endDate}</p>
+                        </div>
+                        <span className={`px-4 py-1 rounded-full text-xs font-bold ${
+                          exam.status === 'Ongoing' ? 'bg-green-100 text-green-600' : 
+                          exam.status === 'Upcoming' ? 'bg-blue-100 text-blue-600' : 'bg-slate-200 text-slate-600'
+                        }`}>
+                          {exam.status}
+                        </span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </Card>
+            </div>
+          </motion.div>
+        )}
+
+        {activeTab === 'schedule' && (
+          <motion.div key="schedule" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              {(currentUser?.role === 'admin' || currentUser?.role === 'teacher') && (
+                <Card className="lg:col-span-1">
+                  <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-primary">
+                    <Calendar size={20} /> Schedule Exam
+                  </h3>
+                  <div className="space-y-4">
+                    <Select label="Select Exam" options={exams.map(e => e.name)} value={exams.find(e => e.id === scheduleForm.examId)?.name || ''} onChange={(e: any) => setScheduleForm({...scheduleForm, examId: exams.find(ex => ex.name === e.target.value)?.id || ''})} />
+                    <Select label="Class" options={masterData.classes} value={scheduleForm.class} onChange={(e: any) => setScheduleForm({...scheduleForm, class: e.target.value})} />
+                    <Select label="Section" options={masterData.sections} value={scheduleForm.section} onChange={(e: any) => setScheduleForm({...scheduleForm, section: e.target.value})} />
+                    <Select label="Subject" options={masterData.subjects} value={scheduleForm.subject} onChange={(e: any) => setScheduleForm({...scheduleForm, subject: e.target.value})} />
+                    <Input label="Date" type="date" value={scheduleForm.date} onChange={(e: any) => setScheduleForm({...scheduleForm, date: e.target.value})} />
+                    <div className="grid grid-cols-2 gap-4">
+                      <Input label="Start Time" type="time" value={scheduleForm.startTime} onChange={(e: any) => setScheduleForm({...scheduleForm, startTime: e.target.value})} />
+                      <Input label="End Time" type="time" value={scheduleForm.endTime} onChange={(e: any) => setScheduleForm({...scheduleForm, endTime: e.target.value})} />
+                    </div>
+                    <Input label="Room No" value={scheduleForm.room} onChange={(e: any) => setScheduleForm({...scheduleForm, room: e.target.value})} />
+                    <button onClick={handleAddSchedule} className="btn-primary w-full py-3 mt-4">Schedule Exam</button>
+                  </div>
+                </Card>
+              )}
+
+              <Card className={(currentUser?.role === 'admin' || currentUser?.role === 'teacher') ? "lg:col-span-2" : "lg:col-span-3"}>
+                <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-primary">
+                  <Clock size={20} /> Exam Time Table
+                </h3>
+                <div className="space-y-6">
+                  {filteredSchedules.length === 0 ? (
+                    <div className="text-center py-12 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                      <p className="text-text-sub">No exams scheduled yet.</p>
+                    </div>
+                  ) : (
+                    filteredSchedules.map((s: any) => (
+                      <div key={s.id} className="p-6 bg-slate-50 rounded-2xl border border-slate-100">
+                        <div className="flex items-center justify-between mb-4">
+                          <div>
+                            <h4 className="font-bold text-lg">{s.subject}</h4>
+                            <p className="text-sm text-text-sub">{s.class} - {s.section} | Room: {s.room}</p>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-xs font-bold text-primary block">{s.date}</span>
+                            <span className="text-[10px] text-text-sub">{s.startTime} - {s.endTime}</span>
+                          </div>
+                        </div>
+                        <div className="flex gap-3 mt-4">
+                          <button className="flex items-center gap-2 bg-white border border-slate-200 px-4 py-2 rounded-xl text-xs font-bold hover:bg-slate-100 transition-all">
+                            <Upload size={14} /> Question Paper
+                          </button>
+                          <button className="flex items-center gap-2 bg-white border border-slate-200 px-4 py-2 rounded-xl text-xs font-bold hover:bg-slate-100 transition-all">
+                            <Upload size={14} /> Answer Sheet
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </Card>
+            </div>
+          </motion.div>
+        )}
+
+        {activeTab === 'marks' && (
+          <motion.div key="marks" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+            <Card>
+              <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-primary">
+                <FileEdit size={20} /> Enter Marks & Feedback
+              </h3>
+              <div className="space-y-8">
+                {examSchedules.map((s: any) => (
+                  <div key={s.id} className="p-6 bg-slate-50 rounded-3xl border border-slate-100">
+                    <div className="mb-6">
+                      <h4 className="font-bold text-xl">{s.subject} ({s.class}-{s.section})</h4>
+                      <p className="text-sm text-text-sub">Exam: {exams.find(e => e.id === s.examId)?.name}</p>
+                    </div>
+                    
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="text-xs font-bold text-text-secondary uppercase tracking-wider border-b border-slate-200">
+                            <th className="pb-3 px-4">Student Name</th>
+                            <th className="pb-3 px-4 w-32">Marks (100)</th>
+                            <th className="pb-3 px-4">Feedback</th>
+                            <th className="pb-3 px-4 text-right">Action</th>
+                          </tr>
+                        </thead>
+                        <tbody className="text-sm">
+                          {students.filter((st: any) => st.class === s.class && st.section === s.section).map((student: any) => {
+                            const result = examResults.find((r: any) => r.examScheduleId === s.id && r.studentId === student.studentId);
+                            const currentData = marksForm[`${s.id}_${student.studentId}`] || { marks: result?.marks || '', feedback: result?.feedback || '' };
+
+                            return (
+                              <tr key={student.studentId} className="border-b border-slate-100 last:border-0">
+                                <td className="py-4 px-4 font-medium">{student.name} {student.surname}</td>
+                                <td className="py-4 px-4">
+                                  <input 
+                                    type="number" 
+                                    className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary/20 outline-none"
+                                    value={currentData.marks}
+                                    onChange={(e) => setMarksForm({...marksForm, [`${s.id}_${student.studentId}`]: { ...currentData, marks: e.target.value }})}
+                                  />
+                                </td>
+                                <td className="py-4 px-4">
+                                  <input 
+                                    type="text" 
+                                    className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary/20 outline-none"
+                                    placeholder="Teacher's feedback"
+                                    value={currentData.feedback}
+                                    onChange={(e) => setMarksForm({...marksForm, [`${s.id}_${student.studentId}`]: { ...currentData, feedback: e.target.value }})}
+                                  />
+                                </td>
+                                <td className="py-4 px-4 text-right">
+                                  <button 
+                                    onClick={() => handleSaveMarks(s.id, student.studentId, `${student.name} ${student.surname}`)}
+                                    className="bg-primary text-white px-4 py-2 rounded-xl text-xs font-bold hover:bg-primary-dark transition-all"
+                                  >
+                                    Save
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          </motion.div>
+        )}
+
+        {activeTab === 'report' && (
+          <motion.div key="report" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {students.filter(s => currentUser?.role === 'student' ? s.studentId === currentUser.id : true).map((student: any) => (
+                <Card key={student.studentId} className="relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-bl-full -mr-16 -mt-16"></div>
+                  <div className="flex items-center gap-6 mb-8">
+                    <img 
+                      src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${student.studentId}`} 
+                      alt="Avatar" 
+                      className="w-20 h-20 rounded-2xl bg-slate-100 border-4 border-white shadow-lg"
+                    />
+                    <div>
+                      <h3 className="text-2xl font-black text-text-heading tracking-tighter uppercase">{student.name} {student.surname}</h3>
+                      <p className="text-sm text-text-sub font-bold uppercase tracking-widest">{student.class} - Section {student.section}</p>
+                      <p className="text-xs text-text-sub">Student ID: {student.studentId}</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <h4 className="text-sm font-bold text-primary uppercase tracking-wider border-b border-slate-100 pb-2">Academic Performance</h4>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="text-[10px] font-bold text-text-secondary uppercase tracking-wider border-b border-slate-200">
+                            <th className="pb-3">Subject</th>
+                            <th className="pb-3 text-center">Marks</th>
+                            <th className="pb-3 text-center">Grade</th>
+                            <th className="pb-3 text-center">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody className="text-sm">
+                          {examSchedules.filter(s => s.class === student.class && s.section === student.section).map((s: any) => {
+                            const result = examResults.find(r => r.examScheduleId === s.id && r.studentId === student.studentId);
+                            return (
+                              <tr key={s.id} className="border-b border-slate-100 last:border-0">
+                                <td className="py-3 font-medium">{s.subject}</td>
+                                <td className="py-3 text-center font-bold">{result?.marks || '-'} / 100</td>
+                                <td className="py-3 text-center">
+                                  <span className="px-3 py-1 bg-slate-100 rounded-lg font-bold text-xs">{result?.grade || '-'}</span>
+                                </td>
+                                <td className="py-3 text-center">
+                                  {result ? (
+                                    <span className={`px-3 py-1 rounded-lg font-bold text-[10px] uppercase tracking-widest ${
+                                      result.status === 'Pass' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'
+                                    }`}>
+                                      {result.status}
+                                    </span>
+                                  ) : '-'}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                    
+                    {/* Teacher Feedback Section */}
+                    <div className="mt-6 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                      <h5 className="text-xs font-bold text-text-secondary uppercase tracking-wider mb-2">Teacher's Remarks</h5>
+                      <div className="space-y-2">
+                        {examSchedules.filter(s => s.class === student.class && s.section === student.section).map((s: any) => {
+                          const result = examResults.find(r => r.examScheduleId === s.id && r.studentId === student.studentId);
+                          if (!result?.feedback) return null;
+                          return (
+                            <div key={s.id} className="text-xs italic text-text-secondary">
+                              <span className="font-bold not-italic text-primary">{s.subject}:</span> "{result.feedback}"
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <button className="w-full mt-6 flex items-center justify-center gap-2 bg-slate-900 text-white py-4 rounded-2xl font-bold hover:bg-slate-800 transition-all shadow-xl">
+                      <Download size={20} /> Download Report Card
+                    </button>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          </motion.div>
+        )}
+
+        {activeTab === 'stats' && (
+          <motion.div key="stats" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+            <div className="space-y-8">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <Card>
+                  <h4 className="text-sm font-bold text-primary uppercase tracking-wider mb-6">Class-wise Performance</h4>
+                  <div className="space-y-4">
+                    {Object.entries(stats.byClass).map(([className, data]: any) => {
+                      const passRate = ((data.pass / data.total) * 100).toFixed(1);
+                      return (
+                        <div key={className} className="space-y-2">
+                          <div className="flex justify-between text-sm">
+                            <span className="font-bold">{className}</span>
+                            <span className="text-text-sub">{passRate}% Pass</span>
+                          </div>
+                          <div className="h-2 bg-slate-100 rounded-full overflow-hidden flex">
+                            <div className="h-full bg-green-500" style={{ width: `${passRate}%` }}></div>
+                            <div className="h-full bg-red-500" style={{ width: `${100 - Number(passRate)}%` }}></div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </Card>
+
+                <Card>
+                  <h4 className="text-sm font-bold text-primary uppercase tracking-wider mb-6">Section-wise Performance</h4>
+                  <div className="space-y-4">
+                    {Object.entries(stats.bySection).map(([sectionName, data]: any) => {
+                      const passRate = ((data.pass / data.total) * 100).toFixed(1);
+                      return (
+                        <div key={sectionName} className="space-y-2">
+                          <div className="flex justify-between text-sm">
+                            <span className="font-bold">{sectionName}</span>
+                            <span className="text-text-sub">{passRate}% Pass</span>
+                          </div>
+                          <div className="h-2 bg-slate-100 rounded-full overflow-hidden flex">
+                            <div className="h-full bg-green-500" style={{ width: `${passRate}%` }}></div>
+                            <div className="h-full bg-red-500" style={{ width: `${100 - Number(passRate)}%` }}></div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </Card>
+
+                <Card>
+                  <h4 className="text-sm font-bold text-primary uppercase tracking-wider mb-6">Subject-wise Performance</h4>
+                  <div className="space-y-4">
+                    {Object.entries(stats.bySubject).map(([subject, data]: any) => {
+                      const passRate = ((data.pass / data.total) * 100).toFixed(1);
+                      return (
+                        <div key={subject} className="space-y-2">
+                          <div className="flex justify-between text-sm">
+                            <span className="font-bold">{subject}</span>
+                            <span className="text-text-sub">{passRate}% Pass</span>
+                          </div>
+                          <div className="h-2 bg-slate-100 rounded-full overflow-hidden flex">
+                            <div className="h-full bg-green-500" style={{ width: `${passRate}%` }}></div>
+                            <div className="h-full bg-red-500" style={{ width: `${100 - Number(passRate)}%` }}></div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </Card>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};

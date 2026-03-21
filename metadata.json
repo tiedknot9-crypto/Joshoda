@@ -1,0 +1,7 @@
+{
+  "name": "Remix: Digital School System",
+  "description": "A modern, student-friendly school management software powered by JOSHODA.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
