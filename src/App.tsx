@@ -95,7 +95,24 @@ import {
 
 // --- Types ---
 
-type View = 'login' | 'dashboard' | 'register-student' | 'student-list' | 'settings' | 'fee-management' | 'academics' | 'attendance' | 'examination' | 'id-cards' | 'hostel' | 'live-camera' | 'admin-360' | 'class-360' | 'due-fees' | 'teacher-panel' | 'parent-panel' | 'leave-management';
+type View = 'login' | 'dashboard' | 'register-student' | 'student-list' | 'settings' | 'fee-management' | 'academics' | 'attendance' | 'examination' | 'id-cards' | 'hostel' | 'live-camera' | 'admin-360' | 'class-360' | 'due-fees' | 'teacher-panel' | 'parent-panel' | 'leave-management' | 'reports' | 'calendar' | 'role-assign';
+
+interface User {
+  id: string;
+  name: string;
+  role: 'admin' | 'teacher' | 'student' | 'parent' | 'warden';
+  permissions: string[];
+  studentId?: string;
+}
+
+interface CalendarEvent {
+  id: string;
+  title: string;
+  date: string;
+  type: 'event' | 'holiday' | 'examination' | 'ptm' | 'festival';
+  icon?: string;
+  color?: string;
+}
 
 interface HostelRoom {
   id: string;
@@ -144,6 +161,7 @@ interface Attendance {
   date: string;
   time: string;
   markedBy: string;
+  period?: 'Morning' | 'Last Period';
 }
 
 interface TimeTableEntry {
@@ -185,6 +203,8 @@ interface LeaveRequest {
   status: 'Pending' | 'Approved' | 'Rejected';
   appliedDate: string;
   approvedBy?: string;
+  type?: 'Leave' | 'Early Leave' | 'Parent Pickup';
+  pickupTime?: string;
 }
 
 interface Notification {
@@ -427,7 +447,8 @@ const Attendance = ({ students, attendance, setAttendance, masterData, currentUs
     class: '',
     section: '',
     date: new Date().toISOString().split('T')[0],
-    status: 'Present' as Attendance['status']
+    status: 'Present' as Attendance['status'],
+    period: 'Morning' as 'Morning' | 'Last Period'
   });
   const [historyFilters, setHistoryFilters] = useState({
     date: new Date().toISOString().split('T')[0],
@@ -525,7 +546,8 @@ const Attendance = ({ students, attendance, setAttendance, masterData, currentUs
           status,
           date: today,
           time: new Date().toLocaleTimeString(),
-          markedBy: currentUser?.role === 'admin' ? 'Admin' : 'Teacher'
+          markedBy: currentUser?.role === 'admin' ? 'Admin' : 'Teacher',
+          period: 'Morning'
         };
         return [...prev, newEntry];
       }
@@ -541,7 +563,11 @@ const Attendance = ({ students, attendance, setAttendance, masterData, currentUs
     const studentsToMark = students.filter((s: any) => selectedStudents.includes(s.studentId));
     
     const newEntries = studentsToMark.map((s: any) => {
-      const existing = attendance.find((a: any) => a.studentId === s.studentId && a.date === new Date(manualForm.date).toLocaleDateString());
+      const existing = attendance.find((a: any) => 
+        a.studentId === s.studentId && 
+        a.date === new Date(manualForm.date).toLocaleDateString() &&
+        a.period === manualForm.period
+      );
       if (existing) return null;
 
       return {
@@ -553,7 +579,8 @@ const Attendance = ({ students, attendance, setAttendance, masterData, currentUs
         status: manualForm.status,
         date: new Date(manualForm.date).toLocaleDateString(),
         time: '--',
-        markedBy: currentUser?.role === 'admin' ? 'Admin' : 'Teacher'
+        markedBy: currentUser?.role === 'admin' ? 'Admin' : 'Teacher',
+        period: manualForm.period
       };
     }).filter(Boolean);
 
@@ -698,7 +725,7 @@ const Attendance = ({ students, attendance, setAttendance, masterData, currentUs
                         <div key={a.id} className="p-3 bg-slate-50 rounded-xl border border-slate-100 flex justify-between items-center">
                           <div>
                             <p className="text-sm font-bold">{a.studentName}</p>
-                            <p className="text-[10px] text-text-sub uppercase">{a.class} - {a.section} | {a.time}</p>
+                            <p className="text-[10px] text-text-sub uppercase">{a.class} - {a.section} | {a.time} ({a.period || 'Morning'})</p>
                           </div>
                           <span className={`text-[10px] font-black px-2 py-1 rounded-full uppercase ${
                             a.status === 'Present' ? 'bg-green-100 text-green-700' : 
@@ -728,6 +755,25 @@ const Attendance = ({ students, attendance, setAttendance, masterData, currentUs
                   <Input label="Date" type="date" value={manualForm.date} onChange={(e: any) => setManualForm({...manualForm, date: e.target.value})} />
                   <Select label="Mark As" options={['Present', 'Absent', 'Late', 'Leave', 'Holiday']} value={manualForm.status} onChange={(e: any) => setManualForm({...manualForm, status: e.target.value as any})} />
                   
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-text-secondary uppercase tracking-wider">Period</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {['Morning', 'Last Period'].map((p) => (
+                        <button
+                          key={p}
+                          onClick={() => setManualForm({...manualForm, period: p as any})}
+                          className={`py-2 px-3 rounded-xl text-xs font-bold transition-all border ${
+                            manualForm.period === p 
+                              ? 'bg-primary text-white border-primary shadow-lg shadow-primary/20' 
+                              : 'bg-slate-50 text-text-secondary border-slate-200 hover:bg-slate-100'
+                          }`}
+                        >
+                          {p}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
                   <div className="pt-4 border-t border-slate-100">
                     <button 
                       onClick={handleManualMark} 
@@ -894,7 +940,10 @@ const Attendance = ({ students, attendance, setAttendance, masterData, currentUs
                     ) : (
                       ((currentUser?.role === 'admin' || currentUser?.role === 'teacher') ? filteredHistory : myAttendance).map((a: any) => (
                         <tr key={a.id} className="hover:bg-slate-50/50 transition-colors">
-                          <td className="py-4 text-sm font-medium text-text-sub">{a.date}</td>
+                          <td className="py-4 text-sm font-medium text-text-sub">
+                            {a.date}
+                            <span className="ml-2 text-[10px] font-bold text-primary/60 uppercase">({a.period || 'Morning'})</span>
+                          </td>
                           {(currentUser?.role === 'admin' || currentUser?.role === 'teacher') && (
                             <td className="py-4">
                               <p className="text-sm font-bold text-text-heading">{a.studentName}</p>
@@ -1752,7 +1801,8 @@ const FeeManagement = ({
   setFeeTransactions,
   schoolProfile,
   masterData,
-  showModal
+  showModal,
+  leaveRequests
 }: any) => {
   const [activeTab, setActiveTab] = useState<'collect' | 'master' | 'reports'>('collect');
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
@@ -2041,6 +2091,29 @@ const FeeManagement = ({
                 ))}
               </div>
             </Card>
+
+            {selectedStudent && (
+              <Card className="bg-rose-50 border-rose-100">
+                <h3 className="text-sm font-bold mb-4 uppercase tracking-wider text-rose-700 flex items-center gap-2">
+                  <AlertCircle size={16} />
+                  Student Alerts
+                </h3>
+                <div className="space-y-3">
+                  {leaveRequests
+                    .filter((l: any) => l.studentId === selectedStudent.studentId && l.status === 'Approved' && (l.type === 'Early Leave' || l.type === 'Parent Pickup'))
+                    .map((l: any) => (
+                      <div key={l.id} className="p-3 bg-white rounded-xl border border-rose-200 shadow-sm">
+                        <p className="text-xs font-bold text-rose-600 uppercase mb-1">{l.type}</p>
+                        <p className="text-sm font-medium text-text-heading">Pickup Time: {l.pickupTime || 'N/A'}</p>
+                        <p className="text-[10px] text-text-sub mt-1">Check if any special fees apply.</p>
+                      </div>
+                    ))}
+                  {leaveRequests.filter((l: any) => l.studentId === selectedStudent.studentId && l.status === 'Approved' && (l.type === 'Early Leave' || l.type === 'Parent Pickup')).length === 0 && (
+                    <p className="text-xs text-rose-500 italic">No active leave/pickup alerts for today.</p>
+                  )}
+                </div>
+              </Card>
+            )}
           </div>
         </div>
       )}
@@ -2511,8 +2584,15 @@ const TeacherPanel = ({ syllabuses, setSyllabuses, leaveRequests, setLeaveReques
     a.teacherName === currentUser.name || assignedClasses.some(ac => ac.class === a.class && ac.section === a.section)
   );
 
-  const [activeTab, setActiveTab] = useState<'syllabus' | 'leaves' | 'notifications' | 'activities'>('syllabus');
+  const [activeTab, setActiveTab] = useState<'syllabus' | 'attendance' | 'leaves' | 'activities' | 'notifications' | 'progress' | 'fees' | 'hostel' | 'tools'>('syllabus');
   const [showActivityModal, setShowActivityModal] = useState(false);
+  const [attendanceForm, setAttendanceForm] = useState({
+    class: '',
+    section: '',
+    date: new Date().toISOString().split('T')[0],
+    period: 'Morning' as 'Morning' | 'Last Period'
+  });
+  const [selectedAttendanceStudents, setSelectedAttendanceStudents] = useState<string[]>([]);
   const [activityForm, setActivityForm] = useState({
     class: '',
     section: '',
@@ -2561,13 +2641,18 @@ const TeacherPanel = ({ syllabuses, setSyllabuses, leaveRequests, setLeaveReques
         )}
       </div>
 
-      <div className="flex gap-4 border-b border-slate-200">
+      <div className="flex flex-wrap gap-2 border-b border-slate-200">
         {[
-          { id: 'syllabus', label: 'Syllabus Progress', icon: BookOpen },
-          { id: 'leaves', label: 'Leave Requests', icon: CalendarRange },
-          { id: 'activities', label: 'Class Activities', icon: ClipboardList },
-          { id: 'notifications', label: 'Notifications', icon: Bell },
-        ].map((tab) => (
+          { id: 'syllabus', label: 'Syllabus', icon: BookOpen, permission: 'Syllabus' },
+          { id: 'attendance', label: 'Attendance', icon: UserCheck, permission: 'QR Attendance' },
+          { id: 'leaves', label: 'Leaves', icon: CalendarRange, permission: 'Leave Application' },
+          { id: 'activities', label: 'Homework', icon: ClipboardList, permission: 'Home Work Assign' },
+          { id: 'progress', label: 'Progress', icon: GraduationCap, permission: 'Progress Report' },
+          { id: 'fees', label: 'Fees', icon: Wallet, permission: 'Fee Structure' },
+          { id: 'hostel', label: 'Hostel', icon: Bed, permission: 'Hostel' },
+          { id: 'tools', label: 'Tools', icon: Settings, permission: 'all' },
+          { id: 'notifications', label: 'Notifications', icon: Bell, permission: 'all' },
+        ].filter(tab => currentUser.permissions.includes('all') || currentUser.permissions.includes(tab.permission) || tab.permission === 'all').map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id as any)}
@@ -2632,6 +2717,152 @@ const TeacherPanel = ({ syllabuses, setSyllabuses, leaveRequests, setLeaveReques
         </Card>
       )}
 
+      {activeTab === 'attendance' && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <Card className="lg:col-span-1 h-fit">
+            <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-primary">
+              <UserCheck size={20} /> Mark Attendance
+            </h3>
+            <div className="space-y-6">
+              <div className="grid grid-cols-2 gap-4">
+                <Select 
+                  label="Class" 
+                  options={assignedClasses.map(ac => ac.class)} 
+                  value={attendanceForm.class} 
+                  onChange={(e: any) => setAttendanceForm({...attendanceForm, class: e.target.value})} 
+                />
+                <Select 
+                  label="Section" 
+                  options={assignedClasses.filter(ac => ac.class === attendanceForm.class).map(ac => ac.section)} 
+                  value={attendanceForm.section} 
+                  onChange={(e: any) => setAttendanceForm({...attendanceForm, section: e.target.value})} 
+                />
+              </div>
+              <Input 
+                label="Date" 
+                type="date" 
+                value={attendanceForm.date} 
+                onChange={(e: any) => setAttendanceForm({...attendanceForm, date: e.target.value})} 
+              />
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-text-secondary uppercase tracking-wider">Period</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {['Morning', 'Last Period'].map((p) => (
+                    <button
+                      key={p}
+                      onClick={() => setAttendanceForm({...attendanceForm, period: p as any})}
+                      className={`py-2 px-3 rounded-xl text-xs font-bold transition-all border ${
+                        attendanceForm.period === p 
+                          ? 'bg-primary text-white border-primary shadow-lg shadow-primary/20' 
+                          : 'bg-slate-50 text-text-secondary border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      {p}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              
+              <div className="pt-4 border-t border-slate-100">
+                <button 
+                  onClick={() => {
+                    if (!attendanceForm.class || selectedAttendanceStudents.length === 0) return;
+                    // Mock marking attendance
+                    alert(`Marked ${attendanceForm.period} attendance for ${selectedAttendanceStudents.length} students`);
+                    setSelectedAttendanceStudents([]);
+                  }} 
+                  disabled={selectedAttendanceStudents.length === 0}
+                  className="btn-primary w-full py-4 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <CheckCircle2 size={20} />
+                  Mark {attendanceForm.period} ({selectedAttendanceStudents.length})
+                </button>
+              </div>
+            </div>
+          </Card>
+
+          <Card className="lg:col-span-2">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-bold flex items-center gap-2 text-primary">
+                <Users size={20} /> Student List
+              </h3>
+              <button 
+                onClick={() => {
+                  const classStudents = masterData.students.filter((s: any) => s.class === attendanceForm.class && s.section === attendanceForm.section);
+                  if (selectedAttendanceStudents.length === classStudents.length) {
+                    setSelectedAttendanceStudents([]);
+                  } else {
+                    setSelectedAttendanceStudents(classStudents.map((s: any) => s.studentId));
+                  }
+                }}
+                className="text-xs font-bold text-primary hover:underline"
+              >
+                {attendanceForm.class ? 'Select All' : ''}
+              </button>
+            </div>
+
+            <div className="overflow-hidden rounded-xl border border-slate-100">
+              <table className="w-full text-left">
+                <thead className="bg-slate-50">
+                  <tr>
+                    <th className="p-4 w-12"></th>
+                    <th className="p-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Student</th>
+                    <th className="p-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {masterData.students
+                    .filter((s: any) => s.class === attendanceForm.class && s.section === attendanceForm.section)
+                    .map((s: any) => (
+                      <tr 
+                        key={s.studentId} 
+                        className={`hover:bg-slate-50/50 transition-colors cursor-pointer ${selectedAttendanceStudents.includes(s.studentId) ? 'bg-primary/5' : ''}`}
+                        onClick={() => {
+                          if (selectedAttendanceStudents.includes(s.studentId)) {
+                            setSelectedAttendanceStudents(selectedAttendanceStudents.filter(id => id !== s.studentId));
+                          } else {
+                            setSelectedAttendanceStudents([...selectedAttendanceStudents, s.studentId]);
+                          }
+                        }}
+                      >
+                        <td className="p-4">
+                          <input 
+                            type="checkbox" 
+                            className="w-4 h-4 rounded border-slate-300 text-primary focus:ring-primary"
+                            checked={selectedAttendanceStudents.includes(s.studentId)}
+                            readOnly
+                          />
+                        </td>
+                        <td className="p-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-primary font-bold text-xs">
+                              {s.name[0]}{s.surname[0]}
+                            </div>
+                            <div>
+                              <p className="text-sm font-bold text-text-heading">{s.name} {s.surname}</p>
+                              <p className="text-[10px] text-text-sub uppercase">{s.studentId}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="p-4">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase">Not Marked</span>
+                        </td>
+                      </tr>
+                    ))}
+                  {(!attendanceForm.class || masterData.students.filter((s: any) => s.class === attendanceForm.class && s.section === attendanceForm.section).length === 0) && (
+                    <tr>
+                      <td colSpan={3} className="py-12 text-center text-text-sub italic">
+                        {attendanceForm.class ? 'No students found for this class/section.' : 'Please select a class and section.'}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </div>
+      )}
+
       {activeTab === 'leaves' && (
         <Card>
           <div className="overflow-x-auto">
@@ -2639,8 +2870,8 @@ const TeacherPanel = ({ syllabuses, setSyllabuses, leaveRequests, setLeaveReques
               <thead>
                 <tr className="border-b border-slate-200">
                   <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Student</th>
-                  <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Class/Sec</th>
-                  <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Duration</th>
+                  <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Type</th>
+                  <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Duration/Time</th>
                   <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Reason</th>
                   <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Status</th>
                   <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider text-right">Actions</th>
@@ -2651,12 +2882,19 @@ const TeacherPanel = ({ syllabuses, setSyllabuses, leaveRequests, setLeaveReques
                   <tr key={l.id} className="hover:bg-slate-50/50 transition-colors">
                     <td className="py-4">
                       <p className="text-sm font-bold">{l.studentName}</p>
-                      <p className="text-[10px] text-text-sub uppercase">{l.studentId}</p>
+                      <p className="text-[10px] text-text-sub uppercase">{l.studentId} | {l.class}-{l.section}</p>
                     </td>
-                    <td className="py-4 text-sm font-medium text-text-sub">{l.class}-{l.section}</td>
                     <td className="py-4">
-                      <p className="text-sm font-bold">{l.duration} Days</p>
-                      <p className="text-[10px] text-text-sub">{l.startDate} to {l.endDate}</p>
+                      <span className={`text-[10px] font-black px-2 py-1 rounded-full uppercase ${
+                        l.type === 'Early Leave' ? 'bg-purple-100 text-purple-700' :
+                        l.type === 'Parent Pickup' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-700'
+                      }`}>
+                        {l.type || 'Leave'}
+                      </span>
+                    </td>
+                    <td className="py-4">
+                      <p className="text-sm font-bold">{l.type === 'Leave' ? `${l.duration} Days` : l.pickupTime}</p>
+                      <p className="text-[10px] text-text-sub">{l.startDate} {l.type === 'Leave' ? `to ${l.endDate}` : ''}</p>
                     </td>
                     <td className="py-4 text-sm text-text-sub max-w-xs truncate">{l.reason}</td>
                     <td className="py-4">
@@ -2719,6 +2957,120 @@ const TeacherPanel = ({ syllabuses, setSyllabuses, leaveRequests, setLeaveReques
               <p className="text-text-sub font-medium">No activities uploaded yet for your assigned classes.</p>
             </div>
           )}
+        </div>
+      )}
+
+      {activeTab === 'progress' && (
+        <Card>
+          <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-primary">
+            <GraduationCap size={20} /> Enter Progress Report
+          </h3>
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Select label="Class" options={assignedClasses.map(ac => ac.class)} />
+              <Select label="Section" options={assignedClasses.map(ac => ac.section)} />
+              <Select label="Subject" options={masterData.subjects} />
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="border-b border-slate-200">
+                    <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Student</th>
+                    <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Marks</th>
+                    <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Remarks</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {masterData.students.slice(0, 5).map((s: any) => (
+                    <tr key={s.studentId}>
+                      <td className="py-4 text-sm font-bold">{s.name} {s.surname}</td>
+                      <td className="py-4"><input type="number" className="w-20 bg-slate-50 border border-slate-200 rounded-lg p-2 text-sm" placeholder="Marks" /></td>
+                      <td className="py-4"><input type="text" className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-sm" placeholder="Remarks" /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <button className="btn-primary w-full py-4">Save Progress Report</button>
+          </div>
+        </Card>
+      )}
+
+      {activeTab === 'fees' && (
+        <Card>
+          <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-primary">
+            <Wallet size={20} /> Fee Structure & Collection
+          </h3>
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="p-6 bg-slate-50 rounded-2xl border border-slate-100">
+                <h4 className="font-bold mb-4">Payment QR Code</h4>
+                <div className="flex flex-col items-center justify-center">
+                  <div className="bg-white p-4 rounded-2xl border-2 border-primary/20 mb-4">
+                    <QrCode size={160} className="text-primary" />
+                  </div>
+                  <p className="text-xs text-text-sub font-medium">Scan to pay school fees</p>
+                </div>
+              </div>
+              <div className="space-y-4">
+                <h4 className="font-bold">Recent Fee Alerts</h4>
+                {[1, 2, 3].map(i => (
+                  <div key={i} className="p-4 bg-white rounded-xl border border-slate-100 flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-bold">Student {i}</p>
+                      <p className="text-[10px] text-text-sub uppercase">Pending: ₹2,500</p>
+                    </div>
+                    <button className="text-primary text-xs font-bold hover:underline">Notify Parent</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {activeTab === 'hostel' && (
+        <Card>
+          <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-primary">
+            <Bed size={20} /> Hostel Management
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="p-6 bg-blue-50 rounded-2xl border border-blue-100 text-center">
+              <p className="text-xs font-bold text-blue-600 uppercase mb-1">Total Beds</p>
+              <p className="text-3xl font-black text-blue-700">120</p>
+            </div>
+            <div className="p-6 bg-green-50 rounded-2xl border border-green-100 text-center">
+              <p className="text-xs font-bold text-green-600 uppercase mb-1">Occupied</p>
+              <p className="text-3xl font-black text-green-700">98</p>
+            </div>
+            <div className="p-6 bg-orange-50 rounded-2xl border border-orange-100 text-center">
+              <p className="text-xs font-bold text-orange-600 uppercase mb-1">Available</p>
+              <p className="text-3xl font-black text-orange-700">22</p>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {activeTab === 'tools' && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+          {[
+            { label: 'Admission', icon: UserPlus, desc: 'Register student' },
+            { label: 'QR Attendance', icon: QrCode, desc: 'Scan for attendance' },
+            { label: 'WhatsApp', icon: MessageCircle, desc: 'Bulk notifications' },
+            { label: 'ID Cards', icon: UserPlus, desc: 'Generate ID Card' },
+            { label: 'Certificates', icon: FileText, desc: 'TC/Appreciation' },
+            { label: 'Birthday', icon: Sparkles, desc: 'Wishes list' },
+            { label: 'Cash Mgmt', icon: Coins, desc: 'Daily accounts' },
+            { label: 'Settings', icon: Settings, desc: 'Panel settings' },
+          ].map((tool, i) => (
+            <Card key={i} className="p-6 flex flex-col items-center justify-center text-center hover:bg-slate-50 cursor-pointer transition-all group">
+              <div className="w-12 h-12 bg-primary/10 text-primary rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                <tool.icon size={24} />
+              </div>
+              <h4 className="font-bold text-sm">{tool.label}</h4>
+              <p className="text-[10px] text-text-sub mt-1">{tool.desc}</p>
+            </Card>
+          ))}
         </div>
       )}
 
@@ -2825,21 +3177,27 @@ const TeacherPanel = ({ syllabuses, setSyllabuses, leaveRequests, setLeaveReques
 };
 
 const ParentPanel = ({ students, examResults, homeworks, syllabuses, leaveRequests, setLeaveRequests, notifications, feeTransactions, feeMaster, currentUser }: any) => {
-  const [activeTab, setActiveTab] = useState<'progress' | 'homework' | 'syllabus' | 'leave' | 'fees' | 'notifications'>('progress');
+  const [activeTab, setActiveTab] = useState<'progress' | 'homework' | 'syllabus' | 'leave' | 'fees' | 'notifications' | 'documents'>('progress');
   const [leaveForm, setLeaveForm] = useState({
     startDate: '',
     endDate: '',
-    reason: ''
+    reason: '',
+    type: 'Leave' as 'Leave' | 'Early Leave' | 'Parent Pickup',
+    pickupTime: ''
   });
 
   const myStudent = students.find((s: any) => s.studentId === currentUser.studentId) || students[0]; // Mocking for now
 
   const handleApplyLeave = () => {
-    if (!leaveForm.startDate || !leaveForm.endDate || !leaveForm.reason) return;
+    if (!leaveForm.startDate || !leaveForm.reason) return;
+    if (leaveForm.type === 'Leave' && !leaveForm.endDate) return;
+    if ((leaveForm.type === 'Early Leave' || leaveForm.type === 'Parent Pickup') && !leaveForm.pickupTime) return;
     
     const start = new Date(leaveForm.startDate);
-    const end = new Date(leaveForm.endDate);
-    const duration = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+    const end = leaveForm.type === 'Leave' ? new Date(leaveForm.endDate) : start;
+    const duration = leaveForm.type === 'Leave' 
+      ? Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
+      : 0.5;
 
     const newRequest: LeaveRequest = {
       id: Math.random().toString(36).substr(2, 9),
@@ -2848,16 +3206,18 @@ const ParentPanel = ({ students, examResults, homeworks, syllabuses, leaveReques
       class: myStudent.class,
       section: myStudent.section,
       startDate: leaveForm.startDate,
-      endDate: leaveForm.endDate,
+      endDate: leaveForm.type === 'Leave' ? leaveForm.endDate : leaveForm.startDate,
       duration,
       reason: leaveForm.reason,
       status: 'Pending',
-      appliedDate: new Date().toISOString().split('T')[0]
+      appliedDate: new Date().toISOString().split('T')[0],
+      type: leaveForm.type,
+      pickupTime: leaveForm.pickupTime
     };
 
     setLeaveRequests([...leaveRequests, newRequest]);
-    setLeaveForm({ startDate: '', endDate: '', reason: '' });
-    alert('Leave application submitted successfully!');
+    setLeaveForm({ startDate: '', endDate: '', reason: '', type: 'Leave', pickupTime: '' });
+    alert(`${leaveForm.type} application submitted successfully!`);
   };
 
   const getDueFees = () => {
@@ -2890,13 +3250,14 @@ const ParentPanel = ({ students, examResults, homeworks, syllabuses, leaveReques
 
       <div className="flex flex-wrap gap-2 border-b border-slate-200">
         {[
-          { id: 'progress', label: 'Progress & Marks', icon: GraduationCap },
-          { id: 'homework', label: 'Homework', icon: BookOpen },
-          { id: 'syllabus', label: 'Syllabus', icon: ClipboardList },
-          { id: 'leave', label: 'Leave Management', icon: CalendarRange },
-          { id: 'fees', label: 'Fee Payment', icon: Wallet },
-          { id: 'notifications', label: 'Notifications', icon: Bell },
-        ].map((tab) => (
+          { id: 'progress', label: 'Progress', icon: GraduationCap, permission: 'Progress Report' },
+          { id: 'homework', label: 'Homework', icon: BookOpen, permission: 'Home Work Assign' },
+          { id: 'syllabus', label: 'Syllabus', icon: ClipboardList, permission: 'Syllabus' },
+          { id: 'leave', label: 'Leave', icon: CalendarRange, permission: 'Leave Application' },
+          { id: 'fees', label: 'Fees', icon: Wallet, permission: 'Fee Structure' },
+          { id: 'documents', label: 'Documents', icon: FileText, permission: 'Transfer Certificate' },
+          { id: 'notifications', label: 'Notifications', icon: Bell, permission: 'all' },
+        ].filter(tab => currentUser.permissions.includes('all') || currentUser.permissions.includes(tab.permission) || tab.permission === 'all').map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id as any)}
@@ -3028,27 +3389,55 @@ const ParentPanel = ({ students, examResults, homeworks, syllabuses, leaveReques
       {activeTab === 'leave' && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           <Card>
-            <h3 className="text-lg font-bold mb-6">Apply for Leave</h3>
+            <h3 className="text-lg font-bold mb-6">Apply for Leave / Pickup</h3>
             <div className="space-y-4">
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-text-secondary uppercase tracking-wider">Request Type</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {['Leave', 'Early Leave', 'Parent Pickup'].map((type) => (
+                    <button
+                      key={type}
+                      onClick={() => setLeaveForm({...leaveForm, type: type as any})}
+                      className={`py-2 px-3 rounded-xl text-xs font-bold transition-all border ${
+                        leaveForm.type === type 
+                          ? 'bg-primary text-white border-primary shadow-lg shadow-primary/20' 
+                          : 'bg-slate-50 text-text-secondary border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      {type}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <Input 
-                  label="Start Date" 
+                  label={leaveForm.type === 'Leave' ? "Start Date" : "Date"} 
                   type="date" 
                   value={leaveForm.startDate} 
                   onChange={(e: any) => setLeaveForm({...leaveForm, startDate: e.target.value})} 
                 />
-                <Input 
-                  label="End Date" 
-                  type="date" 
-                  value={leaveForm.endDate} 
-                  onChange={(e: any) => setLeaveForm({...leaveForm, endDate: e.target.value})} 
-                />
+                {leaveForm.type === 'Leave' ? (
+                  <Input 
+                    label="End Date" 
+                    type="date" 
+                    value={leaveForm.endDate} 
+                    onChange={(e: any) => setLeaveForm({...leaveForm, endDate: e.target.value})} 
+                  />
+                ) : (
+                  <Input 
+                    label="Pickup Time" 
+                    type="time" 
+                    value={leaveForm.pickupTime} 
+                    onChange={(e: any) => setLeaveForm({...leaveForm, pickupTime: e.target.value})} 
+                  />
+                )}
               </div>
               <div className="space-y-1">
-                <label className="text-xs font-bold text-text-secondary uppercase tracking-wider">Reason for Leave</label>
+                <label className="text-xs font-bold text-text-secondary uppercase tracking-wider">Reason</label>
                 <textarea 
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl p-4 text-sm focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none h-32"
-                  placeholder="Explain the reason for leave..."
+                  placeholder="Explain the reason..."
                   value={leaveForm.reason}
                   onChange={(e) => setLeaveForm({...leaveForm, reason: e.target.value})}
                 ></textarea>
@@ -3057,19 +3446,27 @@ const ParentPanel = ({ students, examResults, homeworks, syllabuses, leaveReques
                 onClick={handleApplyLeave}
                 className="w-full btn-primary py-4"
               >
-                Submit Application
+                Submit Request
               </button>
             </div>
           </Card>
           <Card>
-            <h3 className="text-lg font-bold mb-6">Leave History</h3>
+            <h3 className="text-lg font-bold mb-6">Request History</h3>
             <div className="space-y-4">
               {leaveRequests.filter((l: any) => l.studentId === myStudent.studentId).map((l: any) => (
                 <div key={l.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
                   <div className="flex justify-between items-start mb-2">
                     <div>
-                      <p className="font-bold">{l.duration} Days Leave</p>
-                      <p className="text-xs text-text-sub">{l.startDate} to {l.endDate}</p>
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className={`text-[10px] font-black px-2 py-0.5 rounded-full uppercase ${
+                          l.type === 'Early Leave' ? 'bg-purple-100 text-purple-700' :
+                          l.type === 'Parent Pickup' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-700'
+                        }`}>
+                          {l.type || 'Leave'}
+                        </span>
+                        <p className="font-bold">{l.type === 'Leave' ? `${l.duration} Days` : l.pickupTime}</p>
+                      </div>
+                      <p className="text-xs text-text-sub">{l.startDate} {l.type === 'Leave' ? `to ${l.endDate}` : ''}</p>
                     </div>
                     <span className={`text-[10px] font-black px-2 py-1 rounded-full uppercase ${
                       l.status === 'Approved' ? 'bg-green-100 text-green-700' : 
@@ -3081,6 +3478,9 @@ const ParentPanel = ({ students, examResults, homeworks, syllabuses, leaveReques
                   <p className="text-xs text-text-sub italic line-clamp-1">"{l.reason}"</p>
                 </div>
               ))}
+              {leaveRequests.filter((l: any) => l.studentId === myStudent.studentId).length === 0 && (
+                <div className="text-center py-12 text-text-sub italic">No requests found.</div>
+              )}
             </div>
           </Card>
         </div>
@@ -3126,6 +3526,25 @@ const ParentPanel = ({ students, examResults, homeworks, syllabuses, leaveReques
               )}
             </div>
           </Card>
+        </div>
+      )}
+
+      {activeTab === 'documents' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {[
+            { title: 'Transfer Certificate', icon: FileText, desc: 'Request or view TC' },
+            { title: 'Appreciation Certificate', icon: Trophy, desc: 'View achievements' },
+            { title: 'Birthday Wishes', icon: Sparkles, desc: 'School greetings' },
+            { title: 'ID Card', icon: UserPlus, desc: 'Digital ID Card' },
+          ].map((doc, i) => (
+            <Card key={i} className="p-6 flex flex-col items-center justify-center text-center hover:bg-slate-50 cursor-pointer transition-all group">
+              <div className="w-12 h-12 bg-primary/10 text-primary rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                <doc.icon size={24} />
+              </div>
+              <h4 className="font-bold text-sm">{doc.title}</h4>
+              <p className="text-[10px] text-text-sub mt-1">{doc.desc}</p>
+            </Card>
+          ))}
         </div>
       )}
 
@@ -3723,9 +4142,640 @@ const Class360View = ({ students, masterData, attendance, feeTransactions }: any
   );
 };
 
+const CalendarView = ({ calendarEvents, setCalendarEvents, currentUser }: any) => {
+  const [showEventModal, setShowEventModal] = useState(false);
+  const [eventForm, setEventForm] = useState<Partial<CalendarEvent>>({
+    title: '',
+    date: new Date().toISOString().split('T')[0],
+    type: 'event',
+    icon: '',
+    color: 'bg-blue-50 text-blue-700 border-blue-200'
+  });
+
+  // Academic year starts in April
+  const academicMonths = [3, 4, 5, 6, 7, 8, 9, 10, 11, 0, 1, 2]; // April (3) to March (2)
+  const monthNames = [
+    "JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE",
+    "JULY", "AUGUST", "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER"
+  ];
+
+  const currentYear = new Date().getFullYear();
+  const startYear = new Date().getMonth() < 3 ? currentYear - 1 : currentYear;
+  const endYear = startYear + 1;
+
+  const handleAddEvent = () => {
+    if (!eventForm.title || !eventForm.date) return;
+    const newEvent: CalendarEvent = {
+      id: Date.now().toString(),
+      title: eventForm.title!,
+      date: eventForm.date!,
+      type: eventForm.type as any,
+      icon: eventForm.icon,
+      color: eventForm.color || 'bg-blue-50 text-blue-700 border-blue-200'
+    };
+    setCalendarEvents([...calendarEvents, newEvent]);
+    setShowEventModal(false);
+    setEventForm({ title: '', date: new Date().toISOString().split('T')[0], type: 'event', icon: '', color: 'bg-blue-50 text-blue-700 border-blue-200' });
+  };
+
+  const getEventsForDate = (year: number, month: number, day: number) => {
+    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    return calendarEvents.filter((e: CalendarEvent) => e.date === dateStr);
+  };
+
+  const isSunday = (year: number, month: number, day: number) => {
+    return new Date(year, month, day).getDay() === 0;
+  };
+
+  const getDayName = (year: number, month: number, day: number) => {
+    const d = new Date(year, month, day);
+    if (d.getMonth() !== month) return null;
+    return d.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase();
+  };
+
+  const festivalIcons = [
+    { name: 'Holi', icon: '🎨' },
+    { name: 'Eid', icon: '🌙' },
+    { name: 'Christmas', icon: '🎅' },
+    { name: 'Navratri', icon: '🕉️' },
+    { name: 'Ram Navmi', icon: '🏹' },
+    { name: 'Sikh Festival', icon: '☬' },
+  ];
+
+  return (
+    <div className="space-y-6 max-w-[95vw] mx-auto pb-20">
+      <div className="flex items-center justify-between bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
+        <div>
+          <h1 className="text-3xl font-black text-slate-800 tracking-tight uppercase">Academic Planner {startYear}-{String(endYear).slice(-2)}</h1>
+          <p className="text-slate-500 font-bold text-sm">Annual Academic Calendar & Holiday List</p>
+        </div>
+        <div className="flex gap-3">
+          {(currentUser?.role === 'admin' || currentUser?.role === 'teacher') && (
+            <button 
+              onClick={() => setShowEventModal(true)}
+              className="flex items-center gap-2 bg-primary text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-primary/20 hover:scale-105 transition-all active:scale-95"
+            >
+              <Plus size={20} /> Add Event
+            </button>
+          )}
+          <button className="flex items-center gap-2 bg-white text-slate-700 border border-slate-200 px-6 py-3 rounded-xl font-bold hover:bg-slate-50 transition-all">
+            <Calendar size={20} /> Sync Google Calendar
+          </button>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse table-fixed min-w-[1200px]">
+            <thead>
+              <tr className="bg-slate-800 text-white">
+                <th className="w-16 p-4 border-r border-slate-700 font-black text-xl italic">D/M</th>
+                {academicMonths.map(m => (
+                  <th key={m} className="p-4 border-r border-slate-700 font-black text-sm tracking-widest uppercase">
+                    {monthNames[m]}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {Array.from({ length: 31 }).map((_, dayIdx) => {
+                const day = dayIdx + 1;
+                return (
+                  <tr key={day} className="border-b border-slate-100 group">
+                    <td className="p-4 bg-slate-50 border-r border-slate-200 text-center font-black text-xl text-slate-400 italic group-hover:text-primary transition-colors">
+                      {day}
+                    </td>
+                    {academicMonths.map(m => {
+                      const year = m < 3 ? endYear : startYear;
+                      const date = new Date(year, m, day);
+                      const isValidDate = date.getMonth() === m && date.getDate() === day;
+                      const sunday = isValidDate && isSunday(year, m, day);
+                      const dayName = isValidDate ? getDayName(year, m, day) : null;
+                      const events = isValidDate ? getEventsForDate(year, m, day) : [];
+
+                      return (
+                        <td 
+                          key={m} 
+                          className={`p-2 border-r border-slate-100 h-24 relative transition-all hover:bg-slate-50/50 ${!isValidDate ? 'bg-slate-50/30' : ''}`}
+                        >
+                          {isValidDate && (
+                            <>
+                              <div className="flex justify-between items-start mb-1">
+                                <span className={`text-[9px] font-black tracking-tighter ${sunday ? 'text-red-500' : 'text-slate-400'}`}>
+                                  {dayName}
+                                </span>
+                                {sunday && (
+                                  <span className="text-[8px] font-black text-red-500/20 rotate-45 absolute top-4 right-2 pointer-events-none uppercase">
+                                    Sunday
+                                  </span>
+                                )}
+                              </div>
+                              <div className="space-y-1">
+                                {events.map(event => (
+                                  <div 
+                                    key={event.id} 
+                                    className={`text-[9px] font-bold p-1.5 rounded-lg border flex flex-col items-center justify-center text-center shadow-sm leading-tight ${event.color}`}
+                                  >
+                                    {event.icon && <span className="text-lg mb-0.5">{event.icon}</span>}
+                                    <span className="uppercase tracking-tighter">{event.title}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </>
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {showEventModal && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md z-[100] flex items-center justify-center p-4">
+          <motion.div 
+            initial={{ scale: 0.9, opacity: 0, y: 20 }} 
+            animate={{ scale: 1, opacity: 1, y: 0 }} 
+            className="bg-white rounded-[2.5rem] p-10 max-w-md w-full shadow-2xl border border-slate-100"
+          >
+            <div className="flex justify-between items-center mb-8">
+              <h3 className="text-2xl font-black text-slate-800 uppercase tracking-tight">Add New Event</h3>
+              <button onClick={() => setShowEventModal(false)} className="p-2 hover:bg-slate-100 rounded-full transition-all">
+                <X size={24} className="text-slate-400" />
+              </button>
+            </div>
+            
+            <div className="space-y-5">
+              <Input 
+                label="Event Title" 
+                placeholder="e.g. Annual Sports Day"
+                value={eventForm.title} 
+                onChange={(e: any) => setEventForm({...eventForm, title: e.target.value})} 
+              />
+              <Input 
+                label="Date" 
+                type="date" 
+                value={eventForm.date} 
+                onChange={(e: any) => setEventForm({...eventForm, date: e.target.value})} 
+              />
+              <Select 
+                label="Event Type" 
+                options={['event', 'holiday', 'examination', 'ptm', 'festival']} 
+                value={eventForm.type} 
+                onChange={(e: any) => {
+                  const type = e.target.value;
+                  let color = 'bg-blue-50 text-blue-700 border-blue-200';
+                  if (type === 'holiday') color = 'bg-red-50 text-red-700 border-red-200';
+                  if (type === 'examination') color = 'bg-purple-50 text-purple-700 border-purple-200';
+                  if (type === 'ptm') color = 'bg-indigo-50 text-indigo-700 border-indigo-200';
+                  if (type === 'festival') color = 'bg-orange-50 text-orange-700 border-orange-200';
+                  setEventForm({...eventForm, type, color});
+                }} 
+              />
+              
+              {eventForm.type === 'festival' && (
+                <div className="space-y-3">
+                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Select Festival Icon</label>
+                  <div className="grid grid-cols-6 gap-2">
+                    {festivalIcons.map(f => (
+                      <button 
+                        key={f.name}
+                        onClick={() => setEventForm({...eventForm, icon: f.icon})}
+                        className={`text-2xl p-3 rounded-2xl border-2 transition-all ${eventForm.icon === f.icon ? 'border-primary bg-primary/5 scale-110' : 'border-slate-50 hover:border-slate-200'}`}
+                        title={f.name}
+                      >
+                        {f.icon}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex gap-4 pt-8">
+                <button 
+                  onClick={() => setShowEventModal(false)} 
+                  className="flex-1 py-4 font-black text-slate-400 uppercase tracking-widest hover:text-slate-600 transition-all"
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={handleAddEvent} 
+                  className="flex-1 py-4 bg-primary text-white font-black uppercase tracking-widest rounded-2xl shadow-xl shadow-primary/30 hover:scale-105 active:scale-95 transition-all"
+                >
+                  Save Event
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const ReportsView = ({ students, feeTransactions, attendance, homeworks, hostelAttendance, masterData, leaveRequests }: any) => {
+  const [activeReport, setActiveReport] = useState<string | null>(null);
+  const [filters, setFilters] = useState({
+    class: '',
+    section: '',
+    date: new Date().toISOString().split('T')[0]
+  });
+
+  const reports = [
+    { id: 'students', title: 'STUDENTS INFORMATION', icon: Users, color: 'text-blue-500', bgColor: 'bg-blue-50' },
+    { id: 'finance', title: 'FINANCE', icon: Receipt, color: 'text-emerald-500', bgColor: 'bg-emerald-50' },
+    { id: 'attendance', title: 'ATTENDANCE', icon: UserCheck, color: 'text-orange-500', bgColor: 'bg-orange-50' },
+    { id: 'leave', title: 'LEAVE & PICKUP', icon: Clock, color: 'text-rose-500', bgColor: 'bg-rose-50' },
+    { id: 'homework', title: 'HOME WORK', icon: BookOpen, color: 'text-purple-500', bgColor: 'bg-purple-50' },
+    { id: 'hostel', title: 'HOSTEL', icon: Home, color: 'text-pink-500', bgColor: 'bg-pink-50' },
+    { id: 'userlog', title: 'USER LOG', icon: ShieldCheck, color: 'text-slate-500', bgColor: 'bg-slate-50' },
+  ];
+
+  const filteredStudents = students.filter((s: any) => 
+    (!filters.class || s.class === filters.class) && 
+    (!filters.section || s.section === filters.section)
+  );
+
+  const filteredFinance = feeTransactions.filter((t: any) => 
+    (!filters.class || t.class === filters.class) && 
+    (!filters.section || t.section === filters.section) &&
+    (!filters.date || t.date === new Date(filters.date).toLocaleDateString())
+  );
+
+  const filteredAttendance = attendance.filter((a: any) => 
+    (!filters.class || a.class === filters.class) && 
+    (!filters.section || a.section === filters.section) &&
+    (!filters.date || a.date === new Date(filters.date).toLocaleDateString())
+  );
+
+  const filteredHomework = homeworks.filter((h: any) => 
+    (!filters.class || h.class === filters.class) && 
+    (!filters.section || h.section === filters.section) &&
+    (!filters.date || h.date === new Date(filters.date).toLocaleDateString())
+  );
+
+  const filteredHostel = hostelAttendance.filter((a: any) => 
+    (!filters.date || a.date === new Date(filters.date).toLocaleDateString())
+  );
+
+  const filteredLeave = leaveRequests.filter((l: any) => 
+    (!filters.date || l.startDate === new Date(filters.date).toLocaleDateString())
+  );
+
+  const exportToExcel = (data: any[], fileName: string) => {
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Report");
+    XLSX.writeFile(wb, `${fileName}.xlsx`);
+  };
+
+  return (
+    <div className="space-y-8 max-w-7xl mx-auto pb-20">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-black text-text-heading tracking-tight">Reports Center 📊</h1>
+          <p className="text-text-sub font-medium">Generate and filter comprehensive school reports.</p>
+        </div>
+        {activeReport && (
+          <button 
+            onClick={() => setActiveReport(null)}
+            className="flex items-center gap-2 text-text-sub hover:text-primary font-bold transition-all"
+          >
+            <ArrowRightLeft size={18} className="rotate-180" /> Back to Reports
+          </button>
+        )}
+      </div>
+
+      {!activeReport ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {reports.map((report) => (
+            <button
+              key={report.id}
+              onClick={() => setActiveReport(report.id)}
+              className="group p-8 bg-white rounded-3xl border border-slate-100 shadow-sm hover:shadow-xl hover:border-primary/20 transition-all text-left"
+            >
+              <div className={`w-14 h-14 ${report.bgColor} ${report.color} rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-all shadow-sm`}>
+                <report.icon size={28} />
+              </div>
+              <h3 className="text-lg font-black text-text-heading mb-2">{report.title}</h3>
+              <p className="text-sm text-text-sub font-medium">View and filter {report.title.toLowerCase()} data.</p>
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div className="space-y-6">
+          <Card className="p-6">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="flex flex-wrap items-center gap-4">
+                <div className="flex items-center gap-2 bg-slate-100 px-4 py-2 rounded-xl border border-slate-200">
+                  <Calendar size={16} className="text-text-secondary" />
+                  <input 
+                    type="date" 
+                    className="bg-transparent outline-none text-sm font-medium"
+                    value={filters.date}
+                    onChange={(e) => setFilters({...filters, date: e.target.value})}
+                  />
+                </div>
+                <select 
+                  className="bg-slate-100 px-4 py-2 rounded-xl border border-slate-200 outline-none text-sm font-medium"
+                  value={filters.class}
+                  onChange={(e) => setFilters({...filters, class: e.target.value})}
+                >
+                  <option value="">All Classes</option>
+                  {masterData.classes.map((c: string) => <option key={c} value={c}>{c}</option>)}
+                </select>
+                <select 
+                  className="bg-slate-100 px-4 py-2 rounded-xl border border-slate-200 outline-none text-sm font-medium"
+                  value={filters.section}
+                  onChange={(e) => setFilters({...filters, section: e.target.value})}
+                >
+                  <option value="">All Sections</option>
+                  {masterData.sections.map((s: string) => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+              <button 
+                onClick={() => exportToExcel(
+                  activeReport === 'students' ? filteredStudents :
+                  activeReport === 'finance' ? filteredFinance :
+                  activeReport === 'attendance' ? filteredAttendance :
+                  activeReport === 'leave' ? filteredLeave :
+                  activeReport === 'homework' ? filteredHomework :
+                  activeReport === 'hostel' ? filteredHostel : [],
+                  `${activeReport}_report`
+                )}
+                className="flex items-center gap-2 bg-green-600 text-white px-6 py-2 rounded-xl text-sm font-bold hover:bg-green-700 transition-all shadow-lg shadow-green-600/20"
+              >
+                <FileSpreadsheet size={18} />
+                Export Excel
+              </button>
+            </div>
+          </Card>
+
+          <Card className="p-0 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead className="bg-slate-50 border-b border-slate-100">
+                  {activeReport === 'students' && (
+                    <tr>
+                      <th className="p-4 font-bold text-xs uppercase text-text-secondary">ID</th>
+                      <th className="p-4 font-bold text-xs uppercase text-text-secondary">Name</th>
+                      <th className="p-4 font-bold text-xs uppercase text-text-secondary">Class</th>
+                      <th className="p-4 font-bold text-xs uppercase text-text-secondary">Father Name</th>
+                      <th className="p-4 font-bold text-xs uppercase text-text-secondary">Mobile</th>
+                    </tr>
+                  )}
+                  {activeReport === 'finance' && (
+                    <tr>
+                      <th className="p-4 font-bold text-xs uppercase text-text-secondary">Date</th>
+                      <th className="p-4 font-bold text-xs uppercase text-text-secondary">Student</th>
+                      <th className="p-4 font-bold text-xs uppercase text-text-secondary">Fee Type</th>
+                      <th className="p-4 font-bold text-xs uppercase text-text-secondary">Amount</th>
+                      <th className="p-4 font-bold text-xs uppercase text-text-secondary">Status</th>
+                    </tr>
+                  )}
+                  {activeReport === 'attendance' && (
+                    <tr>
+                      <th className="p-4 font-bold text-xs uppercase text-text-secondary">Date</th>
+                      <th className="p-4 font-bold text-xs uppercase text-text-secondary">Student</th>
+                      <th className="p-4 font-bold text-xs uppercase text-text-secondary">Class</th>
+                      <th className="p-4 font-bold text-xs uppercase text-text-secondary">Status</th>
+                      <th className="p-4 font-bold text-xs uppercase text-text-secondary">Period</th>
+                      <th className="p-4 font-bold text-xs uppercase text-text-secondary">Time</th>
+                    </tr>
+                  )}
+                  {activeReport === 'leave' && (
+                    <tr>
+                      <th className="p-4 font-bold text-xs uppercase text-text-secondary">Date</th>
+                      <th className="p-4 font-bold text-xs uppercase text-text-secondary">Student</th>
+                      <th className="p-4 font-bold text-xs uppercase text-text-secondary">Type</th>
+                      <th className="p-4 font-bold text-xs uppercase text-text-secondary">Pickup Time</th>
+                      <th className="p-4 font-bold text-xs uppercase text-text-secondary">Status</th>
+                    </tr>
+                  )}
+                  {activeReport === 'homework' && (
+                    <tr>
+                      <th className="p-4 font-bold text-xs uppercase text-text-secondary">Date</th>
+                      <th className="p-4 font-bold text-xs uppercase text-text-secondary">Subject</th>
+                      <th className="p-4 font-bold text-xs uppercase text-text-secondary">Title</th>
+                      <th className="p-4 font-bold text-xs uppercase text-text-secondary">Due Date</th>
+                      <th className="p-4 font-bold text-xs uppercase text-text-secondary">Submissions</th>
+                    </tr>
+                  )}
+                  {activeReport === 'hostel' && (
+                    <tr>
+                      <th className="p-4 font-bold text-xs uppercase text-text-secondary">Date</th>
+                      <th className="p-4 font-bold text-xs uppercase text-text-secondary">Student ID</th>
+                      <th className="p-4 font-bold text-xs uppercase text-text-secondary">Status</th>
+                      <th className="p-4 font-bold text-xs uppercase text-text-secondary">Time</th>
+                    </tr>
+                  )}
+                  {activeReport === 'userlog' && (
+                    <tr>
+                      <th className="p-4 font-bold text-xs uppercase text-text-secondary">Time</th>
+                      <th className="p-4 font-bold text-xs uppercase text-text-secondary">User</th>
+                      <th className="p-4 font-bold text-xs uppercase text-text-secondary">Action</th>
+                      <th className="p-4 font-bold text-xs uppercase text-text-secondary">IP Address</th>
+                    </tr>
+                  )}
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {activeReport === 'students' && filteredStudents.map((s: any) => (
+                    <tr key={s.id} className="hover:bg-slate-50/50 transition-all">
+                      <td className="p-4 text-sm font-bold text-primary">{s.studentId}</td>
+                      <td className="p-4 text-sm font-bold">{s.name} {s.surname}</td>
+                      <td className="p-4 text-sm font-medium">{s.class} - {s.section}</td>
+                      <td className="p-4 text-sm font-medium">{s.fatherName}</td>
+                      <td className="p-4 text-sm font-medium">{s.fatherMobile}</td>
+                    </tr>
+                  ))}
+                  {activeReport === 'finance' && filteredFinance.map((t: any) => (
+                    <tr key={t.id} className="hover:bg-slate-50/50 transition-all">
+                      <td className="p-4 text-sm font-medium">{t.date}</td>
+                      <td className="p-4 text-sm font-bold">{t.studentName}</td>
+                      <td className="p-4 text-sm font-medium">{t.feeType}</td>
+                      <td className="p-4 text-sm font-black text-emerald-600">₹{t.totalPaid}</td>
+                      <td className="p-4">
+                        <span className={`text-[10px] font-black px-2 py-1 rounded-full uppercase ${t.status === 'Paid' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
+                          {t.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                  {activeReport === 'attendance' && filteredAttendance.map((a: any) => (
+                    <tr key={a.id} className="hover:bg-slate-50/50 transition-all">
+                      <td className="p-4 text-sm font-medium">{a.date}</td>
+                      <td className="p-4 text-sm font-bold">{a.studentName}</td>
+                      <td className="p-4 text-sm font-medium">{a.class} - {a.section}</td>
+                      <td className="p-4">
+                        <span className={`text-[10px] font-black px-2 py-1 rounded-full uppercase ${a.status === 'Present' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                          {a.status}
+                        </span>
+                      </td>
+                      <td className="p-4 text-sm font-bold text-primary">{a.period || 'Morning'}</td>
+                      <td className="p-4 text-sm font-medium">{a.time}</td>
+                    </tr>
+                  ))}
+                  {activeReport === 'leave' && filteredLeave.map((l: any) => (
+                    <tr key={l.id} className="hover:bg-slate-50/50 transition-all">
+                      <td className="p-4 text-sm font-medium">{l.startDate}</td>
+                      <td className="p-4 text-sm font-bold">{l.studentName}</td>
+                      <td className="p-4">
+                        <span className={`text-[10px] font-black px-2 py-1 rounded-full uppercase ${
+                          l.type === 'Early Leave' ? 'bg-orange-100 text-orange-700' : 
+                          l.type === 'Parent Pickup' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-700'
+                        }`}>
+                          {l.type}
+                        </span>
+                      </td>
+                      <td className="p-4 text-sm font-medium">{l.pickupTime || 'N/A'}</td>
+                      <td className="p-4">
+                        <span className={`text-[10px] font-black px-2 py-1 rounded-full uppercase ${
+                          l.status === 'Approved' ? 'bg-green-100 text-green-700' : 
+                          l.status === 'Pending' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'
+                        }`}>
+                          {l.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                  {activeReport === 'homework' && filteredHomework.map((h: any) => (
+                    <tr key={h.id} className="hover:bg-slate-50/50 transition-all">
+                      <td className="p-4 text-sm font-medium">{h.date}</td>
+                      <td className="p-4 text-sm font-bold text-primary">{h.subject}</td>
+                      <td className="p-4 text-sm font-bold">{h.title}</td>
+                      <td className="p-4 text-sm font-medium text-red-500">{h.dueDate}</td>
+                      <td className="p-4 text-sm font-bold">{h.submissions.length} Students</td>
+                    </tr>
+                  ))}
+                  {activeReport === 'hostel' && filteredHostel.map((a: any) => (
+                    <tr key={a.id} className="hover:bg-slate-50/50 transition-all">
+                      <td className="p-4 text-sm font-medium">{a.date}</td>
+                      <td className="p-4 text-sm font-bold">{a.studentId}</td>
+                      <td className="p-4">
+                        <span className={`text-[10px] font-black px-2 py-1 rounded-full uppercase ${a.status === 'Present' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                          {a.status}
+                        </span>
+                      </td>
+                      <td className="p-4 text-sm font-medium">{a.time}</td>
+                    </tr>
+                  ))}
+                  {activeReport === 'userlog' && (
+                    <tr className="hover:bg-slate-50/50 transition-all">
+                      <td className="p-4 text-sm font-medium">{new Date().toLocaleString()}</td>
+                      <td className="p-4 text-sm font-bold">Admin User</td>
+                      <td className="p-4 text-sm font-medium">Logged in to system</td>
+                      <td className="p-4 text-sm font-medium">192.168.1.1</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+              {(
+                (activeReport === 'students' && filteredStudents.length === 0) ||
+                (activeReport === 'finance' && filteredFinance.length === 0) ||
+                (activeReport === 'attendance' && filteredAttendance.length === 0) ||
+                (activeReport === 'leave' && filteredLeave.length === 0) ||
+                (activeReport === 'homework' && filteredHomework.length === 0) ||
+                (activeReport === 'hostel' && filteredHostel.length === 0)
+              ) && (
+                <div className="text-center py-20">
+                  <p className="text-text-sub font-medium italic">No records found for the selected filters.</p>
+                </div>
+              )}
+            </div>
+          </Card>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const RoleAssignPanel = ({ users, setUsers }: any) => {
+  const [selectedUser, setSelectedUser] = useState<any>(null);
+  const availablePermissions = [
+    'Admission', 'QR Attendance', 'QR Late Attendance', 'QR Leaving During School',
+    'Leave Application', 'Fee Structure', 'Hostel', 'Syllabus', 'Payment Gateway',
+    'WhatsApp', 'Progress Report', 'Transfer Certificate', 'Appreciation Certificate',
+    'Birthday Wish', 'Bulk WhatsApp Notification', 'Home Work Assign', 'Bank/Cash Management',
+    'ID Card Generate Panel'
+  ];
+
+  const togglePermission = (permission: string) => {
+    if (!selectedUser) return;
+    const newPermissions = selectedUser.permissions.includes(permission)
+      ? selectedUser.permissions.filter((p: string) => p !== permission)
+      : [...selectedUser.permissions, permission];
+    
+    const updatedUser = { ...selectedUser, permissions: newPermissions };
+    setSelectedUser(updatedUser);
+    setUsers(users.map((u: any) => u.id === selectedUser.id ? updatedUser : u));
+  };
+
+  return (
+    <div className="space-y-8 max-w-5xl mx-auto">
+      <div className="flex items-center justify-between">
+        <h1 className="text-3xl font-black text-text-heading tracking-tight">Role & Permission Management</h1>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <Card className="md:col-span-1">
+          <h3 className="text-lg font-bold mb-4">Users</h3>
+          <div className="space-y-2">
+            {users.map((u: any) => (
+              <button
+                key={u.id}
+                onClick={() => setSelectedUser(u)}
+                className={`w-full text-left p-3 rounded-xl transition-all ${selectedUser?.id === u.id ? 'bg-primary text-white' : 'hover:bg-slate-50'}`}
+              >
+                <p className="font-bold text-sm">{u.name}</p>
+                <p className={`text-[10px] uppercase font-bold ${selectedUser?.id === u.id ? 'text-white/70' : 'text-text-sub'}`}>{u.role} | {u.id}</p>
+              </button>
+            ))}
+          </div>
+        </Card>
+
+        <Card className="md:col-span-2">
+          {selectedUser ? (
+            <>
+              <h3 className="text-lg font-bold mb-4">Permissions for {selectedUser.name}</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {availablePermissions.map((p) => (
+                  <label key={p} className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl cursor-pointer hover:bg-slate-100 transition-all">
+                    <input
+                      type="checkbox"
+                      checked={selectedUser.permissions.includes(p)}
+                      onChange={() => togglePermission(p)}
+                      className="w-4 h-4 rounded border-slate-300 text-primary focus:ring-primary"
+                    />
+                    <span className="text-sm font-medium text-text-heading">{p}</span>
+                  </label>
+                ))}
+              </div>
+            </>
+          ) : (
+            <div className="h-full flex items-center justify-center text-text-sub italic">
+              Select a user to manage permissions
+            </div>
+          )}
+        </Card>
+      </div>
+    </div>
+  );
+};
+
 export default function App() {
   const [view, setView] = useState<View>('login');
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [users, setUsers] = useState<any[]>([
+    { id: 'admin', name: 'Administrator', role: 'admin', permissions: ['all'] },
+    { id: 'teacher', name: 'Teacher', role: 'teacher', permissions: ['all'] },
+    { id: 'stu', name: 'Student', role: 'student', permissions: ['all'] },
+    { id: 'warden', name: 'Hostel Warden', role: 'warden', permissions: ['all'] },
+    { id: 'TCH-12345', name: 'Rajesh Kumar', role: 'teacher', permissions: ['QR Attendance', 'QR Late Attendance', 'QR Leaving During School', 'Leave Application', 'Syllabus', 'Home Work Assign', 'Progress Report'] },
+    { id: 'PAR-12345', name: 'Parent of DS-12345', role: 'parent', studentId: 'DS-12345', permissions: ['QR Attendance', 'Leave Application', 'Fee Structure', 'Syllabus', 'Progress Report', 'Home Work Assign'] }
+  ]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [students, setStudents] = useState<Student[]>([]);
   const [editingStudentId, setEditingStudentId] = useState<string | null>(null);
@@ -3738,8 +4788,8 @@ export default function App() {
     address: '123 Education Hub, New Delhi, India',
     gstNo: '22AAAAA0000A1Z5',
     regNo: 'SCH/2024/001',
-    wardenPanelId: 'WARDEN001',
-    wardenPanelPassword: 'password123',
+    wardenPanelId: 'warden',
+    wardenPanelPassword: '12345',
     cameraUrls: [
       { id: '1', name: 'Main Gate', url: 'https://picsum.photos/seed/gate/640/480' },
       { id: '2', name: 'Hostel Block A', url: 'https://picsum.photos/seed/hostel/640/480' },
@@ -3770,7 +4820,9 @@ export default function App() {
   const [feeTypes, setFeeTypes] = useState<FeeType[]>([
     { id: '1', name: 'Tuition Fee', description: 'Monthly tuition fee' },
     { id: '2', name: 'Library Fee', description: 'Annual library fee' },
-    { id: '3', name: 'Transport Fee', description: 'Monthly transport fee' }
+    { id: '3', name: 'Transport Fee', description: 'Monthly transport fee' },
+    { id: '4', name: 'Early Leave Fee', description: 'Fee for early student leave' },
+    { id: '5', name: 'Parent Pickup Fee', description: 'Fee for parent pickup service' }
   ]);
   const [feeMaster, setFeeMaster] = useState<FeeMaster[]>([
     { id: '1', class: 'Class 1', feeType: 'Tuition Fee', amount: 2500, frequency: 'Monthly' },
@@ -3813,6 +4865,17 @@ export default function App() {
   const [hostelStaff, setHostelStaff] = useState<HostelStaff[]>([]);
   const [hostelAttendance, setHostelAttendance] = useState<HostelAttendance[]>([]);
   
+  const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([
+    { id: '1', title: 'Holi Celebration', date: '2024-03-25', type: 'festival', icon: '🎨', color: 'bg-orange-100 text-orange-700' },
+    { id: '2', title: 'Eid-ul-Fitr', date: '2024-04-10', type: 'festival', icon: '🌙', color: 'bg-emerald-100 text-emerald-700' },
+    { id: '3', title: 'Christmas', date: '2024-12-25', type: 'festival', icon: '🎅', color: 'bg-red-100 text-red-700' },
+    { id: '4', title: 'Navratri', date: '2024-10-03', type: 'festival', icon: '🕉️', color: 'bg-pink-100 text-pink-700' },
+    { id: '5', title: 'Ram Navmi', date: '2024-04-17', type: 'festival', icon: '🏹', color: 'bg-yellow-100 text-yellow-700' },
+    { id: '6', title: 'Guru Gobind Singh Jayanti', date: '2024-01-17', type: 'festival', icon: '☬', color: 'bg-blue-100 text-blue-700' },
+    { id: '7', title: 'PTM - Term 1', date: '2024-05-15', type: 'ptm', color: 'bg-indigo-100 text-indigo-700' },
+    { id: '8', title: 'Final Examination', date: '2024-03-10', type: 'examination', color: 'bg-purple-100 text-purple-700' },
+  ]);
+
   // Modal State
   const [modal, setModal] = useState<{ isOpen: boolean, title: string, message: string, onConfirm?: () => void } | null>(null);
 
@@ -3909,19 +4972,26 @@ export default function App() {
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (loginId === 'admin' && loginPassword === '12345678') {
+    const user = users.find(u => u.id === loginId);
+    if (user && (loginPassword === '12345678' || loginPassword === '12345')) {
       setLoginError('');
-      setCurrentUser({ role: 'admin', name: 'Administrator' });
-      setView('dashboard');
+      setCurrentUser(user);
+      if (user.role === 'admin') setView('dashboard');
+      else if (user.role === 'teacher') setView('teacher-panel');
+      else if (user.role === 'parent') setView('parent-panel');
+      else if (user.role === 'warden') setView('hostel');
+      else setView('dashboard');
     } else if (loginId === schoolProfile.wardenPanelId && loginPassword === schoolProfile.wardenPanelPassword) {
       setLoginError('');
       setCurrentUser({ role: 'warden', name: 'Hostel Warden' });
       setView('hostel');
     } else if (loginId.startsWith('TCH-')) {
-      // Mock teacher login
+      // Mock teacher login for new IDs
       setLoginError('');
-      const teacherName = loginId === 'TCH-12345' ? 'Rajesh Kumar' : 'Teacher ' + loginId.split('-')[1];
-      setCurrentUser({ role: 'teacher', name: teacherName, id: loginId });
+      const teacherName = 'Teacher ' + loginId.split('-')[1];
+      const newUser = { id: loginId, name: teacherName, role: 'teacher', permissions: ['attendance', 'homework', 'syllabus', 'leaves'] };
+      setUsers([...users, newUser]);
+      setCurrentUser(newUser);
       setView('teacher-panel');
     } else if (loginId.startsWith('PAR-')) {
       // Mock parent login - linked to a student
@@ -3929,7 +4999,9 @@ export default function App() {
       const student = students.find(s => s.studentId === studentId);
       if (student) {
         setLoginError('');
-        setCurrentUser({ role: 'parent', ...student });
+        const newUser = { id: loginId, name: `Parent of ${student.name}`, role: 'parent', studentId: student.studentId, permissions: ['attendance', 'homework', 'syllabus', 'leaves', 'fees'] };
+        setUsers([...users, newUser]);
+        setCurrentUser(newUser);
         setView('parent-panel');
       } else {
         setLoginError('No student found for this parent ID.');
@@ -4182,6 +5254,12 @@ export default function App() {
                 active={view === 'leave-management'} 
                 onClick={() => setView('leave-management')} 
               />
+              <SidebarItem 
+                icon={UserCog} 
+                label={isSidebarOpen ? "Role Assign" : ""} 
+                active={view === 'role-assign'} 
+                onClick={() => setView('role-assign')} 
+              />
             </>
           )}
           {currentUser?.role === 'student' && (
@@ -4227,6 +5305,18 @@ export default function App() {
             label={isSidebarOpen ? "Live Camera" : ""} 
             active={view === 'live-camera'} 
             onClick={() => setView('live-camera')} 
+          />
+          <SidebarItem 
+            icon={Calendar} 
+            label={isSidebarOpen ? "Calendar" : ""} 
+            active={view === 'calendar'} 
+            onClick={() => setView('calendar')} 
+          />
+          <SidebarItem 
+            icon={BarChart3} 
+            label={isSidebarOpen ? "Reports" : ""} 
+            active={view === 'reports'} 
+            onClick={() => setView('reports')} 
           />
           <SidebarItem 
             icon={Settings} 
@@ -4341,6 +5431,33 @@ export default function App() {
                   ))}
                 </div>
 
+                <div className="space-y-4">
+                  <h3 className="text-lg font-bold flex items-center gap-2">
+                    <Sparkles size={20} className="text-primary" />
+                    Quick Access
+                  </h3>
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                    {[
+                      { label: 'Attendance', icon: UserCheck, view: 'attendance', color: 'bg-blue-500' },
+                      { label: 'Fees', icon: Wallet, view: 'fee-management', color: 'bg-green-500' },
+                      { label: 'Early Leave', icon: CalendarRange, view: 'leave-management', color: 'bg-purple-500' },
+                      { label: 'Homework', icon: BookOpen, view: 'teacher-panel', color: 'bg-orange-500' },
+                      { label: 'Hostel', icon: Bed, view: 'hostel', color: 'bg-rose-500' },
+                    ].map((shortcut, i) => (
+                      <button 
+                        key={i} 
+                        onClick={() => setView(shortcut.view as any)}
+                        className="flex flex-col items-center justify-center p-4 bg-white rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all group"
+                      >
+                        <div className={`w-12 h-12 ${shortcut.color} rounded-xl flex items-center justify-center text-white mb-2 group-hover:scale-110 transition-transform`}>
+                          <shortcut.icon size={24} />
+                        </div>
+                        <span className="text-xs font-bold text-text-secondary">{shortcut.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                   <Card className="lg:col-span-2">
                     <h3 className="text-lg font-bold mb-6 flex items-center gap-2">
@@ -4387,19 +5504,31 @@ export default function App() {
                   </Card>
 
                   <Card>
-                    <h3 className="text-lg font-bold mb-6">School Calendar</h3>
+                    <div className="flex items-center justify-between mb-6">
+                      <h3 className="text-lg font-bold">School Calendar</h3>
+                      <button onClick={() => setView('calendar')} className="text-xs font-bold text-primary hover:underline">View All</button>
+                    </div>
                     <div className="space-y-4">
-                      {[
-                        { title: 'Mid-term Exams', date: 'Oct 15 - Oct 22', type: 'Exams' },
-                        { title: 'Annual Sports Day', date: 'Nov 05', type: 'Event' },
-                        { title: 'Parent Teacher Meeting', date: 'Nov 12', type: 'Meeting' },
-                      ].map((event, i) => (
+                      {calendarEvents
+                        .filter(e => new Date(e.date) >= new Date())
+                        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+                        .slice(0, 3)
+                        .map((event, i) => (
                         <div key={i} className="p-4 rounded-xl bg-slate-50 border border-slate-100">
-                          <p className="text-xs font-bold text-primary uppercase mb-1">{event.type}</p>
-                          <p className="font-semibold text-sm">{event.title}</p>
-                          <p className="text-xs text-text-secondary mt-1">{event.date}</p>
+                          <div className="flex items-center justify-between mb-1">
+                            <p className="text-[10px] font-black text-primary uppercase tracking-wider">{event.type}</p>
+                            {event.icon && <span className="text-sm">{event.icon}</span>}
+                          </div>
+                          <p className="font-bold text-sm text-text-heading">{event.title}</p>
+                          <p className="text-[10px] text-text-sub mt-1 flex items-center gap-1">
+                            <Clock size={10} />
+                            {new Date(event.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                          </p>
                         </div>
                       ))}
+                      {calendarEvents.length === 0 && (
+                        <p className="text-center py-8 text-text-sub italic text-sm">No upcoming events</p>
+                      )}
                     </div>
                   </Card>
                 </div>
@@ -4881,6 +6010,51 @@ export default function App() {
               </motion.div>
             )}
 
+            {view === 'role-assign' && (
+              <motion.div
+                key="role-assign"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+              >
+                <RoleAssignPanel users={users} setUsers={setUsers} />
+              </motion.div>
+            )}
+
+            {view === 'calendar' && (
+              <motion.div
+                key="calendar"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+              >
+                <CalendarView 
+                  calendarEvents={calendarEvents} 
+                  setCalendarEvents={setCalendarEvents} 
+                  currentUser={currentUser} 
+                />
+              </motion.div>
+            )}
+
+            {view === 'reports' && (
+              <motion.div
+                key="reports"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+              >
+                <ReportsView 
+                  students={students}
+                  feeTransactions={feeTransactions}
+                  attendance={attendance}
+                  homeworks={homeworks}
+                  hostelAttendance={hostelAttendance}
+                  masterData={masterData}
+                  leaveRequests={leaveRequests}
+                />
+              </motion.div>
+            )}
+
             {view === 'settings' && (
               <motion.div
                 key="settings"
@@ -4891,269 +6065,221 @@ export default function App() {
               >
                 <div className="flex items-center justify-between">
                   <div>
-                    <h1 className="text-3xl font-bold text-text-heading">System Settings</h1>
-                    <p className="text-text-sub">Configure school profile, master data, and user credentials.</p>
+                    <h1 className="text-3xl font-bold text-text-heading">Settings</h1>
+                    <p className="text-text-sub">Manage your profile and system configurations.</p>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                  {/* School Profile */}
-                  <div className="lg:col-span-2 space-y-8">
-                    <Card>
-                      <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-primary">
-                        <School size={20} />
-                        School Profile
-                      </h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <Input 
-                          label="School Name" 
-                          value={schoolProfile.name} 
-                          onChange={(e: any) => setSchoolProfile({...schoolProfile, name: e.target.value})} 
-                        />
-                        <Input 
-                          label="Contact Number" 
-                          value={schoolProfile.contact} 
-                          onChange={(e: any) => setSchoolProfile({...schoolProfile, contact: e.target.value})} 
-                        />
-                        <Input 
-                          label="GST Number" 
-                          value={schoolProfile.gstNo} 
-                          onChange={(e: any) => setSchoolProfile({...schoolProfile, gstNo: e.target.value})} 
-                        />
-                        <Input 
-                          label="Registration Number" 
-                          value={schoolProfile.regNo} 
-                          onChange={(e: any) => setSchoolProfile({...schoolProfile, regNo: e.target.value})} 
-                        />
+                  {/* Profile Section - Visible to All */}
+                  <div className="lg:col-span-1">
+                    <Card className="sticky top-8">
+                      <div className="flex flex-col items-center text-center p-4">
+                        <div className="w-24 h-24 bg-primary/10 rounded-full flex items-center justify-center text-primary mb-4">
+                          <UserCircle size={48} />
+                        </div>
+                        <h3 className="text-xl font-bold">{currentUser?.name}</h3>
+                        <p className="text-sm text-text-sub uppercase font-bold tracking-wider">{currentUser?.role}</p>
+                        <p className="text-xs text-text-sub mt-1">ID: {currentUser?.id || currentUser?.studentId || 'N/A'}</p>
                       </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-                        <Input 
-                          label="Warden Panel ID" 
-                          value={schoolProfile.wardenPanelId} 
-                          onChange={(e: any) => setSchoolProfile({...schoolProfile, wardenPanelId: e.target.value})} 
-                        />
-                        <Input 
-                          label="Warden Panel Password" 
-                          type="password"
-                          value={schoolProfile.wardenPanelPassword} 
-                          onChange={(e: any) => setSchoolProfile({...schoolProfile, wardenPanelPassword: e.target.value})} 
-                        />
-                      </div>
-                      <div className="mt-6">
-                        <label className="label-text">School Address</label>
-                        <textarea 
-                          className="input-field min-h-[100px]" 
-                          value={schoolProfile.address}
-                          onChange={(e: any) => setSchoolProfile({...schoolProfile, address: e.target.value})}
-                        ></textarea>
-                      </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mt-8">
-                        <FileUpload label="School Logo" icon={ImageIcon} />
-                        <FileUpload label="Authorized Signature" icon={Signature} />
-                        <FileUpload label="Official Stamp" icon={Stamp} />
-                      </div>
-                    </Card>
-
-                    <Card>
-                      <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-primary">
-                        <Percent size={20} />
-                        Financial Settings
-                      </h3>
-                      <div className="max-w-xs">
-                        <Input 
-                          label="Set Tax (%)" 
-                          type="number" 
-                          value={taxes} 
-                          onChange={(e: any) => setTaxes(e.target.value)} 
-                        />
-                        <p className="helper-text">This tax percentage will be applied to all fee structures.</p>
-                      </div>
-                    </Card>
-
-                    <Card>
-                      <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-primary">
-                        <Video size={20} />
-                        Live Camera Settings
-                      </h3>
-                      <div className="space-y-4">
-                        {(schoolProfile as any).cameraUrls.map((cam: any, index: number) => (
-                          <div key={cam.id} className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-slate-50 rounded-xl border border-slate-100">
-                            <Input 
-                              label={`Camera ${index + 1} Name`} 
-                              value={cam.name} 
-                              onChange={(e: any) => {
-                                const newUrls = [...(schoolProfile as any).cameraUrls];
-                                newUrls[index].name = e.target.value;
-                                setSchoolProfile({...schoolProfile, cameraUrls: newUrls});
-                              }} 
-                            />
-                            <Input 
-                              label={`Camera ${index + 1} URL`} 
-                              value={cam.url} 
-                              onChange={(e: any) => {
-                                const newUrls = [...(schoolProfile as any).cameraUrls];
-                                newUrls[index].url = e.target.value;
-                                setSchoolProfile({...schoolProfile, cameraUrls: newUrls});
-                              }} 
-                            />
-                          </div>
-                        ))}
-                        <p className="helper-text">Configure the RTSP or HTTP stream URLs for your school's live cameras.</p>
-                      </div>
-                    </Card>
-
-                    <Card>
-                      <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-primary">
-                        <BookOpenCheck size={20} />
-                        Master Data Management
-                      </h3>
-                      <div className="space-y-8">
-                        {[
-                          { key: 'categories', label: 'Categories', icon: TagIcon },
-                          { key: 'castes', label: 'Castes', icon: Users },
-                          { key: 'religions', label: 'Religions', icon: HeartPulse },
-                          { key: 'titles', label: 'Titles', icon: UserCheck },
-                          { key: 'classes', label: 'Classes', icon: GraduationCap },
-                          { key: 'sections', label: 'Sections', icon: Hash },
-                          { key: 'subjects', label: 'Subjects', icon: BookOpen },
-                          { key: 'genders', label: 'Genders', icon: UserPlus }
-                        ].map((section) => (
-                          <div key={section.key} className="p-6 bg-slate-50 rounded-2xl border border-slate-100">
-                            <div className="flex items-center justify-between mb-4">
-                              <div className="flex items-center gap-2">
-                                <section.icon size={18} className="text-primary" />
-                                <h4 className="font-bold text-text-heading">{section.label}</h4>
-                              </div>
-                              <button 
-                                onClick={() => {
-                                  const val = prompt(`Enter new ${section.label.toLowerCase()}:`);
-                                  if (val) addMasterItem(section.key, val);
-                                }}
-                                className="flex items-center gap-1 text-xs font-bold text-primary hover:underline"
-                              >
-                                <Plus size={14} />
-                                Add New
-                              </button>
-                            </div>
-                            <div className="flex flex-wrap gap-2">
-                              {(masterData as any)[section.key].map((item: string, idx: number) => (
-                                <div key={idx} className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm">
-                                  <span className="text-sm font-medium">{item}</span>
-                                  <div className="flex items-center gap-1 border-l border-slate-100 ml-1 pl-1">
-                                    <button 
-                                      onClick={() => {
-                                        const val = prompt(`Edit ${section.label.toLowerCase()}:`, item);
-                                        if (val) editMasterItem(section.key, idx, val);
-                                      }}
-                                      className="p-1 text-slate-400 hover:text-primary transition-colors"
-                                    >
-                                      <Edit2 size={12} />
-                                    </button>
-                                    <button 
-                                      onClick={() => {
-                                        showModal(
-                                          'Confirm Delete',
-                                          `Are you sure you want to delete "${item}" from ${section.label}?`,
-                                          () => deleteMasterItem(section.key, idx)
-                                        );
-                                      }}
-                                      className="p-1 text-slate-400 hover:text-red-500 transition-colors"
-                                    >
-                                      <Trash2 size={12} />
-                                    </button>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        ))}
+                      <div className="mt-6 space-y-4">
+                        <Input label="Email Address" value={currentUser?.email || ''} disabled />
+                        <Input label="Phone Number" value={currentUser?.mobile || ''} disabled />
+                        <button className="btn-primary w-full py-3 mt-4">Update Profile</button>
                       </div>
                     </Card>
                   </div>
 
-                  {/* User Management */}
-                  <div className="space-y-8">
-                    <Card>
-                      <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-primary">
-                        <Lock size={20} />
-                        User Credentials
-                      </h3>
-                      <div className="space-y-4">
-                        <p className="text-sm text-text-sub mb-4">Generate secure login credentials for new users.</p>
-                        
-                        <div className="grid grid-cols-2 gap-3">
-                          <button 
-                            onClick={() => generateCredentials('Student')}
-                            className="flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-text-heading py-3 rounded-xl font-bold transition-all text-sm"
-                          >
-                            <Plus size={16} />
-                            Student
-                          </button>
-                          <button 
-                            onClick={() => {
-                              const count = prompt('How many student IDs to generate?', '5');
-                              if (count) generateCredentials('Student', parseInt(count));
-                            }}
-                            className="flex items-center justify-center gap-2 bg-primary/10 hover:bg-primary/20 text-primary py-3 rounded-xl font-bold transition-all text-sm"
-                          >
-                            <Hash size={16} />
-                            Multiple
-                          </button>
+                  {/* Admin Only Settings */}
+                  {currentUser?.role === 'admin' ? (
+                    <div className="lg:col-span-2 space-y-8">
+                      <Card>
+                        <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-primary">
+                          <School size={20} />
+                          School Profile
+                        </h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <Input 
+                            label="School Name" 
+                            value={schoolProfile.name} 
+                            onChange={(e: any) => setSchoolProfile({...schoolProfile, name: e.target.value})} 
+                          />
+                          <Input 
+                            label="Contact Number" 
+                            value={schoolProfile.contact} 
+                            onChange={(e: any) => setSchoolProfile({...schoolProfile, contact: e.target.value})} 
+                          />
+                          <Input 
+                            label="GST Number" 
+                            value={schoolProfile.gstNo} 
+                            onChange={(e: any) => setSchoolProfile({...schoolProfile, gstNo: e.target.value})} 
+                          />
+                          <Input 
+                            label="Registration Number" 
+                            value={schoolProfile.regNo} 
+                            onChange={(e: any) => setSchoolProfile({...schoolProfile, regNo: e.target.value})} 
+                          />
                         </div>
-
-                        <div className="grid grid-cols-2 gap-3">
-                          <button 
-                            onClick={() => generateCredentials('Teacher')}
-                            className="flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-text-heading py-3 rounded-xl font-bold transition-all text-sm"
-                          >
-                            <Plus size={16} />
-                            Teacher
-                          </button>
-                          <button 
-                            onClick={() => {
-                              const count = prompt('How many teacher IDs to generate?', '5');
-                              if (count) generateCredentials('Teacher', parseInt(count));
-                            }}
-                            className="flex items-center justify-center gap-2 bg-primary/10 hover:bg-primary/20 text-primary py-3 rounded-xl font-bold transition-all text-sm"
-                          >
-                            <Hash size={16} />
-                            Multiple
-                          </button>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+                          <Input 
+                            label="Warden Panel ID" 
+                            value={schoolProfile.wardenPanelId} 
+                            onChange={(e: any) => setSchoolProfile({...schoolProfile, wardenPanelId: e.target.value})} 
+                          />
+                          <Input 
+                            label="Warden Panel Password" 
+                            type="password"
+                            value={schoolProfile.wardenPanelPassword} 
+                            onChange={(e: any) => setSchoolProfile({...schoolProfile, wardenPanelPassword: e.target.value})} 
+                          />
                         </div>
-                      </div>
+                        <div className="mt-6">
+                          <label className="label-text">School Address</label>
+                          <textarea 
+                            className="input-field min-h-[100px]" 
+                            value={schoolProfile.address}
+                            onChange={(e: any) => setSchoolProfile({...schoolProfile, address: e.target.value})}
+                          ></textarea>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mt-8">
+                          <FileUpload label="School Logo" icon={ImageIcon} />
+                          <FileUpload label="Authorized Signature" icon={Signature} />
+                          <FileUpload label="Official Stamp" icon={Stamp} />
+                        </div>
+                      </Card>
 
-                      {generatedCredentials.length > 0 && (
-                        <div className="mt-8 space-y-4">
-                          <h4 className="text-xs font-bold text-text-sub uppercase tracking-wider">Recently Generated</h4>
-                          <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2">
-                            {generatedCredentials.slice().reverse().map((cred, i) => (
-                              <div key={i} className="p-4 bg-slate-50 rounded-xl border border-slate-100 relative group">
-                                <div className="flex items-center justify-between mb-2">
-                                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${cred.type === 'Student' ? 'bg-blue-100 text-blue-600' : 'bg-green-100 text-green-600'}`}>
-                                    {cred.type}
-                                  </span>
-                                  <span className="text-[10px] text-text-sub">{cred.date}</span>
+                      <Card>
+                        <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-primary">
+                          <Percent size={20} />
+                          Financial Settings
+                        </h3>
+                        <div className="max-w-xs">
+                          <Input 
+                            label="Set Tax (%)" 
+                            type="number" 
+                            value={taxes} 
+                            onChange={(e: any) => setTaxes(e.target.value)} 
+                          />
+                          <p className="helper-text">This tax percentage will be applied to all fee structures.</p>
+                        </div>
+                      </Card>
+
+                      <Card>
+                        <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-primary">
+                          <Video size={20} />
+                          Live Camera Settings
+                        </h3>
+                        <div className="space-y-4">
+                          {(schoolProfile as any).cameraUrls.map((cam: any, index: number) => (
+                            <div key={cam.id} className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-slate-50 rounded-xl border border-slate-100">
+                              <Input 
+                                label={`Camera ${index + 1} Name`} 
+                                value={cam.name} 
+                                onChange={(e: any) => {
+                                  const newUrls = [...(schoolProfile as any).cameraUrls];
+                                  newUrls[index].name = e.target.value;
+                                  setSchoolProfile({...schoolProfile, cameraUrls: newUrls});
+                                }} 
+                              />
+                              <Input 
+                                label={`Camera ${index + 1} URL`} 
+                                value={cam.url} 
+                                onChange={(e: any) => {
+                                  const newUrls = [...(schoolProfile as any).cameraUrls];
+                                  newUrls[index].url = e.target.value;
+                                  setSchoolProfile({...schoolProfile, cameraUrls: newUrls});
+                                }} 
+                              />
+                            </div>
+                          ))}
+                          <p className="helper-text">Configure the RTSP or HTTP stream URLs for your school's live cameras.</p>
+                        </div>
+                      </Card>
+
+                      <Card>
+                        <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-primary">
+                          <BookOpenCheck size={20} />
+                          Master Data Management
+                        </h3>
+                        <div className="space-y-8">
+                          {[
+                            { key: 'categories', label: 'Categories', icon: TagIcon },
+                            { key: 'castes', label: 'Castes', icon: Users },
+                            { key: 'religions', label: 'Religions', icon: HeartPulse },
+                            { key: 'titles', label: 'Titles', icon: UserCheck },
+                            { key: 'classes', label: 'Classes', icon: GraduationCap },
+                            { key: 'sections', label: 'Sections', icon: Hash },
+                            { key: 'subjects', label: 'Subjects', icon: BookOpen },
+                            { key: 'genders', label: 'Genders', icon: UserPlus }
+                          ].map((section) => (
+                            <div key={section.key} className="p-6 bg-slate-50 rounded-2xl border border-slate-100">
+                              <div className="flex items-center justify-between mb-4">
+                                <div className="flex items-center gap-2">
+                                  <section.icon size={18} className="text-primary" />
+                                  <h4 className="font-bold text-text-heading">{section.label}</h4>
                                 </div>
-                                <div className="flex items-center justify-between">
-                                  <div>
-                                    <p className="text-[10px] text-text-sub uppercase font-bold">ID</p>
-                                    <p className="text-sm font-mono font-bold text-primary">{cred.id}</p>
-                                  </div>
-                                  <div className="text-right">
-                                    <p className="text-[10px] text-text-sub uppercase font-bold">Password</p>
-                                    <p className="text-sm font-mono font-bold">{cred.password}</p>
-                                  </div>
-                                </div>
-                                <button className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity text-text-sub hover:text-red-500">
-                                  <Trash2 size={14} />
+                                <button 
+                                  onClick={() => {
+                                    const val = prompt(`Enter new ${section.label.toLowerCase()}:`);
+                                    if (val) addMasterItem(section.key, val);
+                                  }}
+                                  className="flex items-center gap-1 text-xs font-bold text-primary hover:underline"
+                                >
+                                  <Plus size={14} />
+                                  Add New
                                 </button>
                               </div>
-                            ))}
-                          </div>
+                              <div className="flex flex-wrap gap-2">
+                                {(masterData as any)[section.key].map((item: string, idx: number) => (
+                                  <div key={idx} className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm">
+                                    <span className="text-sm font-medium">{item}</span>
+                                    <div className="flex items-center gap-1 border-l border-slate-100 ml-1 pl-1">
+                                      <button 
+                                        onClick={() => {
+                                          const val = prompt(`Edit ${section.label.toLowerCase()}:`, item);
+                                          if (val) editMasterItem(section.key, idx, val);
+                                        }}
+                                        className="p-1 text-slate-400 hover:text-primary transition-colors"
+                                      >
+                                        <Edit2 size={12} />
+                                      </button>
+                                      <button 
+                                        onClick={() => {
+                                          showModal(
+                                            'Confirm Delete',
+                                            `Are you sure you want to delete "${item}" from ${section.label}?`,
+                                            () => deleteMasterItem(section.key, idx)
+                                          );
+                                        }}
+                                        className="p-1 text-slate-400 hover:text-red-500 transition-colors"
+                                      >
+                                        <Trash2 size={12} />
+                                      </button>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
                         </div>
-                      )}
-                    </Card>
-                  </div>
+                      </Card>
+                    </div>
+                  ) : (
+                    <div className="lg:col-span-2">
+                      <Card>
+                        <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-primary">
+                          <Lock size={20} />
+                          Account Security
+                        </h3>
+                        <div className="space-y-6">
+                          <Input label="Current Password" type="password" />
+                          <Input label="New Password" type="password" />
+                          <Input label="Confirm New Password" type="password" />
+                          <button className="btn-primary w-full py-4 mt-4">Change Password</button>
+                        </div>
+                      </Card>
+                    </div>
+                  )}
                 </div>
               </motion.div>
             )}
@@ -5176,6 +6302,7 @@ export default function App() {
                   schoolProfile={schoolProfile}
                   masterData={masterData}
                   showModal={showModal}
+                  leaveRequests={leaveRequests}
                 />
               </motion.div>
             )}
