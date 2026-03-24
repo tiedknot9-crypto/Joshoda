@@ -56,6 +56,8 @@ import {
   Home,
   FileOutput,
   Trophy,
+  Briefcase,
+  Star,
   BarChart3,
   Bed,
   DoorOpen,
@@ -95,7 +97,7 @@ import {
 
 // --- Types ---
 
-type View = 'login' | 'dashboard' | 'register-student' | 'student-list' | 'settings' | 'fee-management' | 'academics' | 'attendance' | 'examination' | 'id-cards' | 'hostel' | 'live-camera' | 'admin-360' | 'class-360' | 'due-fees' | 'teacher-panel' | 'parent-panel' | 'leave-management' | 'reports' | 'calendar' | 'role-assign';
+type View = 'login' | 'dashboard' | 'register-student' | 'student-list' | 'settings' | 'fee-management' | 'academics' | 'attendance' | 'examination' | 'id-cards' | 'hostel' | 'live-camera' | 'admin-360' | 'class-360' | 'due-fees' | 'teacher-panel' | 'parent-panel' | 'leave-management' | 'reports' | 'calendar' | 'role-assign' | 'human-resource' | 'communicate' | 'front-office' | 'income-expense';
 
 interface User {
   id: string;
@@ -328,6 +330,106 @@ interface FeeTransaction {
   status: 'Paid' | 'Partial' | 'Due';
 }
 
+interface Staff {
+  id: string;
+  name: string;
+  surname: string;
+  email: string;
+  mobile: string;
+  role: string;
+  department: string;
+  designation: string;
+  photo?: string;
+  joiningDate: string;
+  status: 'Active' | 'Inactive';
+}
+
+interface Department {
+  id: string;
+  name: string;
+}
+
+interface Designation {
+  id: string;
+  name: string;
+}
+
+interface AdmissionEnquiry {
+  id: string;
+  name: string;
+  mobile: string;
+  email: string;
+  class: string;
+  date: string;
+  source: string;
+  status: 'Pending' | 'Follow-up' | 'Closed';
+}
+
+interface Visitor {
+  id: string;
+  name: string;
+  mobile: string;
+  purpose: string;
+  date: string;
+  inTime: string;
+  outTime?: string;
+  idCard?: string;
+}
+
+interface Complaint {
+  id: string;
+  type: string;
+  source: string;
+  name: string;
+  mobile: string;
+  date: string;
+  description: string;
+  actionTaken?: string;
+  status: 'Pending' | 'Resolved';
+}
+
+interface CommunicationTemplate {
+  id: string;
+  name: string;
+  subject: string;
+  body: string;
+  type: 'Email' | 'WhatsApp';
+}
+
+interface Income {
+  id: string;
+  name: string;
+  incomeHead: string;
+  invoiceNumber: string;
+  date: string;
+  amount: number;
+  description: string;
+  file?: string;
+}
+
+interface Expense {
+  id: string;
+  name: string;
+  expenseHead: string;
+  invoiceNumber: string;
+  date: string;
+  amount: number;
+  description: string;
+  file?: string;
+}
+
+interface IncomeHead {
+  id: string;
+  name: string;
+  description: string;
+}
+
+interface ExpenseHead {
+  id: string;
+  name: string;
+  description: string;
+}
+
 interface Student {
   id: string;
   name: string;
@@ -351,6 +453,7 @@ interface Student {
   gender: string;
   hasDisability: boolean;
   disabilityDetails: string;
+  photo?: string;
   relationInSchool: {
     name: string;
     class: string;
@@ -2835,8 +2938,12 @@ const TeacherPanel = ({ syllabuses, setSyllabuses, leaveRequests, setLeaveReques
                         </td>
                         <td className="p-4">
                           <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-primary font-bold text-xs">
-                              {s.name[0]}{s.surname[0]}
+                            <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-primary font-bold text-xs overflow-hidden border border-slate-200">
+                              {s.photo ? (
+                                <img src={s.photo} alt={s.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                              ) : (
+                                <span>{s.name[0]}{s.surname[0]}</span>
+                              )}
                             </div>
                             <div>
                               <p className="text-sm font-bold text-text-heading">{s.name} {s.surname}</p>
@@ -2983,7 +3090,16 @@ const TeacherPanel = ({ syllabuses, setSyllabuses, leaveRequests, setLeaveReques
                 <tbody className="divide-y divide-slate-100">
                   {masterData.students.slice(0, 5).map((s: any) => (
                     <tr key={s.studentId}>
-                      <td className="py-4 text-sm font-bold">{s.name} {s.surname}</td>
+                      <td className="py-4 flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-primary font-bold text-xs overflow-hidden border border-slate-200">
+                          {s.photo ? (
+                            <img src={s.photo} alt={s.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                          ) : (
+                            <span>{s.name[0]}</span>
+                          )}
+                        </div>
+                        <span className="text-sm font-bold">{s.name} {s.surname}</span>
+                      </td>
                       <td className="py-4"><input type="number" className="w-20 bg-slate-50 border border-slate-200 rounded-lg p-2 text-sm" placeholder="Marks" /></td>
                       <td className="py-4"><input type="text" className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-sm" placeholder="Remarks" /></td>
                     </tr>
@@ -3177,7 +3293,7 @@ const TeacherPanel = ({ syllabuses, setSyllabuses, leaveRequests, setLeaveReques
 };
 
 const ParentPanel = ({ students, examResults, homeworks, syllabuses, leaveRequests, setLeaveRequests, notifications, feeTransactions, feeMaster, currentUser }: any) => {
-  const [activeTab, setActiveTab] = useState<'progress' | 'homework' | 'syllabus' | 'leave' | 'fees' | 'notifications' | 'documents'>('progress');
+  const [activeTab, setActiveTab] = useState<'progress' | 'homework' | 'syllabus' | 'leave' | 'fees' | 'notifications' | 'documents' | 'profile'>('progress');
   const [leaveForm, setLeaveForm] = useState({
     startDate: '',
     endDate: '',
@@ -3238,8 +3354,12 @@ const ParentPanel = ({ students, examResults, homeworks, syllabuses, leaveReques
           <p className="text-text-sub font-medium">Tracking progress for {myStudent.name} {myStudent.surname}</p>
         </div>
         <div className="flex items-center gap-3 bg-white p-2 rounded-2xl border border-slate-100 shadow-sm">
-          <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center font-bold text-primary">
-            {myStudent.name[0]}
+          <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center font-bold text-primary overflow-hidden">
+            {myStudent.photo ? (
+              <img src={myStudent.photo} alt={myStudent.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+            ) : (
+              myStudent.name[0]
+            )}
           </div>
           <div className="pr-4">
             <p className="text-sm font-bold">{myStudent.name}</p>
@@ -3251,6 +3371,7 @@ const ParentPanel = ({ students, examResults, homeworks, syllabuses, leaveReques
       <div className="flex flex-wrap gap-2 border-b border-slate-200">
         {[
           { id: 'progress', label: 'Progress', icon: GraduationCap, permission: 'Progress Report' },
+          { id: 'profile', label: 'Profile', icon: UserCircle, permission: 'all' },
           { id: 'homework', label: 'Homework', icon: BookOpen, permission: 'Home Work Assign' },
           { id: 'syllabus', label: 'Syllabus', icon: ClipboardList, permission: 'Syllabus' },
           { id: 'leave', label: 'Leave', icon: CalendarRange, permission: 'Leave Application' },
@@ -3272,6 +3393,73 @@ const ParentPanel = ({ students, examResults, homeworks, syllabuses, leaveReques
           </button>
         ))}
       </div>
+
+      {activeTab === 'profile' && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <Card className="lg:col-span-1">
+            <div className="flex flex-col items-center text-center p-6">
+              <div className="w-32 h-32 rounded-2xl bg-primary/10 flex items-center justify-center font-bold text-primary overflow-hidden mb-6">
+                {myStudent.photo ? (
+                  <img src={myStudent.photo} alt={myStudent.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                ) : (
+                  <span className="text-4xl">{myStudent.name[0]}</span>
+                )}
+              </div>
+              <h2 className="text-2xl font-black text-text-heading">{myStudent.name} {myStudent.surname}</h2>
+              <p className="text-sm font-bold text-primary uppercase tracking-widest mt-1">ID: {myStudent.studentId}</p>
+              <div className="mt-6 w-full space-y-3">
+                <div className="flex justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
+                  <span className="text-xs font-bold text-text-sub uppercase">Class</span>
+                  <span className="text-sm font-bold">{myStudent.class}</span>
+                </div>
+                <div className="flex justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
+                  <span className="text-xs font-bold text-text-sub uppercase">Section</span>
+                  <span className="text-sm font-bold">{myStudent.section}</span>
+                </div>
+                <div className="flex justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
+                  <span className="text-xs font-bold text-text-sub uppercase">Gender</span>
+                  <span className="text-sm font-bold">{myStudent.gender}</span>
+                </div>
+              </div>
+            </div>
+          </Card>
+          <Card className="lg:col-span-2">
+            <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-primary">
+              <Users size={20} /> Family Information
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                <p className="text-[10px] font-black text-text-sub uppercase tracking-wider mb-1">Father's Name</p>
+                <p className="font-bold">{myStudent.fatherName}</p>
+                <p className="text-xs text-text-sub mt-2 flex items-center gap-1">
+                  <Phone size={12} /> {myStudent.fatherMobile}
+                </p>
+              </div>
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                <p className="text-[10px] font-black text-text-sub uppercase tracking-wider mb-1">Mother's Name</p>
+                <p className="font-bold">{myStudent.motherName}</p>
+                <p className="text-xs text-text-sub mt-2 flex items-center gap-1">
+                  <Phone size={12} /> {myStudent.motherMobile}
+                </p>
+              </div>
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                <p className="text-[10px] font-black text-text-sub uppercase tracking-wider mb-1">Address</p>
+                <p className="font-bold">{myStudent.address}</p>
+                <p className="text-xs text-text-sub mt-2 flex items-center gap-1">
+                  <MapPin size={12} /> {myStudent.religion} / {myStudent.caste}
+                </p>
+              </div>
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                <p className="text-[10px] font-black text-text-sub uppercase tracking-wider mb-1">Emergency Contact</p>
+                <p className="font-bold">{myStudent.emergencyContact}</p>
+                <p className="text-xs text-text-sub mt-2 flex items-center gap-1">
+                  <HeartPulse size={12} /> Blood Group: {myStudent.bloodGroup}
+                </p>
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
 
       {activeTab === 'progress' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -4376,7 +4564,7 @@ const CalendarView = ({ calendarEvents, setCalendarEvents, currentUser }: any) =
   );
 };
 
-const ReportsView = ({ students, feeTransactions, attendance, homeworks, hostelAttendance, masterData, leaveRequests }: any) => {
+const ReportsView = ({ students, feeTransactions, attendance, homeworks, hostelAttendance, masterData, leaveRequests, userLogs }: any) => {
   const [activeReport, setActiveReport] = useState<string | null>(null);
   const [filters, setFilters] = useState({
     class: '',
@@ -4662,14 +4850,14 @@ const ReportsView = ({ students, feeTransactions, attendance, homeworks, hostelA
                       <td className="p-4 text-sm font-medium">{a.time}</td>
                     </tr>
                   ))}
-                  {activeReport === 'userlog' && (
-                    <tr className="hover:bg-slate-50/50 transition-all">
-                      <td className="p-4 text-sm font-medium">{new Date().toLocaleString()}</td>
-                      <td className="p-4 text-sm font-bold">Admin User</td>
-                      <td className="p-4 text-sm font-medium">Logged in to system</td>
-                      <td className="p-4 text-sm font-medium">192.168.1.1</td>
+                  {activeReport === 'userlog' && userLogs.map((log: any) => (
+                    <tr key={log.id} className="hover:bg-slate-50/50 transition-all">
+                      <td className="p-4 text-sm font-medium">{log.timestamp}</td>
+                      <td className="p-4 text-sm font-bold">{log.user}</td>
+                      <td className="p-4 text-sm font-medium">{log.action}</td>
+                      <td className="p-4 text-sm font-medium text-text-sub">{log.ip}</td>
                     </tr>
-                  )}
+                  ))}
                 </tbody>
               </table>
               {(
@@ -4678,7 +4866,8 @@ const ReportsView = ({ students, feeTransactions, attendance, homeworks, hostelA
                 (activeReport === 'attendance' && filteredAttendance.length === 0) ||
                 (activeReport === 'leave' && filteredLeave.length === 0) ||
                 (activeReport === 'homework' && filteredHomework.length === 0) ||
-                (activeReport === 'hostel' && filteredHostel.length === 0)
+                (activeReport === 'hostel' && filteredHostel.length === 0) ||
+                (activeReport === 'userlog' && userLogs.length === 0)
               ) && (
                 <div className="text-center py-20">
                   <p className="text-text-sub font-medium italic">No records found for the selected filters.</p>
@@ -4688,6 +4877,802 @@ const ReportsView = ({ students, feeTransactions, attendance, homeworks, hostelA
           </Card>
         </div>
       )}
+    </div>
+  );
+};
+
+const HumanResourcePanel = ({ staff, setStaff, departments, setDepartments, designations, setDesignations, leaveRequests, setLeaveRequests }: any) => {
+  const [activeTab, setActiveTab] = useState('staff-list');
+  const [showAddStaff, setShowAddStaff] = useState(false);
+  const [newStaff, setNewStaff] = useState<Partial<Staff>>({
+    status: 'Active',
+    joiningDate: new Date().toISOString().split('T')[0]
+  });
+  const [newDepartment, setNewDepartment] = useState('');
+  const [newDesignation, setNewDesignation] = useState('');
+  const [newLeave, setNewLeave] = useState<any>({
+    startDate: new Date().toISOString().split('T')[0],
+    endDate: new Date().toISOString().split('T')[0],
+    reason: '',
+    status: 'Pending'
+  });
+
+  const handleAddStaff = () => {
+    if (!newStaff.name || !newStaff.surname || !newStaff.role) return;
+    const staffMember: Staff = {
+      ...newStaff as Staff,
+      id: `STF-${Math.floor(100000 + Math.random() * 900000)}`
+    };
+    setStaff([...staff, staffMember]);
+    setShowAddStaff(false);
+    setNewStaff({ status: 'Active', joiningDate: new Date().toISOString().split('T')[0] });
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-black text-text-heading">Human Resource</h2>
+        <div className="flex gap-2">
+          <button 
+            onClick={() => setShowAddStaff(true)}
+            className="btn-primary flex items-center gap-2"
+          >
+            <Plus size={18} /> Add Staff
+          </button>
+        </div>
+      </div>
+
+      <div className="flex gap-2 border-b border-slate-200 overflow-x-auto pb-px">
+        {[
+          { id: 'staff-list', label: 'Staff Details', icon: Users },
+          { id: 'leave', label: 'Apply Leave', icon: CalendarRange },
+          { id: 'approve-leave', label: 'Approve Leave', icon: CheckCircle2 },
+          { id: 'departments', label: 'Department', icon: Building2 },
+          { id: 'designations', label: 'Designation', icon: UserCog }
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`flex items-center gap-2 px-6 py-4 text-sm font-bold transition-all border-b-2 whitespace-nowrap ${
+              activeTab === tab.id
+                ? 'border-primary text-primary'
+                : 'border-transparent text-text-secondary hover:text-primary'
+            }`}
+          >
+            <tab.icon size={18} />
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === 'staff-list' && (
+        <Card>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="border-b border-slate-100">
+                  <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Staff ID</th>
+                  <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Name</th>
+                  <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Role</th>
+                  <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Department</th>
+                  <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Designation</th>
+                  <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Mobile</th>
+                  <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {staff.map((s: Staff) => (
+                  <tr key={s.id} className="hover:bg-slate-50/50 transition-colors">
+                    <td className="py-4 text-sm font-bold text-primary">{s.id}</td>
+                    <td className="py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-xs overflow-hidden">
+                          {s.photo ? <img src={s.photo} alt="" className="w-full h-full object-cover" /> : s.name[0]}
+                        </div>
+                        <span className="font-bold text-text-heading">{s.name} {s.surname}</span>
+                      </div>
+                    </td>
+                    <td className="py-4 text-sm text-text-sub">{s.role}</td>
+                    <td className="py-4 text-sm text-text-sub">{s.department}</td>
+                    <td className="py-4 text-sm text-text-sub">{s.designation}</td>
+                    <td className="py-4 text-sm text-text-sub">{s.mobile}</td>
+                    <td className="py-4">
+                      <span className={`text-[10px] font-black px-2 py-1 rounded-full uppercase ${
+                        s.status === 'Active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                      }`}>
+                        {s.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {activeTab === 'leave' && (
+        <Card className="max-w-xl mx-auto p-8">
+          <h3 className="text-xl font-black text-text-heading mb-6 uppercase tracking-tight">Apply Leave</h3>
+          <div className="space-y-6">
+            <div className="grid grid-cols-2 gap-4">
+              <Input label="Start Date" type="date" value={newLeave.startDate} onChange={(e: any) => setNewLeave({...newLeave, startDate: e.target.value})} />
+              <Input label="End Date" type="date" value={newLeave.endDate} onChange={(e: any) => setNewLeave({...newLeave, endDate: e.target.value})} />
+            </div>
+            <div className="w-full">
+              <label className="label-text">Reason</label>
+              <textarea 
+                className="input-field min-h-[120px]" 
+                value={newLeave.reason}
+                onChange={(e: any) => setNewLeave({...newLeave, reason: e.target.value})}
+              />
+            </div>
+            <button 
+              onClick={() => {
+                if (!newLeave.reason) return;
+                setLeaveRequests([{...newLeave, id: Date.now().toString(), staffName: 'Current User', staffId: 'STF-001'}, ...leaveRequests]);
+                setNewLeave({
+                  startDate: new Date().toISOString().split('T')[0],
+                  endDate: new Date().toISOString().split('T')[0],
+                  reason: '',
+                  status: 'Pending'
+                });
+              }}
+              className="btn-primary w-full py-4"
+            >
+              Submit Leave Request
+            </button>
+          </div>
+        </Card>
+      )}
+
+      {activeTab === 'approve-leave' && (
+        <Card>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="border-b border-slate-100">
+                  <th className="pb-4 px-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Staff</th>
+                  <th className="pb-4 px-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Duration</th>
+                  <th className="pb-4 px-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Reason</th>
+                  <th className="pb-4 px-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Status</th>
+                  <th className="pb-4 px-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {leaveRequests.map((l: any) => (
+                  <tr key={l.id} className="hover:bg-slate-50/50 transition-colors">
+                    <td className="py-4 px-4">
+                      <p className="text-sm font-bold text-text-heading">{l.staffName}</p>
+                      <p className="text-[10px] text-text-sub uppercase">{l.staffId}</p>
+                    </td>
+                    <td className="py-4 px-4">
+                      <p className="text-sm font-bold text-text-heading">{l.startDate} to {l.endDate}</p>
+                    </td>
+                    <td className="py-4 px-4 text-sm text-text-sub max-w-xs truncate">{l.reason}</td>
+                    <td className="py-4 px-4">
+                      <span className={`text-[10px] font-black px-2 py-1 rounded-full uppercase ${
+                        l.status === 'Approved' ? 'bg-green-100 text-green-700' : 
+                        l.status === 'Rejected' ? 'bg-red-100 text-red-700' : 'bg-orange-100 text-orange-700'
+                      }`}>
+                        {l.status}
+                      </span>
+                    </td>
+                    <td className="py-4 px-4">
+                      {l.status === 'Pending' && (
+                        <div className="flex gap-2">
+                          <button 
+                            onClick={() => setLeaveRequests(leaveRequests.map((r: any) => r.id === l.id ? {...r, status: 'Approved'} : r))}
+                            className="p-2 bg-green-50 text-green-600 rounded-lg hover:bg-green-100 transition-all"
+                          >
+                            <CheckCircle2 size={16} />
+                          </button>
+                          <button 
+                            onClick={() => setLeaveRequests(leaveRequests.map((r: any) => r.id === l.id ? {...r, status: 'Rejected'} : r))}
+                            className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-all"
+                          >
+                            <X size={16} />
+                          </button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+                {leaveRequests.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="py-12 text-center text-text-sub font-medium italic">No leave requests found.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {activeTab === 'departments' && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          <Card className="md:col-span-1 p-6">
+            <h3 className="text-lg font-bold mb-6">Add Department</h3>
+            <div className="space-y-4">
+              <Input label="Department Name" value={newDepartment} onChange={(e: any) => setNewDepartment(e.target.value)} />
+              <button 
+                onClick={() => {
+                  if (!newDepartment) return;
+                  setDepartments([...departments, { id: Date.now().toString(), name: newDepartment }]);
+                  setNewDepartment('');
+                }}
+                className="btn-primary w-full py-3"
+              >
+                Save Department
+              </button>
+            </div>
+          </Card>
+          <Card className="md:col-span-2 p-6">
+            <h3 className="text-lg font-bold mb-6">Department List</h3>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="border-b border-slate-100">
+                    <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Name</th>
+                    <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {departments.map((d: any) => (
+                    <tr key={d.id} className="hover:bg-slate-50/50 transition-colors">
+                      <td className="py-4 text-sm font-bold text-text-heading">{d.name}</td>
+                      <td className="py-4 text-right">
+                        <button 
+                          onClick={() => setDepartments(departments.filter((dep: any) => dep.id !== d.id))}
+                          className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {activeTab === 'designations' && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          <Card className="md:col-span-1 p-6">
+            <h3 className="text-lg font-bold mb-6">Add Designation</h3>
+            <div className="space-y-4">
+              <Input label="Designation Name" value={newDesignation} onChange={(e: any) => setNewDesignation(e.target.value)} />
+              <button 
+                onClick={() => {
+                  if (!newDesignation) return;
+                  setDesignations([...designations, { id: Date.now().toString(), name: newDesignation }]);
+                  setNewDesignation('');
+                }}
+                className="btn-primary w-full py-3"
+              >
+                Save Designation
+              </button>
+            </div>
+          </Card>
+          <Card className="md:col-span-2 p-6">
+            <h3 className="text-lg font-bold mb-6">Designation List</h3>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="border-b border-slate-100">
+                    <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Name</th>
+                    <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {designations.map((d: any) => (
+                    <tr key={d.id} className="hover:bg-slate-50/50 transition-colors">
+                      <td className="py-4 text-sm font-bold text-text-heading">{d.name}</td>
+                      <td className="py-4 text-right">
+                        <button 
+                          onClick={() => setDesignations(designations.filter((des: any) => des.id !== d.id))}
+                          className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* Add Staff Modal */}
+      <AnimatePresence>
+        {showAddStaff && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-3xl p-8 w-full max-w-2xl shadow-2xl overflow-y-auto max-h-[90vh]"
+            >
+              <div className="flex items-center justify-between mb-8">
+                <h3 className="text-2xl font-black text-text-heading">Add New Staff</h3>
+                <button onClick={() => setShowAddStaff(false)} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
+                  <X size={24} />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <Input label="First Name" required value={newStaff.name} onChange={(e: any) => setNewStaff({...newStaff, name: e.target.value})} />
+                <Input label="Last Name" required value={newStaff.surname} onChange={(e: any) => setNewStaff({...newStaff, surname: e.target.value})} />
+                <Input label="Email" type="email" value={newStaff.email} onChange={(e: any) => setNewStaff({...newStaff, email: e.target.value})} />
+                <Input label="Mobile" value={newStaff.mobile} onChange={(e: any) => setNewStaff({...newStaff, mobile: e.target.value})} />
+                
+                <div className="w-full">
+                  <label className="label-text">Role <span className="text-red-500">*</span></label>
+                  <select 
+                    className="input-field"
+                    value={newStaff.role}
+                    onChange={(e: any) => setNewStaff({...newStaff, role: e.target.value})}
+                  >
+                    <option value="">Select Role</option>
+                    <option value="Admin">Admin</option>
+                    <option value="Teacher">Teacher</option>
+                    <option value="Accountant">Accountant</option>
+                    <option value="Librarian">Librarian</option>
+                    <option value="Warden">Warden</option>
+                  </select>
+                </div>
+
+                <div className="w-full">
+                  <label className="label-text">Department</label>
+                  <select 
+                    className="input-field"
+                    value={newStaff.department}
+                    onChange={(e: any) => setNewStaff({...newStaff, department: e.target.value})}
+                  >
+                    <option value="">Select Department</option>
+                    {departments.map((d: any) => <option key={d.id} value={d.name}>{d.name}</option>)}
+                  </select>
+                </div>
+
+                <div className="w-full">
+                  <label className="label-text">Designation</label>
+                  <select 
+                    className="input-field"
+                    value={newStaff.designation}
+                    onChange={(e: any) => setNewStaff({...newStaff, designation: e.target.value})}
+                  >
+                    <option value="">Select Designation</option>
+                    {designations.map((d: any) => <option key={d.id} value={d.name}>{d.name}</option>)}
+                  </select>
+                </div>
+
+                <Input label="Joining Date" type="date" value={newStaff.joiningDate} onChange={(e: any) => setNewStaff({...newStaff, joiningDate: e.target.value})} />
+              </div>
+
+              <div className="mt-8 flex gap-3">
+                <button onClick={() => setShowAddStaff(false)} className="flex-1 py-4 font-bold text-text-sub hover:bg-slate-50 rounded-2xl transition-all">Cancel</button>
+                <button onClick={handleAddStaff} className="flex-1 btn-primary py-4">Save Staff</button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
+const CommunicatePanel = ({ notifications, setNotifications, templates, setTemplates }: any) => {
+  const [activeTab, setActiveTab] = useState('notice-board');
+  const [showAddNotice, setShowAddNotice] = useState(false);
+  const [newNotice, setNewNotice] = useState<Partial<Notification>>({
+    type: 'Info',
+    targetRoles: ['admin', 'teacher', 'student', 'parent'],
+    date: new Date().toISOString().split('T')[0]
+  });
+
+  const handleAddNotice = () => {
+    if (!newNotice.title || !newNotice.message) return;
+    const notice: Notification = {
+      ...newNotice as Notification,
+      id: `NOT-${Date.now()}`
+    };
+    setNotifications([notice, ...notifications]);
+    setShowAddNotice(false);
+    setNewNotice({ type: 'Info', targetRoles: ['admin', 'teacher', 'student', 'parent'], date: new Date().toISOString().split('T')[0] });
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-black text-text-heading">Communicate</h2>
+        <button 
+          onClick={() => setShowAddNotice(true)}
+          className="btn-primary flex items-center gap-2"
+        >
+          <Plus size={18} /> Add Notice
+        </button>
+      </div>
+
+      <div className="flex gap-2 border-b border-slate-200 overflow-x-auto pb-px">
+        {[
+          { id: 'notice-board', label: 'Notice Board', icon: Bell },
+          { id: 'send-message', label: 'Send Email/WhatsApp', icon: MessageCircle },
+          { id: 'templates', label: 'Templates', icon: FileText }
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`flex items-center gap-2 px-6 py-4 text-sm font-bold transition-all border-b-2 whitespace-nowrap ${
+              activeTab === tab.id
+                ? 'border-primary text-primary'
+                : 'border-transparent text-text-secondary hover:text-primary'
+            }`}
+          >
+            <tab.icon size={18} />
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === 'notice-board' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {notifications.map((n: Notification) => (
+            <Card key={n.id} className="relative overflow-hidden">
+              <div className={`absolute top-0 left-0 w-1 h-full ${
+                n.type === 'Warning' ? 'bg-orange-500' : 
+                n.type === 'Success' ? 'bg-green-500' : 
+                n.type === 'Fee' ? 'bg-purple-500' : 'bg-blue-500'
+              }`} />
+              <div className="flex justify-between items-start mb-4">
+                <h4 className="font-black text-text-heading">{n.title}</h4>
+                <span className="text-[10px] font-bold text-text-sub uppercase">{n.date}</span>
+              </div>
+              <p className="text-sm text-text-sub mb-4">{n.message}</p>
+              <div className="flex flex-wrap gap-2">
+                {n.targetRoles.map(role => (
+                  <span key={role} className="text-[8px] font-black px-2 py-1 bg-slate-100 rounded-full uppercase text-slate-500">
+                    {role}
+                  </span>
+                ))}
+              </div>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Add Notice Modal */}
+      <AnimatePresence>
+        {showAddNotice && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-3xl p-8 w-full max-w-xl shadow-2xl"
+            >
+              <div className="flex items-center justify-between mb-8">
+                <h3 className="text-2xl font-black text-text-heading">Add New Notice</h3>
+                <button onClick={() => setShowAddNotice(false)} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
+                  <X size={24} />
+                </button>
+              </div>
+
+              <div className="space-y-6">
+                <Input label="Title" required value={newNotice.title} onChange={(e: any) => setNewNotice({...newNotice, title: e.target.value})} />
+                <div className="w-full">
+                  <label className="label-text">Message <span className="text-red-500">*</span></label>
+                  <textarea 
+                    className="input-field min-h-[120px]" 
+                    value={newNotice.message}
+                    onChange={(e: any) => setNewNotice({...newNotice, message: e.target.value})}
+                  />
+                </div>
+                <div className="w-full">
+                  <label className="label-text">Notice Type</label>
+                  <select 
+                    className="input-field"
+                    value={newNotice.type}
+                    onChange={(e: any) => setNewNotice({...newNotice, type: e.target.value as any})}
+                  >
+                    <option value="Info">Information</option>
+                    <option value="Warning">Warning</option>
+                    <option value="Success">Success</option>
+                    <option value="Fee">Fee Related</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="mt-8 flex gap-3">
+                <button onClick={() => setShowAddNotice(false)} className="flex-1 py-4 font-bold text-text-sub hover:bg-slate-50 rounded-2xl transition-all">Cancel</button>
+                <button onClick={handleAddNotice} className="flex-1 btn-primary py-4">Post Notice</button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
+const FrontOfficePanel = ({ enquiries, setEnquiries, visitors, setVisitors, complaints, setComplaints }: any) => {
+  const [activeTab, setActiveTab] = useState('enquiry');
+  const [showAddEnquiry, setShowAddEnquiry] = useState(false);
+  const [newEnquiry, setNewEnquiry] = useState<Partial<AdmissionEnquiry>>({
+    status: 'Pending',
+    date: new Date().toISOString().split('T')[0]
+  });
+  const [newVisitor, setNewVisitor] = useState<Partial<Visitor>>({
+    date: new Date().toISOString().split('T')[0],
+    inTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+  });
+  const [newComplaint, setNewComplaint] = useState<Partial<Complaint>>({
+    date: new Date().toISOString().split('T')[0],
+    status: 'Pending'
+  });
+
+  const handleAddEnquiry = () => {
+    if (!newEnquiry.name || !newEnquiry.mobile) return;
+    const enquiry: AdmissionEnquiry = {
+      ...newEnquiry as AdmissionEnquiry,
+      id: `ENQ-${Date.now()}`
+    };
+    setEnquiries([enquiry, ...enquiries]);
+    setShowAddEnquiry(false);
+    setNewEnquiry({ status: 'Pending', date: new Date().toISOString().split('T')[0] });
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl font-black text-text-heading">Front Office</h2>
+        <button 
+          onClick={() => setShowAddEnquiry(true)}
+          className="btn-primary flex items-center gap-2"
+        >
+          <Plus size={18} /> New Enquiry
+        </button>
+      </div>
+
+      <div className="flex gap-2 border-b border-slate-200 overflow-x-auto pb-px">
+        {[
+          { id: 'enquiry', label: 'Admission Enquiry', icon: UserPlus },
+          { id: 'visitors', label: 'Visitor Book', icon: BookOpen },
+          { id: 'complaints', label: 'Complaints', icon: AlertCircle }
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`flex items-center gap-2 px-6 py-4 text-sm font-bold transition-all border-b-2 whitespace-nowrap ${
+              activeTab === tab.id
+                ? 'border-primary text-primary'
+                : 'border-transparent text-text-secondary hover:text-primary'
+            }`}
+          >
+            <tab.icon size={18} />
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === 'enquiry' && (
+        <Card>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="border-b border-slate-100">
+                  <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Date</th>
+                  <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Name</th>
+                  <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Mobile</th>
+                  <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Class</th>
+                  <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Source</th>
+                  <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {enquiries.map((e: AdmissionEnquiry) => (
+                  <tr key={e.id} className="hover:bg-slate-50/50 transition-colors">
+                    <td className="py-4 text-sm text-text-sub">{e.date}</td>
+                    <td className="py-4 text-sm font-bold text-text-heading">{e.name}</td>
+                    <td className="py-4 text-sm text-text-sub">{e.mobile}</td>
+                    <td className="py-4 text-sm text-text-sub">{e.class}</td>
+                    <td className="py-4 text-sm text-text-sub">{e.source}</td>
+                    <td className="py-4">
+                      <span className={`text-[10px] font-black px-2 py-1 rounded-full uppercase ${
+                        e.status === 'Closed' ? 'bg-slate-100 text-slate-700' : 
+                        e.status === 'Follow-up' ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'
+                      }`}>
+                        {e.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {activeTab === 'visitors' && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          <Card className="md:col-span-1 p-6">
+            <h3 className="text-lg font-bold mb-6">Add Visitor</h3>
+            <div className="space-y-4">
+              <Input label="Visitor Name" value={newVisitor.name} onChange={(e: any) => setNewVisitor({...newVisitor, name: e.target.value})} />
+              <Input label="Mobile" value={newVisitor.mobile} onChange={(e: any) => setNewVisitor({...newVisitor, mobile: e.target.value})} />
+              <Input label="Purpose" value={newVisitor.purpose} onChange={(e: any) => setNewVisitor({...newVisitor, purpose: e.target.value})} />
+              <div className="grid grid-cols-2 gap-4">
+                <Input label="Date" type="date" value={newVisitor.date} onChange={(e: any) => setNewVisitor({...newVisitor, date: e.target.value})} />
+                <Input label="In Time" type="time" value={newVisitor.inTime} onChange={(e: any) => setNewVisitor({...newVisitor, inTime: e.target.value})} />
+              </div>
+              <button 
+                onClick={() => {
+                  if (!newVisitor.name || !newVisitor.mobile) return;
+                  setVisitors([{...newVisitor, id: Date.now().toString()}, ...visitors]);
+                  setNewVisitor({
+                    date: new Date().toISOString().split('T')[0],
+                    inTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                  });
+                }}
+                className="btn-primary w-full py-3"
+              >
+                Save Visitor
+              </button>
+            </div>
+          </Card>
+          <Card className="md:col-span-2 p-6">
+            <h3 className="text-lg font-bold mb-6">Visitor List</h3>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="border-b border-slate-100">
+                    <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Date</th>
+                    <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Name</th>
+                    <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Purpose</th>
+                    <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">In Time</th>
+                    <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Out Time</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {visitors.map((v: Visitor) => (
+                    <tr key={v.id} className="hover:bg-slate-50/50 transition-colors">
+                      <td className="py-4 text-sm text-text-sub">{v.date}</td>
+                      <td className="py-4 text-sm font-bold text-text-heading">{v.name}</td>
+                      <td className="py-4 text-sm text-text-sub">{v.purpose}</td>
+                      <td className="py-4 text-sm text-text-sub">{v.inTime}</td>
+                      <td className="py-4 text-sm text-text-sub">
+                        {v.outTime ? v.outTime : (
+                          <button 
+                            onClick={() => setVisitors(visitors.map((vis: Visitor) => vis.id === v.id ? {...vis, outTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} : vis))}
+                            className="text-[10px] font-black text-primary hover:underline uppercase"
+                          >
+                            Mark Out
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {activeTab === 'complaints' && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          <Card className="md:col-span-1 p-6">
+            <h3 className="text-lg font-bold mb-6">Add Complaint</h3>
+            <div className="space-y-4">
+              <Input label="Complainant Name" value={newComplaint.name} onChange={(e: any) => setNewComplaint({...newComplaint, name: e.target.value})} />
+              <Input label="Complaint Type" value={newComplaint.type} onChange={(e: any) => setNewComplaint({...newComplaint, type: e.target.value})} />
+              <Input label="Source" value={newComplaint.source} onChange={(e: any) => setNewComplaint({...newComplaint, source: e.target.value})} />
+              <Input label="Date" type="date" value={newComplaint.date} onChange={(e: any) => setNewComplaint({...newComplaint, date: e.target.value})} />
+              <div className="w-full">
+                <label className="label-text">Description</label>
+                <textarea 
+                  className="input-field min-h-[100px]" 
+                  value={newComplaint.description}
+                  onChange={(e: any) => setNewComplaint({...newComplaint, description: e.target.value})}
+                />
+              </div>
+              <button 
+                onClick={() => {
+                  if (!newComplaint.name || !newComplaint.description) return;
+                  setComplaints([{...newComplaint, id: Date.now().toString()}, ...complaints]);
+                  setNewComplaint({
+                    date: new Date().toISOString().split('T')[0],
+                    status: 'Pending'
+                  });
+                }}
+                className="btn-primary w-full py-3"
+              >
+                Save Complaint
+              </button>
+            </div>
+          </Card>
+          <Card className="md:col-span-2 p-6">
+            <h3 className="text-lg font-bold mb-6">Complaint List</h3>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="border-b border-slate-100">
+                    <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Date</th>
+                    <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Name</th>
+                    <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Type</th>
+                    <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Status</th>
+                    <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {complaints.map((c: Complaint) => (
+                    <tr key={c.id} className="hover:bg-slate-50/50 transition-colors">
+                      <td className="py-4 text-sm text-text-sub">{c.date}</td>
+                      <td className="py-4 text-sm font-bold text-text-heading">{c.name}</td>
+                      <td className="py-4 text-sm text-text-sub">{c.type}</td>
+                      <td className="py-4">
+                        <span className={`text-[10px] font-black px-2 py-1 rounded-full uppercase ${
+                          c.status === 'Resolved' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'
+                        }`}>
+                          {c.status}
+                        </span>
+                      </td>
+                      <td className="py-4">
+                        {c.status === 'Pending' && (
+                          <button 
+                            onClick={() => setComplaints(complaints.map((comp: Complaint) => comp.id === c.id ? {...comp, status: 'Resolved'} : comp))}
+                            className="text-[10px] font-black text-primary hover:underline uppercase"
+                          >
+                            Resolve
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* Add Enquiry Modal */}
+      <AnimatePresence>
+        {showAddEnquiry && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-3xl p-8 w-full max-w-xl shadow-2xl"
+            >
+              <div className="flex items-center justify-between mb-8">
+                <h3 className="text-2xl font-black text-text-heading">New Admission Enquiry</h3>
+                <button onClick={() => setShowAddEnquiry(false)} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
+                  <X size={24} />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <Input label="Name" required value={newEnquiry.name} onChange={(e: any) => setNewEnquiry({...newEnquiry, name: e.target.value})} />
+                <Input label="Mobile" required value={newEnquiry.mobile} onChange={(e: any) => setNewEnquiry({...newEnquiry, mobile: e.target.value})} />
+                <Input label="Email" value={newEnquiry.email} onChange={(e: any) => setNewEnquiry({...newEnquiry, email: e.target.value})} />
+                <Input label="Class" value={newEnquiry.class} onChange={(e: any) => setNewEnquiry({...newEnquiry, class: e.target.value})} />
+                <Input label="Source" placeholder="e.g. Website, Newspaper" value={newEnquiry.source} onChange={(e: any) => setNewEnquiry({...newEnquiry, source: e.target.value})} />
+                <Input label="Date" type="date" value={newEnquiry.date} onChange={(e: any) => setNewEnquiry({...newEnquiry, date: e.target.value})} />
+              </div>
+
+              <div className="mt-8 flex gap-3">
+                <button onClick={() => setShowAddEnquiry(false)} className="flex-1 py-4 font-bold text-text-sub hover:bg-slate-50 rounded-2xl transition-all">Cancel</button>
+                <button onClick={handleAddEnquiry} className="flex-1 btn-primary py-4">Save Enquiry</button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
@@ -4761,6 +5746,183 @@ const RoleAssignPanel = ({ users, setUsers }: any) => {
           )}
         </Card>
       </div>
+    </div>
+  );
+};
+
+const IncomeExpenseView = ({ incomes, setIncomes, expenses, setExpenses, incomeHeads, setIncomeHeads, expenseHeads, setExpenseHeads }: any) => {
+  const [activeTab, setActiveTab] = useState<'income' | 'expense' | 'income-head' | 'expense-head'>('income');
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [formData, setFormData] = useState<any>({});
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const handleAdd = () => {
+    if (activeTab === 'income') {
+      setIncomes([...incomes, { ...formData, id: Date.now().toString() }]);
+    } else if (activeTab === 'expense') {
+      setExpenses([...expenses, { ...formData, id: Date.now().toString() }]);
+    } else if (activeTab === 'income-head') {
+      setIncomeHeads([...incomeHeads, { ...formData, id: Date.now().toString() }]);
+    } else if (activeTab === 'expense-head') {
+      setExpenseHeads([...expenseHeads, { ...formData, id: Date.now().toString() }]);
+    }
+    setShowAddModal(false);
+    setFormData({});
+  };
+
+  const filteredData = (activeTab === 'income' ? incomes : expenses).filter((item: any) => 
+    item.name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    item.invoiceNumber?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  return (
+    <div className="space-y-8 max-w-7xl mx-auto pb-20">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <div>
+          <h1 className="text-3xl font-black text-text-heading tracking-tight uppercase">Income & Expense Management</h1>
+          <p className="text-text-sub font-medium">Manage school finances, donations, and operational costs.</p>
+        </div>
+        <button 
+          onClick={() => {
+            setFormData({ date: new Date().toISOString().split('T')[0] });
+            setShowAddModal(true);
+          }}
+          className="btn-primary flex items-center gap-2"
+        >
+          <Plus size={20} /> Add {activeTab.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}
+        </button>
+      </div>
+
+      <div className="flex gap-4 border-b border-slate-200">
+        <button onClick={() => setActiveTab('income')} className={`px-6 py-3 font-bold text-sm transition-all border-b-2 ${activeTab === 'income' ? 'border-primary text-primary' : 'border-transparent text-text-sub'}`}>Income</button>
+        <button onClick={() => setActiveTab('expense')} className={`px-6 py-3 font-bold text-sm transition-all border-b-2 ${activeTab === 'expense' ? 'border-primary text-primary' : 'border-transparent text-text-sub'}`}>Expense</button>
+        <button onClick={() => setActiveTab('income-head')} className={`px-6 py-3 font-bold text-sm transition-all border-b-2 ${activeTab === 'income-head' ? 'border-primary text-primary' : 'border-transparent text-text-sub'}`}>Income Head</button>
+        <button onClick={() => setActiveTab('expense-head')} className={`px-6 py-3 font-bold text-sm transition-all border-b-2 ${activeTab === 'expense-head' ? 'border-primary text-primary' : 'border-transparent text-text-sub'}`}>Expense Head</button>
+      </div>
+
+      {(activeTab === 'income' || activeTab === 'expense') && (
+        <Card className="p-6">
+          <div className="flex flex-col md:flex-row gap-4 mb-6">
+            <div className="flex-1 relative">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+              <input 
+                type="text" 
+                placeholder={`Search ${activeTab}...`} 
+                className="input-field pl-12"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="text-[10px] font-bold text-text-secondary uppercase tracking-wider border-b border-slate-200">
+                  <th className="pb-4 px-4">Name</th>
+                  <th className="pb-4 px-4">Invoice No</th>
+                  <th className="pb-4 px-4">Head</th>
+                  <th className="pb-4 px-4">Date</th>
+                  <th className="pb-4 px-4">Amount</th>
+                  <th className="pb-4 px-4">Action</th>
+                </tr>
+              </thead>
+              <tbody className="text-sm">
+                {filteredData.map((item: any) => (
+                  <tr key={item.id} className="border-b border-slate-100 hover:bg-slate-50 transition-all">
+                    <td className="py-4 px-4 font-bold">{item.name}</td>
+                    <td className="py-4 px-4">{item.invoiceNumber}</td>
+                    <td className="py-4 px-4">{activeTab === 'income' ? item.incomeHead : item.expenseHead}</td>
+                    <td className="py-4 px-4">{item.date}</td>
+                    <td className="py-4 px-4 font-black text-primary">₹{item.amount.toLocaleString()}</td>
+                    <td className="py-4 px-4">
+                      <div className="flex gap-2">
+                        <button className="p-2 hover:bg-slate-100 rounded-lg text-blue-500"><Edit2 size={16} /></button>
+                        <button className="p-2 hover:bg-slate-100 rounded-lg text-red-500"><Trash2 size={16} /></button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {filteredData.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="py-12 text-center text-text-sub font-medium italic">No records found.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {(activeTab === 'income-head' || activeTab === 'expense-head') && (
+        <Card className="p-6">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="text-[10px] font-bold text-text-secondary uppercase tracking-wider border-b border-slate-200">
+                  <th className="pb-4 px-4">Name</th>
+                  <th className="pb-4 px-4">Description</th>
+                  <th className="pb-4 px-4">Action</th>
+                </tr>
+              </thead>
+              <tbody className="text-sm">
+                {(activeTab === 'income-head' ? incomeHeads : expenseHeads).map((head: any) => (
+                  <tr key={head.id} className="border-b border-slate-100 hover:bg-slate-50 transition-all">
+                    <td className="py-4 px-4 font-bold">{head.name}</td>
+                    <td className="py-4 px-4 text-text-sub">{head.description}</td>
+                    <td className="py-4 px-4">
+                      <div className="flex gap-2">
+                        <button className="p-2 hover:bg-slate-100 rounded-lg text-blue-500"><Edit2 size={16} /></button>
+                        <button className="p-2 hover:bg-slate-100 rounded-lg text-red-500"><Trash2 size={16} /></button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {showAddModal && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md z-[100] flex items-center justify-center p-4">
+          <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-white rounded-[2.5rem] p-10 max-w-md w-full shadow-2xl">
+            <h3 className="text-2xl font-black text-text-heading mb-8 uppercase tracking-tight">Add {activeTab.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}</h3>
+            <div className="space-y-4">
+              {(activeTab === 'income' || activeTab === 'expense') ? (
+                <>
+                  <Input label="Name" value={formData.name} onChange={(e: any) => setFormData({ ...formData, name: e.target.value })} />
+                  <Select 
+                    label={activeTab === 'income' ? "Income Head" : "Expense Head"} 
+                    options={(activeTab === 'income' ? incomeHeads : expenseHeads).map((h: any) => h.name)} 
+                    value={activeTab === 'income' ? formData.incomeHead : formData.expenseHead} 
+                    onChange={(e: any) => setFormData({ ...formData, [activeTab === 'income' ? 'incomeHead' : 'expenseHead']: e.target.value })} 
+                  />
+                  <Input label="Invoice Number" value={formData.invoiceNumber} onChange={(e: any) => setFormData({ ...formData, invoiceNumber: e.target.value })} />
+                  <Input label="Date" type="date" value={formData.date} onChange={(e: any) => setFormData({ ...formData, date: e.target.value })} />
+                  <Input label="Amount" type="number" value={formData.amount} onChange={(e: any) => setFormData({ ...formData, amount: Number(e.target.value) })} />
+                  <div className="space-y-2">
+                    <label className="label-text">Description</label>
+                    <textarea className="input-field min-h-[100px]" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })}></textarea>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <Input label="Head Name" value={formData.name} onChange={(e: any) => setFormData({ ...formData, name: e.target.value })} />
+                  <div className="space-y-2">
+                    <label className="label-text">Description</label>
+                    <textarea className="input-field min-h-[100px]" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })}></textarea>
+                  </div>
+                </>
+              )}
+              <div className="flex gap-4 pt-4">
+                <button onClick={() => setShowAddModal(false)} className="flex-1 py-4 rounded-2xl font-bold text-text-sub hover:bg-slate-100 transition-all">Cancel</button>
+                <button onClick={handleAdd} className="flex-1 py-4 rounded-2xl bg-primary text-white font-black shadow-xl shadow-primary/20">Save Record</button>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 };
@@ -4865,6 +6027,109 @@ export default function App() {
   const [hostelStaff, setHostelStaff] = useState<HostelStaff[]>([]);
   const [hostelAttendance, setHostelAttendance] = useState<HostelAttendance[]>([]);
   
+  const [staff, setStaff] = useState<Staff[]>([
+    {
+      id: 'STF-1001',
+      name: 'John',
+      surname: 'Doe',
+      role: 'Teacher',
+      department: 'Academic',
+      designation: 'Senior Teacher',
+      email: 'john.doe@school.com',
+      mobile: '9876543210',
+      status: 'Active',
+      joiningDate: '2022-01-15'
+    },
+    {
+      id: 'STF-1002',
+      name: 'Sarah',
+      surname: 'Wilson',
+      role: 'Admin',
+      department: 'Administration',
+      designation: 'Admin Head',
+      email: 'sarah.w@school.com',
+      mobile: '9876543211',
+      status: 'Active',
+      joiningDate: '2021-06-20'
+    }
+  ]);
+  const [departments, setDepartments] = useState<Department[]>([
+    { id: '1', name: 'Academic' },
+    { id: '2', name: 'Administration' },
+    { id: '3', name: 'Library' },
+    { id: '4', name: 'Hostel' }
+  ]);
+  const [designations, setDesignations] = useState<Designation[]>([
+    { id: '1', name: 'Teacher' },
+    { id: '2', name: 'Principal' },
+    { id: '3', name: 'Librarian' },
+    { id: '4', name: 'Warden' }
+  ]);
+  const [staffLeaveRequests, setStaffLeaveRequests] = useState<any[]>([
+    { id: '1', staffId: 'STF-1001', staffName: 'John Doe', startDate: '2024-03-25', endDate: '2024-03-26', reason: 'Personal work', status: 'Pending' },
+    { id: '2', staffId: 'STF-1002', staffName: 'Sarah Wilson', startDate: '2024-03-22', endDate: '2024-03-22', reason: 'Medical', status: 'Approved' }
+  ]);
+  const [admissionEnquiries, setAdmissionEnquiries] = useState<AdmissionEnquiry[]>([
+    {
+      id: 'ENQ-1',
+      name: 'Robert Brown',
+      mobile: '9988776655',
+      email: 'robert@example.com',
+      class: 'Class 5',
+      source: 'Website',
+      date: '2024-03-20',
+      status: 'Pending'
+    },
+    {
+      id: 'ENQ-2',
+      name: 'Emily Davis',
+      mobile: '9988776656',
+      email: 'emily@example.com',
+      class: 'Class 8',
+      source: 'Walk-in',
+      date: '2024-03-22',
+      status: 'Follow-up'
+    }
+  ]);
+  const [incomes, setIncomes] = useState<Income[]>([
+    { id: '1', name: 'Annual Donation', incomeHead: 'Donation', invoiceNumber: 'INC-001', date: '2024-03-15', amount: 50000, description: 'Donation from Alumni Association' },
+    { id: '2', name: 'Government Aid', incomeHead: 'Aid Received', invoiceNumber: 'INC-002', date: '2024-03-18', amount: 120000, description: 'Quarterly government education grant' },
+    { id: '3', name: 'Local Business Sponsorship', incomeHead: 'Donation', invoiceNumber: 'INC-003', date: '2024-03-20', amount: 25000, description: 'Sponsorship for sports day' }
+  ]);
+  const [expenses, setExpenses] = useState<Expense[]>([
+    { id: '1', name: 'Electricity Bill', expenseHead: 'Utility', invoiceNumber: 'EXP-001', date: '2024-03-10', amount: 15000, description: 'Monthly electricity bill for March' },
+    { id: '2', name: 'Stationery Purchase', expenseHead: 'Office Supplies', invoiceNumber: 'EXP-002', date: '2024-03-12', amount: 5000, description: 'Bulk purchase of notebooks and pens' },
+    { id: '3', name: 'Lab Equipment Repair', expenseHead: 'Maintenance', invoiceNumber: 'EXP-003', date: '2024-03-22', amount: 8500, description: 'Repair of microscope and centrifuge' }
+  ]);
+  const [incomeHeads, setIncomeHeads] = useState<IncomeHead[]>([
+    { id: '1', name: 'Donation', description: 'Donations from various sources' },
+    { id: '2', name: 'Aid Received', description: 'Government or NGO aid' },
+    { id: '3', name: 'Event Revenue', description: 'Revenue from school events' }
+  ]);
+  const [expenseHeads, setExpenseHeads] = useState<ExpenseHead[]>([
+    { id: '1', name: 'Utility', description: 'Electricity, Water, etc.' },
+    { id: '2', name: 'Office Supplies', description: 'Stationery, Printing, etc.' },
+    { id: '3', name: 'Maintenance', description: 'Building and equipment repairs' }
+  ]);
+  const [visitors, setVisitors] = useState<Visitor[]>([
+    { id: '1', name: 'Michael Scott', mobile: '9876543210', purpose: 'Meeting with Principal', date: '2024-03-24', inTime: '10:00 AM', outTime: '11:00 AM' },
+    { id: '2', name: 'Dwight Schrute', mobile: '9876543211', purpose: 'Admission Enquiry', date: '2024-03-24', inTime: '11:30 AM' }
+  ]);
+  const [complaints, setComplaints] = useState<Complaint[]>([
+    { id: '1', type: 'Infrastructure', source: 'Parent', name: 'Jim Halpert', mobile: '9876543212', date: '2024-03-23', description: 'Broken chair in Class 5A', status: 'Pending' },
+    { id: '2', type: 'Academic', source: 'Student', name: 'Pam Beesly', mobile: '9876543213', date: '2024-03-22', description: 'Library books not available', status: 'Resolved', actionTaken: 'New books ordered' }
+  ]);
+  const [communicationTemplates, setCommunicationTemplates] = useState<CommunicationTemplate[]>([
+    { id: '1', name: 'Fee Reminder', subject: 'Fee Payment Due', body: 'Dear Parent, your child\'s fee is due. Please pay at the earliest.', type: 'Email' },
+    { id: '2', name: 'Holiday Notice', subject: 'School Holiday', body: 'School will remain closed tomorrow due to public holiday.', type: 'WhatsApp' }
+  ]);
+  const [userLogs, setUserLogs] = useState<any[]>([
+    { id: '1', timestamp: new Date().toLocaleString(), user: 'Admin User', action: 'Logged in to system', ip: '192.168.1.1' },
+    { id: '2', timestamp: new Date(Date.now() - 3600000).toLocaleString(), user: 'Teacher Rajesh', action: 'Marked attendance for Class 10A', ip: '192.168.1.45' },
+    { id: '3', timestamp: new Date(Date.now() - 7200000).toLocaleString(), user: 'Admin User', action: 'Updated school profile', ip: '192.168.1.1' },
+    { id: '4', timestamp: new Date(Date.now() - 86400000).toLocaleString(), user: 'Parent DS-12345', action: 'Viewed fee structure', ip: '172.16.0.12' },
+  ]);
+  
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([
     { id: '1', title: 'Holi Celebration', date: '2024-03-25', type: 'festival', icon: '🎨', color: 'bg-orange-100 text-orange-700' },
     { id: '2', title: 'Eid-ul-Fitr', date: '2024-04-10', type: 'festival', icon: '🌙', color: 'bg-emerald-100 text-emerald-700' },
@@ -4884,23 +6149,28 @@ export default function App() {
       const indianStudents: Student[] = [
         { 
           id: '1', studentId: 'DS-100001', name: 'Aarav', surname: 'Sharma', class: 'Class 1', section: 'A', gender: 'Male', address: 'New Delhi', category: 'General', religion: 'Hinduism', caste: 'Brahmin',
-          fatherName: 'Rajesh Sharma', motherName: 'Sunita Sharma', fatherMobile: '9876543210', motherMobile: '9876543211', bloodGroup: 'A+', emergencyContact: '9876543212', localGuardianContact: '9876543213', email: 'aarav@example.com', allergy: 'None', hasDisability: false, disabilityDetails: '', relationInSchool: { name: '', class: '', section: '' }
+          fatherName: 'Rajesh Sharma', motherName: 'Sunita Sharma', fatherMobile: '9876543210', motherMobile: '9876543211', bloodGroup: 'A+', emergencyContact: '9876543212', localGuardianContact: '9876543213', email: 'aarav@example.com', allergy: 'None', hasDisability: false, disabilityDetails: '', relationInSchool: { name: '', class: '', section: '' },
+          photo: 'https://picsum.photos/seed/aarav/200'
         },
         { 
           id: '2', studentId: 'DS-100002', name: 'Vihaan', surname: 'Gupta', class: 'Class 2', section: 'B', gender: 'Male', address: 'Mumbai', category: 'General', religion: 'Hinduism', caste: 'Vaishya',
-          fatherName: 'Amit Gupta', motherName: 'Neha Gupta', fatherMobile: '9876543214', motherMobile: '9876543215', bloodGroup: 'B+', emergencyContact: '9876543216', localGuardianContact: '9876543217', email: 'vihaan@example.com', allergy: 'None', hasDisability: false, disabilityDetails: '', relationInSchool: { name: '', class: '', section: '' }
+          fatherName: 'Amit Gupta', motherName: 'Neha Gupta', fatherMobile: '9876543214', motherMobile: '9876543215', bloodGroup: 'B+', emergencyContact: '9876543216', localGuardianContact: '9876543217', email: 'vihaan@example.com', allergy: 'None', hasDisability: false, disabilityDetails: '', relationInSchool: { name: '', class: '', section: '' },
+          photo: 'https://picsum.photos/seed/vihaan/200'
         },
         { 
           id: '3', studentId: 'DS-100003', name: 'Advik', surname: 'Verma', class: 'Class 3', section: 'C', gender: 'Male', address: 'Bangalore', category: 'OBC', religion: 'Hinduism', caste: 'Kshatriya',
-          fatherName: 'Sanjay Verma', motherName: 'Meera Verma', fatherMobile: '9876543218', motherMobile: '9876543219', bloodGroup: 'O+', emergencyContact: '9876543220', localGuardianContact: '9876543221', email: 'advik@example.com', allergy: 'None', hasDisability: false, disabilityDetails: '', relationInSchool: { name: '', class: '', section: '' }
+          fatherName: 'Sanjay Verma', motherName: 'Meera Verma', fatherMobile: '9876543218', motherMobile: '9876543219', bloodGroup: 'O+', emergencyContact: '9876543220', localGuardianContact: '9876543221', email: 'advik@example.com', allergy: 'None', hasDisability: false, disabilityDetails: '', relationInSchool: { name: '', class: '', section: '' },
+          photo: 'https://picsum.photos/seed/advik/200'
         },
         { 
           id: '4', studentId: 'DS-100004', name: 'Ananya', surname: 'Iyer', class: 'Class 4', section: 'D', gender: 'Female', address: 'Chennai', category: 'General', religion: 'Hinduism', caste: 'Brahmin',
-          fatherName: 'Subramanian Iyer', motherName: 'Lakshmi Iyer', fatherMobile: '9876543222', motherMobile: '9876543223', bloodGroup: 'AB+', emergencyContact: '9876543224', localGuardianContact: '9876543225', email: 'ananya@example.com', allergy: 'None', hasDisability: false, disabilityDetails: '', relationInSchool: { name: '', class: '', section: '' }
+          fatherName: 'Subramanian Iyer', motherName: 'Lakshmi Iyer', fatherMobile: '9876543222', motherMobile: '9876543223', bloodGroup: 'AB+', emergencyContact: '9876543224', localGuardianContact: '9876543225', email: 'ananya@example.com', allergy: 'None', hasDisability: false, disabilityDetails: '', relationInSchool: { name: '', class: '', section: '' },
+          photo: 'https://picsum.photos/seed/ananya/200'
         },
         { 
           id: '5', studentId: 'DS-100005', name: 'Ishani', surname: 'Reddy', class: 'Class 5', section: 'A', gender: 'Female', address: 'Hyderabad', category: 'General', religion: 'Hinduism', caste: 'Reddy',
-          fatherName: 'Venkat Reddy', motherName: 'Kavitha Reddy', fatherMobile: '9876543226', motherMobile: '9876543227', bloodGroup: 'A-', emergencyContact: '9876543228', localGuardianContact: '9876543229', email: 'ishani@example.com', allergy: 'None', hasDisability: false, disabilityDetails: '', relationInSchool: { name: '', class: '', section: '' }
+          fatherName: 'Venkat Reddy', motherName: 'Kavitha Reddy', fatherMobile: '9876543226', motherMobile: '9876543227', bloodGroup: 'A-', emergencyContact: '9876543228', localGuardianContact: '9876543229', email: 'ishani@example.com', allergy: 'None', hasDisability: false, disabilityDetails: '', relationInSchool: { name: '', class: '', section: '' },
+          photo: 'https://picsum.photos/seed/ishani/200'
         },
       ];
       setStudents(indianStudents);
@@ -5172,9 +6442,9 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen flex bg-slate-50">
+    <div className="h-screen flex bg-slate-50 overflow-hidden">
       {/* Sidebar */}
-      <aside className={`bg-white border-r border-slate-200 transition-all duration-300 ${isSidebarOpen ? 'w-64' : 'w-20'} flex flex-col`}>
+      <aside className={`bg-white border-r border-slate-200 transition-all duration-300 ${isSidebarOpen ? 'w-64' : 'w-20'} flex flex-col h-full shrink-0`}>
         <div className="p-6 flex items-center gap-3">
           <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center text-white shrink-0">
             <School size={24} />
@@ -5187,7 +6457,7 @@ export default function App() {
           )}
         </div>
 
-        <nav className="flex-1 px-4 space-y-2">
+        <nav className="flex-1 px-4 space-y-2 overflow-y-auto custom-scrollbar pb-10">
           <SidebarItem 
             icon={LayoutDashboard} 
             label={isSidebarOpen ? "Dashboard" : ""} 
@@ -5259,6 +6529,30 @@ export default function App() {
                 label={isSidebarOpen ? "Role Assign" : ""} 
                 active={view === 'role-assign'} 
                 onClick={() => setView('role-assign')} 
+              />
+              <SidebarItem 
+                icon={Building2} 
+                label={isSidebarOpen ? "Front Office" : ""} 
+                active={view === 'front-office'} 
+                onClick={() => setView('front-office')} 
+              />
+              <SidebarItem 
+                icon={UserCog} 
+                label={isSidebarOpen ? "Human Resource" : ""} 
+                active={view === 'human-resource'} 
+                onClick={() => setView('human-resource')} 
+              />
+              <SidebarItem 
+                icon={MessageCircle} 
+                label={isSidebarOpen ? "Communicate" : ""} 
+                active={view === 'communicate'} 
+                onClick={() => setView('communicate')} 
+              />
+              <SidebarItem 
+                icon={Coins} 
+                label={isSidebarOpen ? "Income & Expense" : ""} 
+                active={view === 'income-expense'} 
+                onClick={() => setView('income-expense')} 
               />
             </>
           )}
@@ -5384,7 +6678,7 @@ export default function App() {
         </header>
 
         {/* Content Area */}
-        <div className="flex-1 overflow-y-auto p-8">
+        <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
           <AnimatePresence mode="wait">
             {view === 'dashboard' && (
               <motion.div
@@ -5839,8 +7133,12 @@ export default function App() {
                               <td className="py-4 font-mono text-xs text-primary font-bold">{s.studentId}</td>
                               <td className="py-4">
                                 <div className="flex items-center gap-3">
-                                  <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center font-bold">
-                                    {s.name[0]}
+                                  <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center font-bold overflow-hidden">
+                                    {s.photo ? (
+                                      <img src={s.photo} alt={s.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                                    ) : (
+                                      s.name[0]
+                                    )}
                                   </div>
                                   <span className="font-semibold">{s.name} {s.surname}</span>
                                 </div>
@@ -5934,7 +7232,7 @@ export default function App() {
                   teacherAssignments={teacherAssignments}
                   activities={activities}
                   setActivities={setActivities}
-                  masterData={masterData}
+                  masterData={{...masterData, students}}
                 />
               </motion.div>
             )}
@@ -5952,6 +7250,45 @@ export default function App() {
                   feeTransactions={feeTransactions}
                   feeMaster={feeMaster}
                   currentUser={currentUser}
+                />
+              </motion.div>
+            )}
+
+            {view === 'human-resource' && (
+              <motion.div key="human-resource" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
+                <HumanResourcePanel 
+                  staff={staff}
+                  setStaff={setStaff}
+                  departments={departments}
+                  setDepartments={setDepartments}
+                  designations={designations}
+                  setDesignations={setDesignations}
+                  leaveRequests={staffLeaveRequests}
+                  setLeaveRequests={setStaffLeaveRequests}
+                />
+              </motion.div>
+            )}
+
+            {view === 'communicate' && (
+              <motion.div key="communicate" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
+                <CommunicatePanel 
+                  notifications={notifications}
+                  setNotifications={setNotifications}
+                  templates={communicationTemplates}
+                  setTemplates={setCommunicationTemplates}
+                />
+              </motion.div>
+            )}
+
+            {view === 'front-office' && (
+              <motion.div key="front-office" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
+                <FrontOfficePanel 
+                  enquiries={admissionEnquiries}
+                  setEnquiries={setAdmissionEnquiries}
+                  visitors={visitors}
+                  setVisitors={setVisitors}
+                  complaints={complaints}
+                  setComplaints={setComplaints}
                 />
               </motion.div>
             )}
@@ -5999,7 +7336,28 @@ export default function App() {
                                   {l.status}
                                 </span>
                               </td>
-                              <td className="py-4 text-sm font-medium text-text-sub">{l.approvedBy || '-'}</td>
+                              <td className="py-4">
+                                {l.status === 'Pending' ? (
+                                  <div className="flex gap-2">
+                                    <button 
+                                      onClick={() => setLeaveRequests(leaveRequests.map(r => r.id === l.id ? {...r, status: 'Approved', approvedBy: 'Admin'} : r))}
+                                      className="p-2 bg-green-50 text-green-600 rounded-lg hover:bg-green-100 transition-all"
+                                      title="Approve"
+                                    >
+                                      <CheckCircle2 size={16} />
+                                    </button>
+                                    <button 
+                                      onClick={() => setLeaveRequests(leaveRequests.map(r => r.id === l.id ? {...r, status: 'Rejected', approvedBy: 'Admin'} : r))}
+                                      className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-all"
+                                      title="Reject"
+                                    >
+                                      <X size={16} />
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <span className="text-sm font-medium text-text-sub">{l.approvedBy || '-'}</span>
+                                )}
+                              </td>
                             </tr>
                           ))}
                         </tbody>
@@ -6051,6 +7409,27 @@ export default function App() {
                   hostelAttendance={hostelAttendance}
                   masterData={masterData}
                   leaveRequests={leaveRequests}
+                  userLogs={userLogs}
+                />
+              </motion.div>
+            )}
+
+            {view === 'income-expense' && (
+              <motion.div
+                key="income-expense"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+              >
+                <IncomeExpenseView 
+                  incomes={incomes} 
+                  setIncomes={setIncomes} 
+                  expenses={expenses} 
+                  setExpenses={setExpenses} 
+                  incomeHeads={incomeHeads} 
+                  setIncomeHeads={setIncomeHeads} 
+                  expenseHeads={expenseHeads} 
+                  setExpenseHeads={setExpenseHeads} 
                 />
               </motion.div>
             )}
@@ -6075,8 +7454,17 @@ export default function App() {
                   <div className="lg:col-span-1">
                     <Card className="sticky top-8">
                       <div className="flex flex-col items-center text-center p-4">
-                        <div className="w-24 h-24 bg-primary/10 rounded-full flex items-center justify-center text-primary mb-4">
-                          <UserCircle size={48} />
+                        <div className="w-24 h-24 bg-primary/10 rounded-full flex items-center justify-center text-primary mb-4 overflow-hidden border-2 border-primary/20">
+                          {currentUser?.role === 'student' && students.find((s: any) => s.studentId === currentUser.id)?.photo ? (
+                            <img 
+                              src={students.find((s: any) => s.studentId === currentUser.id).photo} 
+                              alt={currentUser?.name} 
+                              className="w-full h-full object-cover"
+                              referrerPolicy="no-referrer"
+                            />
+                          ) : (
+                            <UserCircle size={48} />
+                          )}
                         </div>
                         <h3 className="text-xl font-bold">{currentUser?.name}</h3>
                         <p className="text-sm text-text-sub uppercase font-bold tracking-wider">{currentUser?.role}</p>
@@ -6361,8 +7749,10 @@ export default function App() {
               >
                 <IDCardsModule 
                   students={students}
+                  staff={staff}
                   masterData={masterData}
                   schoolProfile={schoolProfile}
+                  examResults={examResults}
                 />
               </motion.div>
             )}
@@ -7325,93 +8715,260 @@ const HostelModule = ({
   );
 };
 
-const IDCardsModule = ({ students, masterData, schoolProfile }: any) => {
+const IDCardsModule = ({ students, staff, masterData, schoolProfile, examResults }: any) => {
   const [activeTab, setActiveTab] = useState('student');
   const [selectedClass, setSelectedClass] = useState('');
   const [selectedSection, setSelectedSection] = useState('');
-  const [selectedStudent, setSelectedStudent] = useState<any>(null);
+  const [selectedPerson, setSelectedPerson] = useState<any>(null);
+  const [orientation, setOrientation] = useState<'portrait' | 'landscape'>('portrait');
 
-  const filteredStudents = students.filter((s: any) => 
-    (!selectedClass || s.class === selectedClass) && 
-    (!selectedSection || s.section === selectedSection)
-  );
+  const filteredPeople = activeTab === 'teacher' || activeTab === 'experience' 
+    ? staff 
+    : students.filter((s: any) => 
+        (!selectedClass || s.class === selectedClass) && 
+        (!selectedSection || s.section === selectedSection)
+      );
 
   const tabs = [
     { id: 'student', label: 'Student ID', icon: UserCircle },
+    { id: 'teacher', label: 'Staff ID', icon: UserCheck },
+    { id: 'marksheet', label: 'Mark Sheet', icon: ClipboardList },
+    { id: 'experience', label: 'Experience Cert', icon: Briefcase },
+    { id: 'awards', label: 'Award Cert', icon: Trophy },
+    { id: 'appraisal', label: 'Appraisal Cert', icon: Star },
     { id: 'hostel', label: 'Hostel Card', icon: Home },
     { id: 'transfer', label: 'Transfer Cert', icon: FileOutput },
     { id: 'migration', label: 'Migration Cert', icon: FileSpreadsheet },
-    { id: 'awards', label: 'Awards', icon: Trophy },
-    { id: 'teacher', label: 'Teacher ID', icon: UserCheck }
   ];
 
-  const IDCard = ({ person, type = 'student' }: { person: any, type?: string }) => (
-    <div className="w-[350px] h-[500px] bg-white rounded-3xl shadow-2xl overflow-hidden border border-slate-200 relative flex flex-col">
+  const IDCard = ({ person, type = 'student', orientation = 'portrait' }: { person: any, type?: string, orientation?: 'portrait' | 'landscape' }) => (
+    <div className={`${orientation === 'portrait' ? 'w-[350px] h-[500px]' : 'w-[500px] h-[320px]'} bg-white rounded-3xl shadow-2xl overflow-hidden border border-slate-200 relative flex ${orientation === 'portrait' ? 'flex-col' : 'flex-row'}`}>
       {/* Header */}
-      <div className="bg-primary p-6 text-white text-center relative overflow-hidden">
+      <div className={`${orientation === 'portrait' ? 'bg-primary p-6' : 'bg-primary w-1/3 p-4'} text-white text-center relative overflow-hidden flex flex-col justify-center items-center`}>
         <div className="absolute top-0 left-0 w-full h-full opacity-10">
           <div className="absolute -top-10 -left-10 w-32 h-32 bg-white rounded-full blur-2xl"></div>
           <div className="absolute -bottom-10 -right-10 w-32 h-32 bg-white rounded-full blur-2xl"></div>
         </div>
         <div className="relative z-10">
-          <h2 className="text-lg font-black tracking-tight uppercase leading-tight">{schoolProfile.name}</h2>
+          <h2 className={`${orientation === 'portrait' ? 'text-lg' : 'text-sm'} font-black tracking-tight uppercase leading-tight`}>{schoolProfile.name}</h2>
           <p className="text-[10px] opacity-80 font-medium mt-1 uppercase tracking-widest">Identity Card</p>
         </div>
+        {orientation === 'landscape' && (
+          <div className="mt-4 w-20 h-20 bg-white rounded-xl p-1 shadow-inner">
+             <img 
+              src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${person.studentId || person.id || 'TCH-12345'}`} 
+              alt="QR Code" 
+              className="w-full h-full object-contain"
+              referrerPolicy="no-referrer"
+            />
+          </div>
+        )}
       </div>
 
-      {/* Profile Image */}
-      <div className="flex-1 flex flex-col items-center pt-8 px-6">
-        <div className="w-32 h-32 rounded-2xl border-4 border-primary/10 p-1 mb-6">
+      {/* Content */}
+      <div className={`flex-1 flex ${orientation === 'portrait' ? 'flex-col' : 'flex-row'} items-center ${orientation === 'portrait' ? 'pt-8 px-6' : 'p-6 gap-6'}`}>
+        <div className={`${orientation === 'portrait' ? 'w-32 h-32' : 'w-24 h-24'} rounded-2xl border-4 border-primary/10 p-1 ${orientation === 'portrait' ? 'mb-6' : ''} shrink-0`}>
           <div className="w-full h-full rounded-xl bg-slate-100 flex items-center justify-center text-primary font-black text-4xl overflow-hidden">
-            {person.photo ? <img src={person.photo} alt="" className="w-full h-full object-cover" /> : person.name[0]}
+            {person.photo ? <img src={person.photo} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" /> : person.name[0]}
           </div>
         </div>
 
-        <h3 className="text-xl font-black text-text-heading text-center uppercase tracking-tight">{person.name} {person.surname}</h3>
-        <p className="text-primary font-bold text-sm mb-6 uppercase tracking-widest">{type === 'teacher' ? 'Faculty Member' : 'Student'}</p>
+        <div className="flex-1 w-full">
+          <h3 className={`${orientation === 'portrait' ? 'text-xl' : 'text-lg'} font-black text-text-heading ${orientation === 'portrait' ? 'text-center' : ''} uppercase tracking-tight`}>{person.name} {person.surname}</h3>
+          <p className={`text-primary font-bold text-sm ${orientation === 'portrait' ? 'mb-6 text-center' : 'mb-4'} uppercase tracking-widest`}>{type === 'teacher' ? 'Faculty Member' : 'Student'}</p>
 
-        <div className="w-full space-y-3 bg-slate-50 p-4 rounded-2xl border border-slate-100">
-          <div className="flex justify-between items-center">
-            <span className="text-[10px] font-bold text-text-secondary uppercase tracking-wider">ID Number</span>
-            <span className="text-xs font-black text-text-heading font-mono">{person.studentId || person.teacherId || 'TCH-12345'}</span>
-          </div>
-          {type !== 'teacher' && (
-            <>
-              <div className="flex justify-between items-center">
-                <span className="text-[10px] font-bold text-text-secondary uppercase tracking-wider">Class & Sec</span>
-                <span className="text-xs font-black text-text-heading">{person.class} - {person.section}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-[10px] font-bold text-text-secondary uppercase tracking-wider">Blood Group</span>
-                <span className="text-xs font-black text-red-600">{person.bloodGroup || 'B+'}</span>
-              </div>
-            </>
-          )}
-          <div className="flex justify-between items-center">
-            <span className="text-[10px] font-bold text-text-secondary uppercase tracking-wider">Contact</span>
-            <span className="text-xs font-black text-text-heading">{person.fatherMobile || person.mobile || '+91 98765 43210'}</span>
+          <div className="w-full space-y-2 bg-slate-50 p-3 rounded-2xl border border-slate-100">
+            <div className="flex justify-between items-center">
+              <span className="text-[8px] font-bold text-text-secondary uppercase tracking-wider">ID Number</span>
+              <span className="text-[10px] font-black text-text-heading font-mono">{person.studentId || person.id || 'TCH-12345'}</span>
+            </div>
+            {type !== 'teacher' && (
+              <>
+                <div className="flex justify-between items-center">
+                  <span className="text-[8px] font-bold text-text-secondary uppercase tracking-wider">Class & Sec</span>
+                  <span className="text-[10px] font-black text-text-heading">{person.class} - {person.section}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-[8px] font-bold text-text-secondary uppercase tracking-wider">Blood Group</span>
+                  <span className="text-[10px] font-black text-red-600">{person.bloodGroup || 'B+'}</span>
+                </div>
+              </>
+            )}
+            <div className="flex justify-between items-center">
+              <span className="text-[8px] font-bold text-text-secondary uppercase tracking-wider">Contact</span>
+              <span className="text-[10px] font-black text-text-heading">{person.fatherMobile || person.mobile || '+91 98765 43210'}</span>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Footer with QR */}
-      <div className="p-6 bg-white border-t border-slate-100 flex items-center justify-between">
-        <div className="flex flex-col gap-1">
-          <div className="w-20 h-8 border-b border-slate-300"></div>
-          <p className="text-[8px] font-bold text-text-secondary uppercase tracking-widest">Principal</p>
+      {/* Footer (Portrait Only) */}
+      {orientation === 'portrait' && (
+        <div className="p-6 bg-white border-t border-slate-100 flex items-center justify-between">
+          <div className="flex flex-col gap-1">
+            <div className="w-20 h-8 border-b border-slate-300"></div>
+            <p className="text-[8px] font-bold text-text-secondary uppercase tracking-widest">Principal</p>
+          </div>
+          <div className="w-16 h-16 bg-slate-50 rounded-lg p-2 border border-slate-100 flex items-center justify-center">
+            <img 
+              src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${person.studentId || person.id || 'TCH-12345'}`} 
+              alt="QR Code" 
+              className="w-full h-full object-contain"
+              referrerPolicy="no-referrer"
+            />
+          </div>
         </div>
-        <div className="w-16 h-16 bg-slate-50 rounded-lg p-2 border border-slate-100 flex items-center justify-center">
-          <img 
-            src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${person.studentId || person.teacherId || 'TCH-12345'}`} 
-            alt="QR Code" 
-            className="w-full h-full object-contain"
-            referrerPolicy="no-referrer"
-          />
-        </div>
-      </div>
+      )}
       
       {/* Card Strip */}
-      <div className="h-2 bg-primary w-full"></div>
+      <div className={`${orientation === 'portrait' ? 'h-2 w-full' : 'w-2 h-full'} bg-primary`}></div>
+    </div>
+  );
+
+  const MarkSheet = ({ student, results }: { student: any, results: any[] }) => (
+    <div className="w-[800px] min-h-[1000px] bg-white p-12 shadow-2xl border-4 border-slate-200 relative mx-auto font-serif">
+      <div className="text-center mb-10 border-b-2 border-slate-100 pb-8">
+        <h1 className="text-3xl font-black text-primary uppercase tracking-tighter mb-2">{schoolProfile.name}</h1>
+        <p className="text-text-sub font-bold uppercase tracking-widest text-xs">{schoolProfile.address}</p>
+        <h2 className="text-2xl font-black text-text-heading mt-6 uppercase">Academic Progress Report</h2>
+        <p className="text-sm font-bold text-text-sub">Academic Session: 2023-24</p>
+      </div>
+
+      <div className="grid grid-cols-2 gap-8 mb-10 bg-slate-50 p-6 rounded-2xl border border-slate-100">
+        <div className="space-y-2">
+          <p className="text-xs uppercase font-bold text-text-secondary">Student Name</p>
+          <p className="text-lg font-black text-text-heading">{student.name} {student.surname}</p>
+          <p className="text-xs uppercase font-bold text-text-secondary mt-4">Father's Name</p>
+          <p className="text-sm font-bold text-text-heading">{student.fatherName}</p>
+        </div>
+        <div className="space-y-2 text-right">
+          <p className="text-xs uppercase font-bold text-text-secondary">Student ID</p>
+          <p className="text-lg font-black text-primary font-mono">{student.studentId}</p>
+          <p className="text-xs uppercase font-bold text-text-secondary mt-4">Class & Section</p>
+          <p className="text-sm font-bold text-text-heading">{student.class} - {student.section}</p>
+        </div>
+      </div>
+
+      <table className="w-full border-collapse mb-10">
+        <thead>
+          <tr className="bg-primary text-white">
+            <th className="p-4 text-left border border-primary text-sm uppercase font-black">Subject</th>
+            <th className="p-4 text-center border border-primary text-sm uppercase font-black">Max Marks</th>
+            <th className="p-4 text-center border border-primary text-sm uppercase font-black">Obtained</th>
+            <th className="p-4 text-center border border-primary text-sm uppercase font-black">Grade</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-200">
+          {results.map((res, idx) => (
+            <tr key={idx} className={idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}>
+              <td className="p-4 border border-slate-200 font-bold text-text-heading">{res.subject}</td>
+              <td className="p-4 border border-slate-200 text-center font-bold">100</td>
+              <td className="p-4 border border-slate-200 text-center font-black text-primary">{res.marks}</td>
+              <td className="p-4 border border-slate-200 text-center font-bold">
+                {res.marks >= 90 ? 'A+' : res.marks >= 80 ? 'A' : res.marks >= 70 ? 'B' : 'C'}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+        <tfoot>
+          <tr className="bg-slate-100">
+            <td className="p-4 border border-slate-200 font-black uppercase text-sm">Grand Total</td>
+            <td className="p-4 border border-slate-200 text-center font-black">{results.length * 100}</td>
+            <td className="p-4 border border-slate-200 text-center font-black text-primary">
+              {results.reduce((acc, curr) => acc + curr.marks, 0)}
+            </td>
+            <td className="p-4 border border-slate-200 text-center font-black">
+              {Math.round(results.reduce((acc, curr) => acc + curr.marks, 0) / results.length)}%
+            </td>
+          </tr>
+        </tfoot>
+      </table>
+
+      <div className="grid grid-cols-3 gap-8 mt-20">
+        <div className="text-center">
+          <div className="w-32 h-10 border-b border-slate-300 mx-auto mb-2"></div>
+          <p className="text-[10px] font-bold text-text-secondary uppercase">Class Teacher</p>
+        </div>
+        <div className="text-center">
+          <div className="w-32 h-10 border-b border-slate-300 mx-auto mb-2"></div>
+          <p className="text-[10px] font-bold text-text-secondary uppercase">Examination Head</p>
+        </div>
+        <div className="text-center">
+          <div className="w-32 h-10 border-b border-slate-300 mx-auto mb-2"></div>
+          <p className="text-[10px] font-bold text-text-secondary uppercase">Principal</p>
+        </div>
+      </div>
+    </div>
+  );
+
+  const ExperienceCertificate = ({ staff }: { staff: any }) => (
+    <div className="w-[800px] min-h-[1000px] bg-white p-20 shadow-2xl border-[16px] border-double border-slate-100 relative mx-auto">
+      <div className="text-center mb-16">
+        <h1 className="text-4xl font-black text-primary uppercase tracking-tighter mb-2">{schoolProfile.name}</h1>
+        <p className="text-text-sub font-bold uppercase tracking-widest text-sm">{schoolProfile.address}</p>
+        <div className="w-40 h-1 bg-primary mx-auto mt-8"></div>
+        <h2 className="text-3xl font-black text-text-heading mt-12 uppercase underline underline-offset-8">Experience Certificate</h2>
+      </div>
+
+      <div className="space-y-10 text-xl leading-relaxed text-justify">
+        <div className="flex justify-between font-bold text-text-secondary mb-12">
+          <span>Ref: EXP/2024/{staff.id.split('-')[1]}</span>
+          <span>Date: {new Date().toLocaleDateString()}</span>
+        </div>
+
+        <p>TO WHOM IT MAY CONCERN</p>
+
+        <p>This is to certify that <span className="font-black border-b-2 border-slate-300 px-4">{staff.name} {staff.surname}</span> has been 
+        working with <span className="font-black">{schoolProfile.name}</span> as a <span className="font-black border-b-2 border-slate-300 px-4">{staff.designation || staff.role}</span> in 
+        the <span className="font-black border-b-2 border-slate-300 px-4">{staff.department || 'Academic'}</span> department from 
+        <span className="font-black border-b-2 border-slate-300 px-4">{staff.joiningDate || '01/06/2021'}</span> to 
+        <span className="font-black border-b-2 border-slate-300 px-4">{new Date().toLocaleDateString()}</span>.</p>
+
+        <p>During his/her tenure, we found him/her to be hardworking, dedicated, and committed to his/her duties. 
+        He/She possesses a good character and has been an asset to our institution.</p>
+
+        <p>We wish him/her all the very best for his/her future endeavors.</p>
+
+        <div className="mt-32">
+          <div className="w-56 h-12 border-b-2 border-slate-300 mb-2"></div>
+          <p className="font-bold text-text-secondary uppercase text-sm">Authorized Signatory</p>
+          <p className="font-black text-text-heading uppercase">{schoolProfile.name}</p>
+        </div>
+      </div>
+    </div>
+  );
+
+  const AppraisalCertificate = ({ person, title = "Outstanding Performance" }: { person: any, title?: string }) => (
+    <div className="w-[1000px] h-[700px] bg-white p-12 shadow-2xl border-[20px] border-double border-primary/20 relative mx-auto overflow-hidden">
+      <div className="absolute -top-20 -right-20 w-64 h-64 bg-primary/5 rounded-full blur-3xl"></div>
+      <div className="absolute -bottom-20 -left-20 w-64 h-64 bg-primary/5 rounded-full blur-3xl"></div>
+      
+      <div className="border-4 border-primary/10 h-full w-full p-12 flex flex-col items-center justify-center text-center relative z-10">
+        <div className="mb-8 p-6 bg-primary/5 rounded-full">
+          <Trophy size={60} className="text-primary" />
+        </div>
+        <h1 className="text-5xl font-black text-primary uppercase tracking-tighter mb-4">Certificate of Appraisal</h1>
+        <p className="text-xl font-bold text-text-sub uppercase tracking-[0.3em] mb-12">This is awarded to</p>
+        
+        <h2 className="text-6xl font-black text-text-heading mb-8 font-serif italic">{person.name} {person.surname}</h2>
+        
+        <div className="w-64 h-1 bg-primary mb-8"></div>
+        
+        <p className="text-2xl font-bold text-text-sub max-w-2xl leading-relaxed">
+          In recognition of your <span className="text-primary font-black">{title}</span> and exceptional contribution to the school's sports and extracurricular activities.
+        </p>
+
+        <div className="flex justify-between w-full mt-16 px-12">
+          <div className="text-center">
+            <div className="w-40 h-px bg-slate-300 mb-2"></div>
+            <p className="text-[10px] font-bold text-text-secondary uppercase">Activity Coordinator</p>
+          </div>
+          <div className="text-center">
+            <div className="w-40 h-px bg-slate-300 mb-2"></div>
+            <p className="text-[10px] font-bold text-text-secondary uppercase">Principal</p>
+          </div>
+        </div>
+      </div>
     </div>
   );
 
@@ -7572,18 +9129,45 @@ const IDCardsModule = ({ students, masterData, schoolProfile }: any) => {
     <div className="space-y-8 max-w-7xl mx-auto pb-20">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
-          <h1 className="text-3xl font-black text-text-heading tracking-tight">ID Cards & Certificates</h1>
-          <p className="text-text-sub font-medium">Generate and print official school documents.</p>
+          <h1 className="text-3xl font-black text-text-heading tracking-tight">ID Cards & Certificates 🪪</h1>
+          <p className="text-text-sub font-medium">Generate professional identity cards and official certificates.</p>
         </div>
+        {selectedPerson && (
+          <div className="flex items-center gap-4 no-print">
+            {(activeTab === 'student' || activeTab === 'teacher') && (
+              <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
+                <button 
+                  onClick={() => setOrientation('portrait')}
+                  className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${orientation === 'portrait' ? 'bg-white text-primary shadow-sm' : 'text-text-secondary hover:text-primary'}`}
+                >
+                  Portrait
+                </button>
+                <button 
+                  onClick={() => setOrientation('landscape')}
+                  className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${orientation === 'landscape' ? 'bg-white text-primary shadow-sm' : 'text-text-secondary hover:text-primary'}`}
+                >
+                  Landscape
+                </button>
+              </div>
+            )}
+            <button 
+              onClick={() => setSelectedPerson(null)}
+              className="flex items-center gap-2 text-text-sub hover:text-primary font-bold transition-all"
+            >
+              <ArrowRightLeft size={18} className="rotate-180" /> Back to List
+            </button>
+          </div>
+        )}
       </div>
 
-      <div className="flex flex-wrap gap-2 p-1.5 bg-slate-100 rounded-2xl w-fit">
+      <div className="flex flex-wrap gap-2 p-1.5 bg-slate-100 rounded-2xl w-fit no-print">
         {tabs.map((tab) => (
           <button
             key={tab.id}
             onClick={() => {
               setActiveTab(tab.id);
-              setSelectedStudent(null);
+              setSelectedPerson(null);
+              setBulkMode(false);
             }}
             className={`flex items-center gap-2 px-6 py-3 rounded-xl font-bold transition-all ${
               activeTab === tab.id 
@@ -7599,40 +9183,44 @@ const IDCardsModule = ({ students, masterData, schoolProfile }: any) => {
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
         {/* Selection Sidebar */}
-        <div className="lg:col-span-1 space-y-6">
+        <div className="lg:col-span-1 space-y-6 no-print">
           <Card className="p-6">
             <h3 className="font-bold text-text-heading mb-4 flex items-center gap-2">
               <Filter size={18} className="text-primary" />
               Selection Filter
             </h3>
             <div className="space-y-4">
-              <div>
-                <label className="label-text">Select Class</label>
-                <select 
-                  className="input-field"
-                  value={selectedClass}
-                  onChange={(e) => setSelectedClass(e.target.value)}
-                >
-                  <option value="">All Classes</option>
-                  {masterData.classes.map((c: string) => <option key={c} value={c}>{c}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="label-text">Select Section</label>
-                <select 
-                  className="input-field"
-                  value={selectedSection}
-                  onChange={(e) => setSelectedSection(e.target.value)}
-                >
-                  <option value="">All Sections</option>
-                  {masterData.sections.map((s: string) => <option key={s} value={s}>{s}</option>)}
-                </select>
-              </div>
-              {selectedClass && (
+              {(activeTab !== 'teacher' && activeTab !== 'experience') && (
+                <>
+                  <div>
+                    <label className="label-text">Select Class</label>
+                    <select 
+                      className="input-field text-sm"
+                      value={selectedClass}
+                      onChange={(e) => setSelectedClass(e.target.value)}
+                    >
+                      <option value="">All Classes</option>
+                      {masterData.classes.map((c: string) => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="label-text">Select Section</label>
+                    <select 
+                      className="input-field text-sm"
+                      value={selectedSection}
+                      onChange={(e) => setSelectedSection(e.target.value)}
+                    >
+                      <option value="">All Sections</option>
+                      {masterData.sections.map((s: string) => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
+                </>
+              )}
+              {selectedClass && activeTab !== 'teacher' && activeTab !== 'experience' && (
                 <button 
                   onClick={() => {
                     setBulkMode(!bulkMode);
-                    setSelectedStudent(null);
+                    setSelectedPerson(null);
                   }}
                   className={`w-full py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 ${
                     bulkMode 
@@ -7648,40 +9236,24 @@ const IDCardsModule = ({ students, masterData, schoolProfile }: any) => {
           </Card>
 
           <Card className="p-6">
-            <h3 className="font-bold text-text-heading mb-4">Select {activeTab === 'teacher' ? 'Teacher' : 'Student'}</h3>
+            <h3 className="font-bold text-text-heading mb-4">Select {activeTab === 'teacher' || activeTab === 'experience' ? 'Staff' : 'Student'}</h3>
             <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2">
-              {activeTab === 'teacher' ? (
-                masterData.teachers.map((teacher: string, idx: number) => (
-                  <button
-                    key={idx}
-                    onClick={() => setSelectedStudent({ name: teacher.split(' ')[0], surname: teacher.split(' ')[1] || '', teacherId: `TCH-${1000 + idx}` })}
-                    className={`w-full text-left p-3 rounded-xl font-bold text-sm transition-all border ${
-                      selectedStudent?.name === teacher.split(' ')[0]
-                        ? 'bg-primary/10 border-primary text-primary'
-                        : 'bg-slate-50 border-transparent text-text-sub hover:border-slate-200'
-                    }`}
-                  >
-                    {teacher}
-                  </button>
-                ))
-              ) : (
-                filteredStudents.map((s: any) => (
-                  <button
-                    key={s.id}
-                    onClick={() => setSelectedStudent(s)}
-                    className={`w-full text-left p-3 rounded-xl font-bold text-sm transition-all border ${
-                      selectedStudent?.id === s.id
-                        ? 'bg-primary/10 border-primary text-primary'
-                        : 'bg-slate-50 border-transparent text-text-sub hover:border-slate-200'
-                    }`}
-                  >
-                    <div className="flex justify-between items-center">
-                      <span>{s.name} {s.surname}</span>
-                      <span className="text-[10px] opacity-60">{s.studentId}</span>
-                    </div>
-                  </button>
-                ))
-              )}
+              {filteredPeople.map((person: any) => (
+                <button
+                  key={person.id}
+                  onClick={() => setSelectedPerson(person)}
+                  className={`w-full text-left p-3 rounded-xl font-bold text-sm transition-all border ${
+                    selectedPerson?.id === person.id
+                      ? 'bg-primary/10 border-primary text-primary'
+                      : 'bg-slate-50 border-transparent text-text-sub hover:border-slate-200'
+                  }`}
+                >
+                  <div className="flex justify-between items-center">
+                    <span>{person.name} {person.surname}</span>
+                    <span className="text-[10px] opacity-60">{person.studentId || person.id}</span>
+                  </div>
+                </button>
+              ))}
             </div>
           </Card>
         </div>
@@ -7693,7 +9265,7 @@ const IDCardsModule = ({ students, masterData, schoolProfile }: any) => {
               <div className="flex items-center justify-between bg-white p-6 rounded-3xl border border-slate-200 shadow-sm sticky top-0 z-20 no-print">
                 <div>
                   <h3 className="font-black text-text-heading">Bulk Generation Mode</h3>
-                  <p className="text-xs text-text-sub">Generating {filteredStudents.length} {activeTab}s for Class {selectedClass}</p>
+                  <p className="text-xs text-text-sub">Generating {filteredPeople.length} {activeTab}s for Class {selectedClass}</p>
                 </div>
                 <button onClick={handlePrint} className="btn-primary flex items-center gap-2">
                   <Printer size={20} />
@@ -7701,14 +9273,22 @@ const IDCardsModule = ({ students, masterData, schoolProfile }: any) => {
                 </button>
               </div>
               <div className="space-y-12">
-                {filteredStudents.map((s: any) => (
-                  <div key={s.id} className="flex flex-col items-center">
+                {filteredPeople.map((p: any) => (
+                  <div key={p.id} className="flex flex-col items-center">
                     <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-xl">
-                      {activeTab === 'student' && <IDCard person={s} />}
-                      {activeTab === 'hostel' && <HostelCard student={s} />}
-                      {activeTab === 'transfer' && <TransferCertificate student={s} />}
-                      {activeTab === 'migration' && <MigrationCertificate student={s} />}
-                      {activeTab === 'awards' && <AwardCertificate student={s} />}
+                      {activeTab === 'student' && <IDCard person={p} orientation={orientation} />}
+                      {activeTab === 'teacher' && <IDCard person={p} type="teacher" orientation={orientation} />}
+                      {activeTab === 'hostel' && <HostelCard student={p} />}
+                      {activeTab === 'transfer' && <TransferCertificate student={p} />}
+                      {activeTab === 'migration' && <MigrationCertificate student={p} />}
+                      {activeTab === 'awards' && <AwardCertificate student={p} />}
+                      {activeTab === 'appraisal' && <AppraisalCertificate person={p} />}
+                      {activeTab === 'marksheet' && (
+                        <MarkSheet 
+                          student={p} 
+                          results={examResults.filter((r: any) => r.studentId === p.studentId)} 
+                        />
+                      )}
                     </div>
                     <div className="w-full border-b-2 border-dashed border-slate-300 my-8 no-print"></div>
                   </div>
@@ -7717,19 +9297,27 @@ const IDCardsModule = ({ students, masterData, schoolProfile }: any) => {
             </div>
           ) : (
             <Card className="p-12 min-h-[600px] flex flex-col items-center justify-center bg-slate-50/50 border-dashed border-2 border-slate-200">
-              {selectedStudent ? (
+              {selectedPerson ? (
                 <motion.div
                   initial={{ opacity: 0, scale: 0.9 }}
                   animate={{ opacity: 1, scale: 1 }}
                   className="flex flex-col items-center gap-8"
                 >
                   <div className="bg-white p-4 rounded-[32px] shadow-2xl">
-                    {activeTab === 'student' && <IDCard person={selectedStudent} />}
-                    {activeTab === 'teacher' && <IDCard person={selectedStudent} type="teacher" />}
-                    {activeTab === 'hostel' && <HostelCard student={selectedStudent} />}
-                    {activeTab === 'transfer' && <TransferCertificate student={selectedStudent} />}
-                    {activeTab === 'migration' && <MigrationCertificate student={selectedStudent} />}
-                    {activeTab === 'awards' && <AwardCertificate student={selectedStudent} />}
+                    {activeTab === 'student' && <IDCard person={selectedPerson} orientation={orientation} />}
+                    {activeTab === 'teacher' && <IDCard person={selectedPerson} type="teacher" orientation={orientation} />}
+                    {activeTab === 'hostel' && <HostelCard student={selectedPerson} />}
+                    {activeTab === 'transfer' && <TransferCertificate student={selectedPerson} />}
+                    {activeTab === 'migration' && <MigrationCertificate student={selectedPerson} />}
+                    {activeTab === 'awards' && <AwardCertificate student={selectedPerson} />}
+                    {activeTab === 'experience' && <ExperienceCertificate staff={selectedPerson} />}
+                    {activeTab === 'appraisal' && <AppraisalCertificate person={selectedPerson} />}
+                    {activeTab === 'marksheet' && (
+                      <MarkSheet 
+                        student={selectedPerson} 
+                        results={examResults.filter((r: any) => r.studentId === selectedPerson.studentId)} 
+                      />
+                    )}
                   </div>
 
                   <div className="flex gap-4 no-print">
@@ -7747,13 +9335,13 @@ const IDCardsModule = ({ students, masterData, schoolProfile }: any) => {
                   </div>
                 </motion.div>
               ) : (
-                <div className="text-center space-y-4">
+                <div className="text-center space-y-4 no-print">
                   <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mx-auto text-slate-400">
                     <UserCircle size={40} />
                   </div>
                   <div>
                     <h4 className="text-xl font-bold text-text-heading">No Selection</h4>
-                    <p className="text-text-sub max-w-xs mx-auto">Please select a {activeTab === 'teacher' ? 'teacher' : 'student'} from the sidebar to preview their {tabs.find(t => t.id === activeTab)?.label}.</p>
+                    <p className="text-text-sub max-w-xs mx-auto">Please select a {activeTab === 'teacher' || activeTab === 'experience' ? 'staff member' : 'student'} from the sidebar to preview their {tabs.find(t => t.id === activeTab)?.label}.</p>
                   </div>
                 </div>
               )}
