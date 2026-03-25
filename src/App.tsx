@@ -73,7 +73,9 @@ import {
   CalendarRange,
   XCircle,
   PieChart as PieChartIcon,
-  Menu
+  Menu,
+  ChevronUp,
+  ChevronDown
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import * as XLSX from 'xlsx';
@@ -2183,10 +2185,21 @@ const FeeManagement = ({
     dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
   });
   const [showReceipt, setShowReceipt] = useState<FeeTransaction | null>(null);
+  const [searchFilters, setSearchFilters] = useState({
+    class: '',
+    section: '',
+    rollNo: ''
+  });
   const [filters, setFilters] = useState({
     date: '',
     class: '',
     section: ''
+  });
+
+  const filteredStudentsForCollection = students.filter((s: any) => {
+    return (!searchFilters.class || s.class === searchFilters.class) &&
+           (!searchFilters.section || s.section === searchFilters.section) &&
+           (!searchFilters.rollNo || s.rollNo?.includes(searchFilters.rollNo) || s.studentId?.includes(searchFilters.rollNo));
   });
 
   const handleCollectFee = () => {
@@ -2342,11 +2355,52 @@ const FeeManagement = ({
             <Card>
               <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-primary">
                 <UserPlus size={20} />
-                Select Student & Fee
+                Search & Select Student
               </h3>
+              
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-text-sub uppercase ml-1">Class</label>
+                  <select 
+                    className="input-field py-2"
+                    value={searchFilters.class}
+                    onChange={(e) => setSearchFilters({...searchFilters, class: e.target.value})}
+                  >
+                    <option value="">All Classes</option>
+                    {masterData.classes.map((c: string) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-text-sub uppercase ml-1">Section</label>
+                  <select 
+                    className="input-field py-2"
+                    value={searchFilters.section}
+                    onChange={(e) => setSearchFilters({...searchFilters, section: e.target.value})}
+                  >
+                    <option value="">All Sections</option>
+                    {masterData.sections.map((s: string) => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-text-sub uppercase ml-1">Roll / ID</label>
+                  <input 
+                    type="text"
+                    placeholder="Search..."
+                    className="input-field py-2"
+                    value={searchFilters.rollNo}
+                    onChange={(e) => setSearchFilters({...searchFilters, rollNo: e.target.value})}
+                  />
+                </div>
+                <div className="flex items-end">
+                  <button className="w-full bg-primary text-white py-2 rounded-xl font-bold text-xs shadow-lg shadow-primary/20 flex items-center justify-center gap-2 hover:scale-105 transition-all">
+                    <Search size={14} /> Search
+                  </button>
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <label className="label-text">Search Student</label>
+                  <label className="label-text">Select Student</label>
                   <select 
                     className="input-field"
                     value={selectedStudent?.studentId || ''}
@@ -2357,12 +2411,13 @@ const FeeManagement = ({
                     }}
                   >
                     <option value="">Select Student</option>
-                    {students.map((s: any) => (
+                    {filteredStudentsForCollection.map((s: any) => (
                       <option key={s.studentId} value={s.studentId}>
                         {s.name} {s.surname} ({s.class}-{s.section}) - {s.studentId}
                       </option>
                     ))}
                   </select>
+                  <p className="text-[10px] text-text-sub italic ml-1">{filteredStudentsForCollection.length} students found matching filters.</p>
                 </div>
                 <div className="space-y-2">
                   <label className="label-text">Fee Type</label>
@@ -6759,6 +6814,46 @@ export default function App() {
   const [loginError, setLoginError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isQRLogin, setIsQRLogin] = useState(false);
+  const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
+  const sidebarNavRef = React.useRef<HTMLDivElement>(null);
+
+  const scrollSidebar = (direction: 'up' | 'down') => {
+    if (sidebarNavRef.current) {
+      const scrollAmount = 200;
+      sidebarNavRef.current.scrollBy({
+        top: direction === 'up' ? -scrollAmount : scrollAmount,
+        behavior: 'smooth'
+      });
+    }
+  };
+
+  useEffect(() => {
+    let html5QrCode: Html5Qrcode | null = null;
+    if (isQRLogin && view === 'login') {
+      const startScanner = async () => {
+        try {
+          html5QrCode = new Html5Qrcode("login-qr-reader");
+          await html5QrCode.start(
+            { facingMode },
+            { fps: 10, qrbox: 250 },
+            (decodedText) => {
+              handleLogin(undefined, decodedText);
+              html5QrCode?.stop().catch(err => console.error("QR Scanner Stop Error:", err));
+            },
+            () => {}
+          );
+        } catch (err) {
+          console.error("QR Scanner Start Error:", err);
+        }
+      };
+      startScanner();
+    }
+    return () => {
+      if (html5QrCode) {
+        html5QrCode.stop().catch(err => console.error("QR Scanner Stop Error:", err));
+      }
+    };
+  }, [isQRLogin, view, facingMode]);
 
   const handleLogin = (e?: React.FormEvent, scannedId?: string) => {
     if (e) e.preventDefault();
@@ -6969,24 +7064,17 @@ export default function App() {
                       <div className="w-48 h-48 border-2 border-primary/50 rounded-2xl border-dashed animate-pulse"></div>
                       <p className="mt-4 text-xs font-bold text-slate-500 uppercase tracking-widest">Scan your ID Card QR</p>
                     </div>
+                    <button 
+                      onClick={() => setFacingMode(prev => prev === 'user' ? 'environment' : 'user')}
+                      className="absolute top-4 right-4 p-3 bg-white/90 backdrop-blur-sm rounded-xl shadow-lg text-primary hover:scale-110 transition-all pointer-events-auto"
+                      title="Swap Camera"
+                    >
+                      <Camera size={20} />
+                    </button>
                   </div>
-                  <button 
-                    onClick={() => {
-                      const scanner = new Html5Qrcode("login-qr-reader");
-                      scanner.start(
-                        { facingMode: "user" },
-                        { fps: 10, qrbox: 250 },
-                        (decodedText) => {
-                          handleLogin(undefined, decodedText);
-                          scanner.stop();
-                        },
-                        () => {}
-                      );
-                    }}
-                    className="w-full bg-secondary text-white py-4 rounded-xl font-black text-lg shadow-xl shadow-secondary/30 hover:scale-[1.02] active:scale-[0.98] transition-all uppercase tracking-wider flex items-center justify-center gap-2"
-                  >
-                    <QrCode size={24} /> Start QR Scanner
-                  </button>
+                  <div className="p-4 bg-primary/5 rounded-xl border border-primary/10 text-center">
+                    <p className="text-xs font-bold text-primary uppercase tracking-widest">Camera active: {facingMode === 'user' ? 'Front' : 'Back'}</p>
+                  </div>
                 </div>
               )}
             </div>
@@ -7037,7 +7125,7 @@ export default function App() {
           )}
         </div>
 
-        <nav className="flex-1 px-4 space-y-2 overflow-y-auto custom-scrollbar scrollbar-left pb-10">
+        <nav ref={sidebarNavRef} className="flex-1 px-4 space-y-2 overflow-y-auto custom-scrollbar scrollbar-left pb-10 relative">
           <SidebarItem 
             icon={LayoutDashboard} 
             label={isSidebarOpen ? "Dashboard" : ""} 
@@ -7217,6 +7305,25 @@ export default function App() {
             active={view === 'settings'} 
             onClick={() => setView('settings')} 
           />
+          
+          {/* Desktop Scroll Buttons */}
+          <div className="hidden lg:flex flex-col gap-2 absolute right-2 top-1/2 -translate-y-1/2 z-50 pointer-events-none">
+            <button 
+              onClick={(e) => { e.stopPropagation(); scrollSidebar('up'); }} 
+              className="p-2 bg-pink-500 text-white rounded-full hover:bg-pink-600 transition-all shadow-lg pointer-events-auto"
+              title="Scroll Up"
+            >
+              <ChevronUp size={16} />
+            </button>
+            <button 
+              onClick={(e) => { e.stopPropagation(); scrollSidebar('down'); }} 
+              className="p-2 bg-pink-500 text-white rounded-full hover:bg-pink-600 transition-all shadow-lg pointer-events-auto"
+              title="Scroll Down"
+            >
+              <ChevronDown size={16} />
+            </button>
+          </div>
+
           <div className="mt-auto p-4 text-center border-t border-slate-100">
             <p className="text-[8px] font-black text-slate-400 uppercase tracking-[0.2em]">A Digital Communique Product</p>
           </div>
