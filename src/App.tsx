@@ -14,6 +14,7 @@ import {
   AlertCircle,
   GraduationCap,
   School,
+  Laptop,
   Phone,
   Mail,
   MapPin,
@@ -68,9 +69,11 @@ import {
   UserCheck2,
   Camera,
   Video,
+  User,
   CalendarRange,
   XCircle,
-  PieChart as PieChartIcon
+  PieChart as PieChartIcon,
+  Menu
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import * as XLSX from 'xlsx';
@@ -97,14 +100,15 @@ import {
 
 // --- Types ---
 
-type View = 'login' | 'dashboard' | 'register-student' | 'student-list' | 'settings' | 'fee-management' | 'academics' | 'attendance' | 'examination' | 'id-cards' | 'hostel' | 'live-camera' | 'admin-360' | 'class-360' | 'due-fees' | 'teacher-panel' | 'parent-panel' | 'leave-management' | 'reports' | 'calendar' | 'role-assign' | 'human-resource' | 'communicate' | 'front-office' | 'income-expense';
+type View = 'login' | 'dashboard' | 'register-student' | 'student-list' | 'settings' | 'fee-management' | 'academics' | 'attendance' | 'examination' | 'id-cards' | 'hostel' | 'live-camera' | 'admin-360' | 'class-360' | 'due-fees' | 'teacher-panel' | 'parent-panel' | 'leave-management' | 'reports' | 'calendar' | 'role-assign' | 'human-resource' | 'communicate' | 'front-office' | 'income-expense' | 'profile-settings' | 'user-logs' | 'super-admin-panel';
 
 interface User {
   id: string;
   name: string;
-  role: 'admin' | 'teacher' | 'student' | 'parent' | 'warden';
+  role: 'admin' | 'teacher' | 'student' | 'parent' | 'warden' | 'super-admin';
   permissions: string[];
   studentId?: string;
+  password?: string;
 }
 
 interface CalendarEvent {
@@ -559,7 +563,13 @@ const Attendance = ({ students, attendance, setAttendance, masterData, currentUs
     section: ''
   });
 
+  const [scanFilters, setScanFilters] = useState({
+    class: '',
+    section: ''
+  });
+
   const [scanning, setScanning] = useState(false);
+  const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
 
   useEffect(() => {
     let html5QrCode: Html5Qrcode | null = null;
@@ -567,9 +577,7 @@ const Attendance = ({ students, attendance, setAttendance, masterData, currentUs
     const startScanner = async () => {
       if (scanning && activeTab === 'scan' && (currentUser?.role === 'admin' || currentUser?.role === 'teacher')) {
         try {
-          // Small delay to ensure DOM element is ready
           await new Promise(resolve => setTimeout(resolve, 500));
-          
           const element = document.getElementById("reader");
           if (!element) return;
 
@@ -583,9 +591,7 @@ const Attendance = ({ students, attendance, setAttendance, masterData, currentUs
             (decodedText: string) => {
               onScanSuccess(decodedText);
             },
-            (errorMessage: string) => {
-              // Ignore constant scan errors
-            }
+            (errorMessage: string) => {}
           ).catch((err: any) => {
             console.error("Scanner start error:", err);
           });
@@ -612,8 +618,32 @@ const Attendance = ({ students, attendance, setAttendance, masterData, currentUs
     };
   }, [activeTab, currentUser, scanning]);
 
+  const takePhoto = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      const video = document.createElement('video');
+      video.srcObject = stream;
+      await video.play();
+      
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+      ctx?.drawImage(video, 0, 0);
+      
+      const photo = canvas.toDataURL('image/jpeg');
+      setCapturedPhoto(photo);
+      
+      stream.getTracks().forEach(track => track.stop());
+      return photo;
+    } catch (err) {
+      console.error("Camera error:", err);
+      alert("Could not access camera for photo capture");
+      return null;
+    }
+  };
+
   function onScanSuccess(decodedText: string) {
-    // Assuming QR code contains studentId
     const student = students.find((s: any) => s.studentId === decodedText);
     if (student) {
       markAttendance(student, 'Present');
@@ -692,6 +722,12 @@ const Attendance = ({ students, attendance, setAttendance, masterData, currentUs
     alert(`Attendance marked for ${newEntries.length} students`);
   };
 
+  const scanFilteredStudents = students.filter((s: any) => {
+    const matchesClass = !scanFilters.class || s.class === scanFilters.class;
+    const matchesSection = !scanFilters.section || s.section === scanFilters.section;
+    return matchesClass && matchesSection;
+  });
+
   const manualFilteredStudents = students.filter((s: any) => {
     const matchesClass = !manualForm.class || s.class === manualForm.class;
     const matchesSection = !manualForm.section || s.section === manualForm.section;
@@ -767,78 +803,163 @@ const Attendance = ({ students, attendance, setAttendance, masterData, currentUs
       <AnimatePresence mode="wait">
         {activeTab === 'scan' && (currentUser?.role === 'admin' || currentUser?.role === 'teacher') && (
           <motion.div key="scan" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              <Card>
-                <h3 className="text-lg font-bold mb-6 flex items-center justify-between gap-2 text-primary">
-                  <div className="flex items-center gap-2">
-                    <QrCode size={20} /> QR Scanner
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              <div className="lg:col-span-1 space-y-6">
+                <Card>
+                  <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-primary">
+                    <Filter size={20} /> Scan Filters
+                  </h3>
+                  <div className="space-y-4">
+                    <Select 
+                      label="Class" 
+                      options={masterData.classes} 
+                      value={scanFilters.class} 
+                      onChange={(e: any) => setScanFilters({...scanFilters, class: e.target.value})} 
+                    />
+                    <Select 
+                      label="Section" 
+                      options={masterData.sections} 
+                      value={scanFilters.section} 
+                      onChange={(e: any) => setScanFilters({...scanFilters, section: e.target.value})} 
+                    />
                   </div>
-                  {!scanning && (
-                    <button 
-                      onClick={() => setScanning(true)}
-                      className="px-4 py-2 bg-primary text-white rounded-xl text-xs font-bold shadow-lg shadow-primary/20 hover:scale-105 transition-all"
-                    >
-                      Start Camera
-                    </button>
-                  )}
-                  {scanning && (
-                    <button 
-                      onClick={() => setScanning(false)}
-                      className="px-4 py-2 bg-red-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-red-500/20 hover:scale-105 transition-all"
-                    >
-                      Stop Camera
-                    </button>
-                  )}
-                </h3>
-                <div id="reader" className="w-full overflow-hidden rounded-2xl border-2 border-slate-200 min-h-[300px] bg-slate-50 flex items-center justify-center relative">
-                  {!scanning && (
-                    <div className="text-center p-8">
-                      <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-400">
-                        <Camera size={32} />
+                </Card>
+
+                <Card>
+                  <h3 className="text-lg font-bold mb-6 flex items-center justify-between gap-2 text-primary">
+                    <div className="flex items-center gap-2">
+                      <QrCode size={20} /> QR Scanner
+                    </div>
+                    {!scanning && (
+                      <button 
+                        onClick={() => setScanning(true)}
+                        className="px-4 py-2 bg-primary text-white rounded-xl text-xs font-bold shadow-lg shadow-primary/20 hover:scale-105 transition-all"
+                      >
+                        Start Camera
+                      </button>
+                    )}
+                    {scanning && (
+                      <div className="flex flex-col gap-4">
+                        <div className="flex gap-2">
+                          <button 
+                            onClick={async () => {
+                              const photo = await takePhoto();
+                              if (photo) {
+                                setScanResult("Photo captured for verification");
+                                setTimeout(() => setScanResult(null), 3000);
+                              }
+                            }}
+                            className="flex-1 px-4 py-2 bg-secondary text-white rounded-xl text-xs font-bold shadow-lg shadow-secondary/20 hover:scale-105 transition-all flex items-center justify-center gap-2"
+                          >
+                            <Camera size={14} /> Capture
+                          </button>
+                          <button 
+                            onClick={() => setScanning(false)}
+                            className="px-4 py-2 bg-red-500 text-white rounded-xl text-xs font-bold shadow-lg shadow-red-500/20 hover:scale-105 transition-all"
+                          >
+                            Stop Camera
+                          </button>
+                        </div>
+                        {capturedPhoto && (
+                          <motion.div 
+                            initial={{ opacity: 0, scale: 0.9 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            className="relative rounded-xl overflow-hidden border-2 border-secondary/30"
+                          >
+                            <img src={capturedPhoto} alt="Captured" className="w-full h-auto" />
+                            <div className="absolute top-2 right-2 bg-secondary text-white px-2 py-1 rounded-lg text-[10px] font-bold">
+                              CAPTURED
+                            </div>
+                          </motion.div>
+                        )}
                       </div>
-                      <p className="text-sm text-text-sub font-medium">Camera is currently off.</p>
-                      <p className="text-xs text-text-sub/60 mt-1">Click "Start Camera" to begin scanning student QR codes.</p>
+                    )}
+                  </h3>
+                  <div id="reader" className="w-full overflow-hidden rounded-2xl border-2 border-slate-200 min-h-[250px] bg-slate-50 flex items-center justify-center relative">
+                    {!scanning && (
+                      <div className="text-center p-8">
+                        <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-400">
+                          <Camera size={24} />
+                        </div>
+                        <p className="text-sm text-text-sub font-medium">Camera is off</p>
+                      </div>
+                    )}
+                  </div>
+                  {scanResult && (
+                    <div className={`mt-4 p-4 rounded-xl text-center font-bold ${scanResult.includes('Invalid') ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'}`}>
+                      {scanResult}
                     </div>
                   )}
-                </div>
-                {scanResult && (
-                  <div className={`mt-4 p-4 rounded-xl text-center font-bold ${scanResult.includes('Invalid') ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'}`}>
-                    {scanResult}
-                  </div>
-                )}
-                <div className="mt-6 p-4 bg-blue-50 rounded-xl border border-blue-100 flex gap-3">
-                  <AlertCircle className="text-blue-500 shrink-0" size={20} />
-                  <p className="text-xs text-blue-800">Point the camera at the student's ID card QR code to mark them present automatically.</p>
-                </div>
-              </Card>
+                </Card>
+              </div>
 
-              <Card>
-                <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-primary">
-                  <CheckCircle2 size={20} /> Today's Scanned Attendance
-                </h3>
-                <div className="space-y-3">
-                  {attendance.filter((a: any) => a.date === new Date().toLocaleDateString()).length === 0 ? (
-                    <div className="text-center py-12 text-text-sub italic">No scans today yet.</div>
-                  ) : (
-                    attendance
-                      .filter((a: any) => a.date === new Date().toLocaleDateString())
-                      .slice(-10)
-                      .reverse()
-                      .map((a: any) => (
-                        <div key={a.id} className="p-3 bg-slate-50 rounded-xl border border-slate-100 flex justify-between items-center">
-                          <div>
-                            <p className="text-sm font-bold">{a.studentName}</p>
-                            <p className="text-[10px] text-text-sub uppercase">{a.class} - {a.section} | {a.time} ({a.period || 'Morning'})</p>
-                          </div>
-                          <span className={`text-[10px] font-black px-2 py-1 rounded-full uppercase ${
-                            a.status === 'Present' ? 'bg-green-100 text-green-700' : 
-                            a.status === 'Late' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'
-                          }`}>
-                            {a.status}
-                          </span>
-                        </div>
-                      ))
-                  )}
+              <Card className="lg:col-span-2">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-lg font-bold flex items-center gap-2 text-primary">
+                    <Users size={20} /> Student List ({scanFilteredStudents.length})
+                  </h3>
+                  <div className="text-xs font-bold text-text-sub bg-slate-100 px-3 py-1 rounded-full">
+                    {new Date().toLocaleDateString()}
+                  </div>
+                </div>
+
+                <div className="overflow-hidden rounded-xl border border-slate-100">
+                  <table className="w-full text-left">
+                    <thead className="bg-slate-50">
+                      <tr>
+                        <th className="p-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Student</th>
+                        <th className="p-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Class/Section</th>
+                        <th className="p-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Status</th>
+                        <th className="p-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Time</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {scanFilteredStudents.length === 0 ? (
+                        <tr>
+                          <td colSpan={4} className="py-12 text-center text-text-sub italic">
+                            Select class and section to view students.
+                          </td>
+                        </tr>
+                      ) : (
+                        scanFilteredStudents.map((s: any) => {
+                          const record = attendance.find((a: any) => a.studentId === s.studentId && a.date === new Date().toLocaleDateString());
+                          return (
+                            <tr key={s.studentId} className={`transition-colors ${record ? 'bg-green-50/30' : 'hover:bg-slate-50'}`}>
+                              <td className="p-4">
+                                <div className="flex items-center gap-3">
+                                  <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${record ? 'bg-green-100 text-green-600' : 'bg-slate-100 text-primary'}`}>
+                                    {s.name[0]}{s.surname[0]}
+                                  </div>
+                                  <div>
+                                    <p className="text-sm font-bold text-text-heading">{s.name} {s.surname}</p>
+                                    <p className="text-[10px] text-text-sub uppercase">{s.studentId}</p>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="p-4 text-sm text-text-sub">
+                                {s.class} - {s.section}
+                              </td>
+                              <td className="p-4">
+                                {record ? (
+                                  <span className={`text-[10px] font-black px-2 py-1 rounded-full uppercase ${
+                                    record.status === 'Present' ? 'bg-green-100 text-green-700' : 
+                                    record.status === 'Late' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'
+                                  }`}>
+                                    {record.status}
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] font-bold text-slate-400 uppercase">Pending</span>
+                                )}
+                              </td>
+                              <td className="p-4 text-xs text-text-sub font-medium">
+                                {record?.time || '--:--'}
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
                 </div>
               </Card>
             </div>
@@ -1300,16 +1421,40 @@ const Academics = ({
     alert('Homework submitted successfully!');
   };
 
+  const [promotionFrom, setPromotionFrom] = useState('');
+  const [promotionTo, setPromotionTo] = useState('');
+  const [promotionDecisions, setPromotionDecisions] = useState<Record<string, 'promote' | 'detain'>>({});
+
   const handlePromoteStudents = (fromClass: string, toClass: string) => {
-    if (!fromClass || !toClass) return;
+    if (!fromClass || !toClass) {
+      alert('Please select both current and next class');
+      return;
+    }
+    const studentsInClass = students.filter((s: any) => s.class === fromClass);
+    if (studentsInClass.length === 0) {
+      alert(`No students found in ${fromClass}`);
+      return;
+    }
+
     const updated = students.map((s: any) => {
       if (s.class === fromClass) {
-        return { ...s, class: toClass };
+        const decision = promotionDecisions[s.id] || 'promote';
+        if (decision === 'promote') {
+          return { ...s, class: toClass };
+        }
       }
       return s;
     });
+
     setStudents(updated);
-    alert(`Students promoted from ${fromClass} to ${toClass}!`);
+    const promotedCount = studentsInClass.filter(s => (promotionDecisions[s.id] || 'promote') === 'promote').length;
+    const detainedCount = studentsInClass.length - promotedCount;
+    
+    alert(`Promotion completed! ${promotedCount} students promoted to ${toClass}, ${detainedCount} students detained in ${fromClass}.`);
+    
+    setPromotionFrom('');
+    setPromotionTo('');
+    setPromotionDecisions({});
   };
 
   return (
@@ -1506,36 +1651,142 @@ const Academics = ({
           <motion.div key="promotion" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
             <Card>
               <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-primary">
-                <ArrowUpCircle size={20} /> Promote Students
+                <ArrowUpCircle size={20} /> Promote / Detain Students
               </h3>
-              <p className="text-text-sub mb-8">Select the current class and the class to promote students to. All students in the current class will be updated.</p>
+              <p className="text-text-sub mb-8">Select the current class and the class to promote students to. You can individually decide to promote or detain each student.</p>
               
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-end">
-                <Select id="promote-from" label="Current Class" options={masterData.classes} />
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8 items-end mb-12">
+                <Select 
+                  label="Current Class" 
+                  options={masterData.classes} 
+                  value={promotionFrom}
+                  onChange={(e: any) => {
+                    const from = e.target.value;
+                    setPromotionFrom(from);
+                    // Reset decisions when class changes
+                    setPromotionDecisions({});
+                    // Suggest next class
+                    const nextIdx = masterData.classes.indexOf(from) + 1;
+                    if (nextIdx < masterData.classes.length) {
+                      setPromotionTo(masterData.classes[nextIdx]);
+                    } else {
+                      setPromotionTo('');
+                    }
+                  }}
+                />
                 <div className="flex justify-center pb-4">
                   <ArrowRightLeft className="text-slate-300" size={32} />
                 </div>
-                <Select id="promote-to" label="Next Class" options={masterData.classes} />
-              </div>
-              
-              <div className="mt-12 p-6 bg-amber-50 rounded-2xl border border-amber-100 flex gap-4">
-                <AlertCircle className="text-amber-500 shrink-0" size={24} />
-                <div>
-                  <h4 className="font-bold text-amber-900">Important Note</h4>
-                  <p className="text-sm text-amber-800">Student promotion is a bulk action. Ensure you have finalized all results before proceeding. This action will update the class for all students currently in the selected "Current Class".</p>
-                </div>
+                <Select 
+                  label="Next Class" 
+                  options={masterData.classes} 
+                  value={promotionTo}
+                  onChange={(e: any) => setPromotionTo(e.target.value)}
+                />
               </div>
 
-              <button 
-                onClick={() => {
-                  const from = (document.getElementById('promote-from') as any)?.value;
-                  const to = (document.getElementById('promote-to') as any)?.value;
-                  if (from && to) handlePromoteStudents(from, to);
-                }}
-                className="btn-primary px-12 py-4 mt-8"
-              >
-                Execute Bulk Promotion
-              </button>
+              {promotionFrom && (
+                <div className="space-y-6">
+                  <div className="flex justify-between items-center">
+                    <h4 className="font-bold text-slate-700">Student List - {promotionFrom}</h4>
+                    <div className="flex gap-2">
+                      <button 
+                        onClick={() => {
+                          const decisions: any = {};
+                          students.filter((s: any) => s.class === promotionFrom).forEach((s: any) => {
+                            decisions[s.id] = 'promote';
+                          });
+                          setPromotionDecisions(decisions);
+                        }}
+                        className="text-xs px-3 py-1 bg-blue-50 text-blue-600 rounded-full hover:bg-blue-100"
+                      >
+                        Promote All
+                      </button>
+                      <button 
+                        onClick={() => {
+                          const decisions: any = {};
+                          students.filter((s: any) => s.class === promotionFrom).forEach((s: any) => {
+                            decisions[s.id] = 'detain';
+                          });
+                          setPromotionDecisions(decisions);
+                        }}
+                        className="text-xs px-3 py-1 bg-amber-50 text-amber-600 rounded-full hover:bg-amber-100"
+                      >
+                        Detain All
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="overflow-x-auto border border-slate-100 rounded-2xl">
+                    <table className="w-full text-left">
+                      <thead className="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider">
+                        <tr>
+                          <th className="px-6 py-4 font-semibold">Student</th>
+                          <th className="px-6 py-4 font-semibold">Roll No</th>
+                          <th className="px-6 py-4 font-semibold">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {students.filter((s: any) => s.class === promotionFrom).map((s: any) => (
+                          <tr key={s.id} className="hover:bg-slate-50 transition-colors">
+                            <td className="px-6 py-4">
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 text-xs font-bold">
+                                  {s.name[0]}
+                                </div>
+                                <div>
+                                  <div className="font-bold text-slate-900">{s.name} {s.surname}</div>
+                                  <div className="text-xs text-slate-500">{s.studentId}</div>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 text-sm text-slate-600">{s.rollNo}</td>
+                            <td className="px-6 py-4">
+                              <div className="flex gap-2">
+                                <button 
+                                  onClick={() => setPromotionDecisions(prev => ({ ...prev, [s.id]: 'promote' }))}
+                                  className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
+                                    (promotionDecisions[s.id] || 'promote') === 'promote' 
+                                      ? 'bg-green-100 text-green-700 border border-green-200' 
+                                      : 'bg-slate-100 text-slate-500 border border-transparent hover:bg-slate-200'
+                                  }`}
+                                >
+                                  Promote
+                                </button>
+                                <button 
+                                  onClick={() => setPromotionDecisions(prev => ({ ...prev, [s.id]: 'detain' }))}
+                                  className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
+                                    promotionDecisions[s.id] === 'detain' 
+                                      ? 'bg-amber-100 text-amber-700 border border-amber-200' 
+                                      : 'bg-slate-100 text-slate-500 border border-transparent hover:bg-slate-200'
+                                  }`}
+                                >
+                                  Detain
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div className="mt-8 p-6 bg-amber-50 rounded-2xl border border-amber-100 flex gap-4">
+                    <AlertCircle className="text-amber-500 shrink-0" size={24} />
+                    <div>
+                      <h4 className="font-bold text-amber-900">Important Note</h4>
+                      <p className="text-sm text-amber-800">Student promotion is a bulk action. Ensure you have finalized all results before proceeding. This action will update the class for all students marked as "Promote". Students marked as "Detain" will remain in their current class.</p>
+                    </div>
+                  </div>
+
+                  <button 
+                    onClick={() => handlePromoteStudents(promotionFrom, promotionTo)}
+                    className="btn-primary px-12 py-4 mt-4"
+                  >
+                    Execute Promotion / Detention
+                  </button>
+                </div>
+              )}
             </Card>
           </motion.div>
         )}
@@ -1970,6 +2221,9 @@ const FeeManagement = ({
     setFeeTransactions([newTransaction, ...feeTransactions]);
     setShowReceipt(newTransaction);
     
+    // Alert success
+    alert(`Fee of ₹${totalPaid} collected for ${selectedStudent.name}`);
+    
     // Reset form
     setSelectedStudent(null);
     setSelectedFeeType('');
@@ -2082,9 +2336,11 @@ const FeeManagement = ({
                   <label className="label-text">Search Student</label>
                   <select 
                     className="input-field"
+                    value={selectedStudent?.studentId || ''}
                     onChange={(e) => {
                       const student = students.find((s: any) => s.studentId === e.target.value);
                       setSelectedStudent(student || null);
+                      setSelectedFeeType('');
                     }}
                   >
                     <option value="">Select Student</option>
@@ -2095,11 +2351,27 @@ const FeeManagement = ({
                     ))}
                   </select>
                 </div>
-                <Select 
-                  label="Fee Type" 
-                  options={feeTypes.map(f => f.name)} 
-                  onChange={(e: any) => setSelectedFeeType(e.target.value)}
-                />
+                <div className="space-y-2">
+                  <label className="label-text">Fee Type</label>
+                  <select 
+                    className="input-field"
+                    value={selectedFeeType}
+                    onChange={(e) => setSelectedFeeType(e.target.value)}
+                  >
+                    <option value="">Select Fee Type</option>
+                    {feeMaster
+                      .filter(fm => fm.class === selectedStudent?.class)
+                      .map(fm => (
+                        <option key={fm.id} value={fm.feeType}>
+                          {fm.feeType} (₹{fm.amount})
+                        </option>
+                      ))
+                    }
+                  </select>
+                  {selectedStudent && feeMaster.filter(fm => fm.class === selectedStudent.class).length === 0 && (
+                    <p className="text-[10px] text-red-500 italic">No fees assigned to Class {selectedStudent.class} in Fee Master.</p>
+                  )}
+                </div>
               </div>
             </Card>
 
@@ -5927,23 +6199,159 @@ const IncomeExpenseView = ({ incomes, setIncomes, expenses, setExpenses, incomeH
   );
 };
 
+const SuperAdminPanel = ({ users, setUsers }: any) => {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [editingUserId, setEditingUserId] = useState<string | null>(null);
+  const [newPassword, setNewPassword] = useState('');
+
+  const handleResetPassword = (userId: string) => {
+    if (!newPassword) {
+      alert('Please enter a new password');
+      return;
+    }
+    setUsers(users.map((u: any) => u.id === userId ? { ...u, password: newPassword } : u));
+    setEditingUserId(null);
+    setNewPassword('');
+    alert('Password reset successfully!');
+  };
+
+  const filteredUsers = users.filter((u: any) => 
+    u.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    u.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    u.role.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  return (
+    <div className="space-y-8">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-black text-text-heading tracking-tight uppercase">Super Admin Control 🛡️</h1>
+          <p className="text-text-secondary font-medium">Manage all user credentials and security settings.</p>
+        </div>
+      </div>
+
+      <Card className="p-8">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
+          <h3 className="text-xl font-black text-primary flex items-center gap-3 uppercase tracking-tighter">
+            <ShieldCheck size={24} /> User Credentials Master List
+          </h3>
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+            <input 
+              type="text" 
+              placeholder="Search by ID, Name or Role..." 
+              className="w-full pl-12 pr-4 py-4 rounded-2xl border-2 border-slate-100 focus:border-primary outline-none text-sm font-bold transition-all shadow-sm"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+        </div>
+
+        <div className="overflow-x-auto rounded-[2rem] border-2 border-slate-50 shadow-sm">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-slate-50/50 text-[10px] font-black text-text-secondary uppercase tracking-[0.2em] border-b-2 border-slate-100">
+                <th className="py-6 px-6">User Info</th>
+                <th className="py-6 px-6">Role</th>
+                <th className="py-6 px-6">Current Password</th>
+                <th className="py-6 px-6 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="text-sm">
+              {filteredUsers.map((user: any) => (
+                <tr key={user.id} className="border-b border-slate-50 hover:bg-primary/5 transition-all group">
+                  <td className="py-6 px-6">
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary font-black shadow-inner">
+                        {user.name[0]}
+                      </div>
+                      <div>
+                        <p className="font-black text-text-heading text-base">{user.name}</p>
+                        <p className="text-xs font-bold text-primary uppercase tracking-widest">{user.id}</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="py-6 px-6">
+                    <span className={`text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-wider ${
+                      user.role === 'admin' ? 'bg-red-100 text-red-700' :
+                      user.role === 'teacher' ? 'bg-blue-100 text-blue-700' :
+                      user.role === 'student' ? 'bg-green-100 text-green-700' :
+                      user.role === 'super-admin' ? 'bg-purple-100 text-purple-700' :
+                      'bg-slate-100 text-slate-700'
+                    }`}>
+                      {user.role}
+                    </span>
+                  </td>
+                  <td className="py-6 px-6">
+                    {editingUserId === user.id ? (
+                      <input 
+                        type="text" 
+                        className="input-field py-2 text-xs" 
+                        placeholder="New Password"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        autoFocus
+                      />
+                    ) : (
+                      <div className="flex items-center gap-2 font-mono font-bold text-slate-600 bg-slate-100 px-3 py-1.5 rounded-lg w-fit">
+                        <Lock size={12} className="text-slate-400" />
+                        {user.password || '12345678'}
+                      </div>
+                    )}
+                  </td>
+                  <td className="py-6 px-6 text-right">
+                    {editingUserId === user.id ? (
+                      <div className="flex justify-end gap-2">
+                        <button 
+                          onClick={() => setEditingUserId(null)}
+                          className="p-2 hover:bg-red-50 rounded-xl text-red-500 transition-colors"
+                        >
+                          <XCircle size={20} />
+                        </button>
+                        <button 
+                          onClick={() => handleResetPassword(user.id)}
+                          className="p-2 hover:bg-green-50 rounded-xl text-green-500 transition-colors"
+                        >
+                          <CheckCircle2 size={20} />
+                        </button>
+                      </div>
+                    ) : (
+                      <button 
+                        onClick={() => setEditingUserId(user.id)}
+                        className="px-4 py-2 bg-white border-2 border-slate-100 rounded-xl text-xs font-black text-primary hover:bg-primary hover:text-white hover:border-primary transition-all shadow-sm flex items-center gap-2 ml-auto"
+                      >
+                        <Edit2 size={14} /> Reset Password
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+    </div>
+  );
+};
+
 export default function App() {
   const [view, setView] = useState<View>('login');
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [users, setUsers] = useState<any[]>([
-    { id: 'admin', name: 'Administrator', role: 'admin', permissions: ['all'] },
-    { id: 'teacher', name: 'Teacher', role: 'teacher', permissions: ['all'] },
-    { id: 'stu', name: 'Student', role: 'student', permissions: ['all'] },
-    { id: 'warden', name: 'Hostel Warden', role: 'warden', permissions: ['all'] },
-    { id: 'TCH-12345', name: 'Rajesh Kumar', role: 'teacher', permissions: ['QR Attendance', 'QR Late Attendance', 'QR Leaving During School', 'Leave Application', 'Syllabus', 'Home Work Assign', 'Progress Report'] },
-    { id: 'PAR-12345', name: 'Parent of DS-12345', role: 'parent', studentId: 'DS-12345', permissions: ['QR Attendance', 'Leave Application', 'Fee Structure', 'Syllabus', 'Progress Report', 'Home Work Assign'] }
+    { id: 'admin', name: 'Administrator', role: 'admin', permissions: ['all'], password: '123' },
+    { id: 'teacher', name: 'Teacher', role: 'teacher', permissions: ['all'], password: '123' },
+    { id: 'stu', name: 'Student', role: 'student', permissions: ['all'], password: '123' },
+    { id: 'warden', name: 'Hostel Warden', role: 'warden', permissions: ['all'], password: '123' },
+    { id: 'DC0018', name: 'Super Admin', role: 'super-admin', permissions: ['all'], password: 'Durgamaa@18' },
+    { id: 'TCH-12345', name: 'Rajesh Kumar', role: 'teacher', permissions: ['QR Attendance', 'QR Late Attendance', 'QR Leaving During School', 'Leave Application', 'Syllabus', 'Home Work Assign', 'Progress Report'], password: '123' },
+    { id: 'PAR-12345', name: 'Parent of DS-12345', role: 'parent', studentId: 'DS-12345', permissions: ['QR Attendance', 'Leave Application', 'Fee Structure', 'Syllabus', 'Progress Report', 'Home Work Assign'], password: '123' }
   ]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [students, setStudents] = useState<Student[]>([]);
   const [editingStudentId, setEditingStudentId] = useState<string | null>(null);
   const [schoolProfile, setSchoolProfile] = useState({
-    name: 'Digital School System',
-    logo: 'https://storage.googleapis.com/cortex-dev-cortex-build-public-assets/ais-dev-qwpf4dfgd7b2nhd2genpku-212916940376/nehatripathifreelance%40gmail.com/1742561480073-image-0.png',
+    name: 'Digital School Systems',
+    logo: 'https://storage.googleapis.com/cortex-dev-cortex-build-public-assets/ais-dev-b3e775v3rvj7egmf2trpz3-352124703760/tiedknot9%40gmail.com/1742831965561-image-0.png',
     signature: null,
     stamp: null,
     contact: '+91 9876543210',
@@ -5960,6 +6368,9 @@ export default function App() {
     ]
   });
   const [formData, setFormData] = useState<any>({});
+  const [selectedPersonForID, setSelectedPersonForID] = useState<any>(null);
+  const [idCardTab, setIdCardTab] = useState('student');
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
   
   // Master Data State
   const [masterData, setMasterData] = useState({
@@ -6200,6 +6611,25 @@ export default function App() {
     setModal({ isOpen: true, title, message, onConfirm });
   };
 
+  const handleProfileUpdate = (updates: any) => {
+    const updatedUser = { ...currentUser, ...updates };
+    setCurrentUser(updatedUser);
+    setUsers(users.map(u => u.id === currentUser.id ? updatedUser : u));
+    
+    if (updates.password) {
+      setUserLogs(prev => [{
+        id: Date.now().toString(),
+        timestamp: new Date().toLocaleString(),
+        user: currentUser.name,
+        action: 'Password Reset',
+        details: `Password changed to: ${updates.password}`,
+        ip: '192.168.1.1'
+      }, ...prev]);
+    }
+    
+    alert('Profile updated successfully!');
+  };
+
   // Master Data Handlers
   const addMasterItem = (key: string, value: string) => {
     if (!value) return;
@@ -6239,37 +6669,51 @@ export default function App() {
   const [loginPassword, setLoginPassword] = useState('');
   const [loginError, setLoginError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [isQRLogin, setIsQRLogin] = useState(false);
 
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    const user = users.find(u => u.id === loginId);
-    if (user && (loginPassword === '12345678' || loginPassword === '12345')) {
+  const handleLogin = (e?: React.FormEvent, scannedId?: string) => {
+    if (e) e.preventDefault();
+    const id = scannedId || loginId;
+
+    // Super Admin Check
+    if (id === 'DC0018' && loginPassword === 'Durgamaa@18') {
+      setLoginError('');
+      const superAdmin = users.find(u => u.id === 'DC0018');
+      setCurrentUser(superAdmin);
+      setView('dashboard');
+      return;
+    }
+
+    const user = users.find(u => u.id === id);
+    const isValidPassword = user && (scannedId || loginPassword === (user.password || '12345678') || loginPassword === '12345');
+
+    if (user && isValidPassword) {
       setLoginError('');
       setCurrentUser(user);
-      if (user.role === 'admin') setView('dashboard');
+      if (user.role === 'admin' || user.role === 'super-admin') setView('dashboard');
       else if (user.role === 'teacher') setView('teacher-panel');
       else if (user.role === 'parent') setView('parent-panel');
       else if (user.role === 'warden') setView('hostel');
       else setView('dashboard');
-    } else if (loginId === schoolProfile.wardenPanelId && loginPassword === schoolProfile.wardenPanelPassword) {
+    } else if (id === schoolProfile.wardenPanelId && (scannedId || loginPassword === schoolProfile.wardenPanelPassword)) {
       setLoginError('');
       setCurrentUser({ role: 'warden', name: 'Hostel Warden' });
       setView('hostel');
-    } else if (loginId.startsWith('TCH-')) {
+    } else if (id.startsWith('TCH-')) {
       // Mock teacher login for new IDs
       setLoginError('');
-      const teacherName = 'Teacher ' + loginId.split('-')[1];
-      const newUser = { id: loginId, name: teacherName, role: 'teacher', permissions: ['attendance', 'homework', 'syllabus', 'leaves'] };
+      const teacherName = 'Teacher ' + id.split('-')[1];
+      const newUser = { id: id, name: teacherName, role: 'teacher', permissions: ['attendance', 'homework', 'syllabus', 'leaves'] };
       setUsers([...users, newUser]);
       setCurrentUser(newUser);
       setView('teacher-panel');
-    } else if (loginId.startsWith('PAR-')) {
+    } else if (id.startsWith('PAR-')) {
       // Mock parent login - linked to a student
-      const studentId = loginId.replace('PAR-', 'DS-');
+      const studentId = id.replace('PAR-', 'DS-');
       const student = students.find(s => s.studentId === studentId);
       if (student) {
         setLoginError('');
-        const newUser = { id: loginId, name: `Parent of ${student.name}`, role: 'parent', studentId: student.studentId, permissions: ['attendance', 'homework', 'syllabus', 'leaves', 'fees'] };
+        const newUser = { id: id, name: `Parent of ${student.name}`, role: 'parent', studentId: student.studentId, permissions: ['attendance', 'homework', 'syllabus', 'leaves', 'fees'] };
         setUsers([...users, newUser]);
         setCurrentUser(newUser);
         setView('parent-panel');
@@ -6278,7 +6722,7 @@ export default function App() {
       }
     } else {
       // Check if it's a student ID
-      const student = students.find(s => s.studentId === loginId);
+      const student = students.find(s => s.studentId === id);
       if (student) {
         setLoginError('');
         setCurrentUser({ role: 'student', ...student });
@@ -6318,7 +6762,7 @@ export default function App() {
   if (view === 'login') {
     return (
       <div 
-        className="min-h-screen flex flex-col items-center justify-center p-6 bg-cover bg-center relative"
+        className="min-h-screen flex flex-col items-center justify-center p-4 md:p-6 bg-cover bg-center relative"
         style={{ backgroundImage: 'url("https://images.unsplash.com/photo-1541339907198-e08756ebafe3?q=80&w=2070&auto=format&fit=crop")' }}
       >
         {/* Overlay for better readability */}
@@ -6329,110 +6773,140 @@ export default function App() {
           animate={{ opacity: 1, y: 0 }}
           className="w-full max-w-md relative z-10"
         >
-          {/* Central Illustration Area */}
-          <div className="text-center mb-6 relative">
+          {/* Central Logo Area */}
+          <div className="text-center mb-10 relative">
             <div className="relative inline-block">
-              {/* Mocking the illustration with icons and shapes */}
-              <div className="relative z-20 flex flex-col items-center">
-                <div className="bg-white p-4 rounded-2xl shadow-2xl mb-[-20px] relative z-30 border border-slate-100">
-                  <div className="flex items-center justify-center gap-2 mb-2">
-                    <Building2 className="text-primary" size={32} />
-                    <div className="h-8 w-[1px] bg-slate-200"></div>
-                    <GraduationCap className="text-primary" size={32} />
-                  </div>
-                  <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                    <BookOpen className="text-primary" size={40} />
-                  </div>
-                </div>
-                <div className="bg-slate-800 w-48 h-32 rounded-t-xl shadow-2xl flex items-center justify-center border-x-4 border-t-4 border-slate-700">
-                  <div className="w-40 h-24 bg-blue-500/20 rounded-lg border border-blue-400/30 flex items-center justify-center overflow-hidden">
-                     <div className="grid grid-cols-3 gap-1 opacity-30">
-                        {[...Array(9)].map((_, i) => <div key={i} className="w-4 h-4 bg-white rounded-sm"></div>)}
-                     </div>
-                  </div>
-                </div>
-                <div className="bg-slate-700 w-56 h-3 rounded-b-xl shadow-lg"></div>
-              </div>
-              
-              {/* Decorative elements */}
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-primary/20 rounded-full blur-3xl -z-10"></div>
+              <img 
+                src={schoolProfile.logo} 
+                alt="Digital School Systems Logo" 
+                className="w-64 md:w-80 h-auto drop-shadow-2xl mx-auto"
+                referrerPolicy="no-referrer"
+              />
             </div>
           </div>
 
-          <div className="login-glass rounded-[24px] overflow-hidden shadow-2xl border-white/40">
-            <div className="bg-primary/10 py-6 text-center border-b border-white/20">
-              <h1 className="text-4xl font-black text-primary tracking-tight">School Login</h1>
-              <p className="text-slate-600 font-medium text-sm mt-1">Digital System powered by <span className="font-bold text-primary">JOSHODA.</span></p>
+          <div className="login-glass rounded-[32px] overflow-hidden shadow-2xl border-white/40">
+            <div className="bg-linear-to-b from-primary/10 to-transparent py-8 text-center border-b border-white/20">
+              <h2 className="text-xl font-bold text-text-heading tracking-tight">Portal Access</h2>
+              <p className="text-slate-500 font-medium text-xs mt-1 uppercase tracking-widest">Secure Login for Students & Staff</p>
             </div>
 
-            <form onSubmit={handleLogin} className="p-8 space-y-5">
-              <div className="space-y-1">
-                <div className="relative">
-                  <UserCircle className="absolute left-4 top-1/2 -translate-y-1/2 text-primary" size={20} />
-                  <input 
-                    type="text" 
-                    className="w-full pl-12 pr-4 py-4 rounded-xl border border-slate-200 focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none transition-all bg-white/90 placeholder:text-slate-400 text-base font-medium" 
-                    placeholder="Username"
-                    value={loginId}
-                    onChange={(e) => setLoginId(e.target.value)}
-                  />
-                </div>
+            <div className="p-8 space-y-5">
+              <div className="flex gap-4 p-1 bg-slate-100 rounded-xl mb-4">
+                <button 
+                  onClick={() => setIsQRLogin(false)}
+                  className={`flex-1 py-2 rounded-lg font-bold text-sm transition-all ${!isQRLogin ? 'bg-white text-primary shadow-sm' : 'text-slate-500'}`}
+                >
+                  ID/Password
+                </button>
+                <button 
+                  onClick={() => setIsQRLogin(true)}
+                  className={`flex-1 py-2 rounded-lg font-bold text-sm transition-all ${isQRLogin ? 'bg-white text-primary shadow-sm' : 'text-slate-500'}`}
+                >
+                  QR Login
+                </button>
               </div>
 
-              <div className="space-y-1">
-                <div className="relative">
-                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-primary" size={20} />
-                  <input 
-                    type={showPassword ? "text" : "password"} 
-                    className="w-full pl-12 pr-12 py-4 rounded-xl border border-slate-200 focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none transition-all bg-white/90 placeholder:text-slate-400 text-base font-medium" 
-                    placeholder="Password"
-                    value={loginPassword}
-                    onChange={(e) => setLoginPassword(e.target.value)}
-                  />
+              {!isQRLogin ? (
+                <form onSubmit={(e) => handleLogin(e)} className="space-y-5">
+                  <div className="space-y-1">
+                    <div className="relative">
+                      <UserCircle className="absolute left-4 top-1/2 -translate-y-1/2 text-primary" size={20} />
+                      <input 
+                        type="text" 
+                        className="w-full pl-12 pr-4 py-4 rounded-xl border border-slate-200 focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none transition-all bg-white/90 placeholder:text-slate-400 text-base font-medium" 
+                        placeholder="Username"
+                        value={loginId}
+                        onChange={(e) => setLoginId(e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <div className="relative">
+                      <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-primary" size={20} />
+                      <input 
+                        type={showPassword ? "text" : "password"} 
+                        className="w-full pl-12 pr-12 py-4 rounded-xl border border-slate-200 focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none transition-all bg-white/90 placeholder:text-slate-400 text-base font-medium" 
+                        placeholder="Password"
+                        value={loginPassword}
+                        onChange={(e) => setLoginPassword(e.target.value)}
+                      />
+                      <button 
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-primary transition-colors"
+                      >
+                        {showPassword ? <Eye size={20} /> : <ScanLine size={20} />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {loginError && (
+                    <motion.div 
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      className="p-4 bg-red-50 text-red-600 text-sm font-bold rounded-xl border border-red-100 flex items-center gap-2"
+                    >
+                      <AlertCircle size={18} />
+                      {loginError}
+                    </motion.div>
+                  )}
+
                   <button 
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-primary transition-colors"
+                    type="submit"
+                    className="w-full bg-primary text-white py-4 rounded-xl font-black text-lg shadow-xl shadow-primary/30 hover:scale-[1.02] active:scale-[0.98] transition-all uppercase tracking-wider"
                   >
-                    {showPassword ? <Eye size={20} /> : <ScanLine size={20} />}
+                    Enter Dashboard
+                  </button>
+
+                  <div className="flex items-center justify-between pt-2">
+                    <label className="flex items-center gap-2 cursor-pointer group">
+                      <div className="relative flex items-center justify-center">
+                        <input type="checkbox" className="peer sr-only" />
+                        <div className="w-5 h-5 border-2 border-slate-300 rounded peer-checked:bg-primary peer-checked:border-primary transition-all"></div>
+                        <CheckCircle2 className="absolute text-white opacity-0 peer-checked:opacity-100 transition-opacity" size={14} />
+                      </div>
+                      <span className="text-sm font-semibold text-slate-600 group-hover:text-primary transition-colors">Remember Me</span>
+                    </label>
+                    <button type="button" className="text-sm font-bold text-primary hover:underline">Forgot Password?</button>
+                  </div>
+                </form>
+              ) : (
+                <div className="space-y-5">
+                  <div className="relative aspect-square bg-slate-100 rounded-2xl overflow-hidden border-2 border-slate-200">
+                    <div id="login-qr-reader" className="w-full h-full"></div>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                      <div className="w-48 h-48 border-2 border-primary/50 rounded-2xl border-dashed animate-pulse"></div>
+                      <p className="mt-4 text-xs font-bold text-slate-500 uppercase tracking-widest">Scan your ID Card QR</p>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => {
+                      const scanner = new Html5Qrcode("login-qr-reader");
+                      scanner.start(
+                        { facingMode: "user" },
+                        { fps: 10, qrbox: 250 },
+                        (decodedText) => {
+                          handleLogin(undefined, decodedText);
+                          scanner.stop();
+                        },
+                        () => {}
+                      );
+                    }}
+                    className="w-full bg-secondary text-white py-4 rounded-xl font-black text-lg shadow-xl shadow-secondary/30 hover:scale-[1.02] active:scale-[0.98] transition-all uppercase tracking-wider flex items-center justify-center gap-2"
+                  >
+                    <QrCode size={24} /> Start QR Scanner
                   </button>
                 </div>
-              </div>
-
-              {loginError && (
-                <motion.div 
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  className="p-4 bg-red-50 text-red-600 text-sm font-bold rounded-xl border border-red-100 flex items-center gap-2"
-                >
-                  <AlertCircle size={18} />
-                  {loginError}
-                </motion.div>
               )}
+            </div>
 
-              <button 
-                type="submit" 
-                className="w-full py-4 rounded-xl bg-primary text-white font-bold text-lg shadow-lg shadow-primary/30 hover:bg-primary-hover hover:shadow-xl hover:-translate-y-0.5 transition-all active:scale-[0.98]"
-              >
-                Login
-              </button>
-
-              <div className="flex items-center justify-between pt-2">
-                <label className="flex items-center gap-2 cursor-pointer group">
-                  <div className="relative flex items-center justify-center">
-                    <input type="checkbox" className="peer sr-only" />
-                    <div className="w-5 h-5 border-2 border-slate-300 rounded peer-checked:bg-primary peer-checked:border-primary transition-all"></div>
-                    <CheckCircle2 className="absolute text-white opacity-0 peer-checked:opacity-100 transition-opacity" size={14} />
-                  </div>
-                  <span className="text-sm font-semibold text-slate-600 group-hover:text-primary transition-colors">Remember Me</span>
-                </label>
-                <button type="button" className="text-sm font-bold text-primary hover:underline">Forgot Password?</button>
-              </div>
-            </form>
-
-            <div className="bg-primary py-3 text-center">
-              <p className="text-[10px] text-white/80 font-bold uppercase tracking-[0.2em]">
-                — A Digital Communique Product —
+            <div className="bg-primary/5 py-4 text-center border-t border-white/20">
+              <p className="text-[10px] text-text-heading/60 font-black uppercase tracking-[0.3em] flex items-center justify-center gap-2">
+                <span className="w-8 h-[1px] bg-primary/20"></span>
+                Powered by <span className="text-primary">JOSHODA</span>
+                <span className="w-8 h-[1px] bg-primary/20"></span>
               </p>
             </div>
           </div>
@@ -6442,17 +6916,34 @@ export default function App() {
   }
 
   return (
-    <div className="h-screen flex bg-slate-50 overflow-hidden">
+    <div className="min-h-screen bg-slate-50 flex overflow-hidden">
+      {/* Sidebar Overlay for Mobile */}
+      {isSidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[90] lg:hidden"
+          onClick={() => setIsSidebarOpen(false)}
+        ></div>
+      )}
+
       {/* Sidebar */}
-      <aside className={`bg-white border-r border-slate-200 transition-all duration-300 ${isSidebarOpen ? 'w-64' : 'w-20'} flex flex-col h-full shrink-0`}>
-        <div className="p-6 flex items-center gap-3">
-          <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center text-white shrink-0">
-            <School size={24} />
+      <aside className={`
+        fixed inset-y-0 left-0 z-[100] lg:relative lg:z-0
+        ${isSidebarOpen ? 'w-72 translate-x-0' : 'w-0 -translate-x-full lg:w-24 lg:translate-x-0'} 
+        bg-white border-r border-slate-200 flex flex-col transition-all duration-300 ease-in-out overflow-hidden
+      `}>
+        <div className="p-6 flex items-center gap-3 border-b border-slate-50">
+          <div className="shrink-0">
+            <img 
+              src={schoolProfile.logo} 
+              alt="Logo" 
+              className={`${isSidebarOpen ? 'w-12' : 'w-10'} h-auto transition-all`}
+              referrerPolicy="no-referrer"
+            />
           </div>
           {isSidebarOpen && (
             <div className="overflow-hidden whitespace-nowrap">
-              <h2 className="font-bold text-sm leading-tight">Digital School</h2>
-              <p className="text-[10px] text-text-secondary uppercase tracking-wider">JOSHODA</p>
+              <h2 className="font-black text-sm leading-tight text-primary tracking-tighter">DIGITAL SCHOOL</h2>
+              <p className="text-[9px] text-secondary font-bold uppercase tracking-widest">SYSTEMS</p>
             </div>
           )}
         </div>
@@ -6554,6 +7045,12 @@ export default function App() {
                 active={view === 'income-expense'} 
                 onClick={() => setView('income-expense')} 
               />
+              <SidebarItem 
+                icon={ShieldCheck} 
+                label={isSidebarOpen ? "User Logs" : ""} 
+                active={view === 'user-logs'} 
+                onClick={() => setView('user-logs')} 
+              />
             </>
           )}
           {currentUser?.role === 'student' && (
@@ -6562,6 +7059,14 @@ export default function App() {
               label={isSidebarOpen ? "My Due Fees" : ""} 
               active={view === 'due-fees'} 
               onClick={() => setView('due-fees')} 
+            />
+          )}
+          {currentUser?.role === 'super-admin' && (
+            <SidebarItem 
+              icon={ShieldCheck} 
+              label={isSidebarOpen ? "Super Admin Panel" : ""} 
+              active={view === 'super-admin-panel'} 
+              onClick={() => setView('super-admin-panel')} 
             />
           )}
           <SidebarItem 
@@ -6638,17 +7143,25 @@ export default function App() {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col overflow-hidden">
+      <main className="flex-1 flex flex-col overflow-hidden w-full pb-20 lg:pb-0">
         {/* Header */}
-        <header className="h-16 bg-white border-bottom border-slate-200 flex items-center justify-between px-8 shrink-0">
-          <div className="flex items-center gap-4">
+        <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 md:px-8 shrink-0">
+          <div className="flex items-center gap-2 md:gap-4">
             <button 
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="p-2 hover:bg-slate-100 rounded-lg text-text-secondary"
+              className="p-2 hover:bg-slate-100 rounded-lg text-text-secondary lg:hidden"
             >
-              <Users size={20} />
+              <Menu size={20} />
             </button>
-            <div className="relative hidden md:block">
+            <div className="flex items-center gap-2 lg:hidden">
+              <img 
+                src={schoolProfile.logo} 
+                alt="Logo" 
+                className="w-8 h-8 object-contain"
+                referrerPolicy="no-referrer"
+              />
+            </div>
+            <div className="relative hidden lg:block">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
               <input 
                 type="text" 
@@ -6658,28 +7171,199 @@ export default function App() {
             </div>
           </div>
 
-          <div className="flex items-center gap-4">
-            <button className="p-2 hover:bg-slate-100 rounded-full text-text-secondary relative">
+          <div className="flex items-center gap-2 md:gap-4 relative">
+            <button className="p-2 hover:bg-slate-100 rounded-full text-text-secondary relative hidden sm:block">
               <Bell size={20} />
               <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-accent-warning rounded-full border-2 border-white"></span>
             </button>
-            <div className="flex items-center gap-3 pl-4 border-l border-slate-200">
-              <div className="text-right hidden sm:block">
-                <p className="text-sm font-semibold">Admin User</p>
-                <p className="text-[10px] text-text-secondary uppercase">Super Admin</p>
+            <div 
+              className="flex items-center gap-2 md:gap-3 pl-2 md:pl-4 border-l border-slate-200 cursor-pointer hover:bg-slate-50 p-1 rounded-xl transition-all"
+              onClick={() => setShowProfileMenu(!showProfileMenu)}
+            >
+              <div className="text-right hidden md:block">
+                <p className="text-sm font-semibold">{currentUser?.name || 'Admin User'}</p>
+                <p className="text-[10px] text-text-secondary uppercase">{currentUser?.role === 'admin' ? 'Super Admin' : currentUser?.role}</p>
               </div>
               <img 
-                src="https://api.dicebear.com/7.x/avataaars/svg?seed=admin" 
+                src={currentUser?.photo || `https://api.dicebear.com/7.x/avataaars/svg?seed=${currentUser?.id || 'admin'}`} 
                 alt="Avatar" 
-                className="w-10 h-10 rounded-xl bg-slate-100"
+                className="w-8 h-8 md:w-10 md:h-10 rounded-xl bg-slate-100 object-cover"
               />
             </div>
+
+            {showProfileMenu && (
+              <div className="absolute top-full right-0 mt-2 w-56 bg-white rounded-2xl shadow-2xl border border-slate-100 py-2 z-[110] overflow-hidden">
+                <div className="px-4 py-3 border-b border-slate-50">
+                  <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Account</p>
+                </div>
+                <button 
+                  onClick={() => {
+                    setView('profile-settings');
+                    setShowProfileMenu(false);
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-sm text-slate-700 hover:bg-slate-50 transition-all"
+                >
+                  <User size={18} className="text-primary" />
+                  <span>Profile Settings</span>
+                </button>
+                <button 
+                  onClick={() => {
+                    setCurrentUser(null);
+                    setView('login');
+                    setShowProfileMenu(false);
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-sm text-red-600 hover:bg-red-50 transition-all"
+                >
+                  <LogOut size={18} />
+                  <span>Logout</span>
+                </button>
+              </div>
+            )}
           </div>
         </header>
 
         {/* Content Area */}
-        <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
+        <div className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar">
           <AnimatePresence mode="wait">
+            {view === 'profile-settings' && (
+              <motion.div key="profile-settings" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
+                <div className="max-w-2xl mx-auto space-y-8">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h1 className="text-3xl font-black text-text-heading tracking-tight uppercase">Profile Settings</h1>
+                      <p className="text-text-sub font-medium">Update your personal information and security settings.</p>
+                    </div>
+                  </div>
+
+                  <Card className="p-8">
+                    <div className="flex flex-col items-center mb-10">
+                      <div className="relative group">
+                        <img 
+                          src={currentUser?.photo || `https://api.dicebear.com/7.x/avataaars/svg?seed=${currentUser?.id || 'admin'}`} 
+                          alt="Profile" 
+                          className="w-32 h-32 rounded-[2.5rem] bg-slate-100 object-cover border-4 border-white shadow-xl"
+                        />
+                        <label className="absolute bottom-0 right-0 w-10 h-10 bg-primary text-white rounded-xl flex items-center justify-center cursor-pointer shadow-lg hover:scale-110 transition-all">
+                          <Camera size={20} />
+                          <input 
+                            type="file" 
+                            className="hidden" 
+                            accept="image/*"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                const reader = new FileReader();
+                                reader.onloadend = () => {
+                                  handleProfileUpdate({ photo: reader.result });
+                                };
+                                reader.readAsDataURL(file);
+                              }
+                            }}
+                          />
+                        </label>
+                      </div>
+                      <h3 className="mt-4 text-xl font-black text-text-heading uppercase tracking-tight">{currentUser?.name}</h3>
+                      <p className="text-text-sub text-sm font-bold uppercase tracking-widest">{currentUser?.role}</p>
+                    </div>
+
+                    <div className="space-y-6">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <Input 
+                          label="Full Name" 
+                          value={currentUser?.name} 
+                          onChange={(e: any) => handleProfileUpdate({ name: e.target.value })} 
+                        />
+                        <Input 
+                          label="User ID" 
+                          value={currentUser?.id} 
+                          disabled 
+                        />
+                      </div>
+
+                      <div className="pt-6 border-t border-slate-100">
+                        <h4 className="text-sm font-black text-text-heading uppercase tracking-widest mb-4">Security Settings</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-end">
+                          <Input 
+                            label="New Password" 
+                            type="password" 
+                            placeholder="Enter new password"
+                            id="new-password-input"
+                          />
+                          <button 
+                            onClick={() => {
+                              const pass = (document.getElementById('new-password-input') as HTMLInputElement).value;
+                              if (pass.length < 5) {
+                                alert('Password must be at least 5 characters long');
+                                return;
+                              }
+                              handleProfileUpdate({ password: pass });
+                              (document.getElementById('new-password-input') as HTMLInputElement).value = '';
+                            }}
+                            className="btn-primary py-4"
+                          >
+                            Update Password
+                          </button>
+                        </div>
+                        <p className="mt-2 text-[10px] text-text-sub italic">Note: Password changes are logged for security auditing by super admins.</p>
+                      </div>
+                    </div>
+                  </Card>
+                </div>
+              </motion.div>
+            )}
+
+            {view === 'user-logs' && (
+              <motion.div key="user-logs" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
+                <div className="space-y-8">
+                  <div>
+                    <h1 className="text-3xl font-black text-text-heading tracking-tight uppercase">User Activity Logs</h1>
+                    <p className="text-text-sub font-medium">Monitor sensitive actions and security events across the system.</p>
+                  </div>
+
+                  <Card className="p-6">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="text-[10px] font-bold text-text-secondary uppercase tracking-wider border-b border-slate-200">
+                            <th className="pb-4 px-4">Timestamp</th>
+                            <th className="pb-4 px-4">User</th>
+                            <th className="pb-4 px-4">Action</th>
+                            <th className="pb-4 px-4">Details</th>
+                          </tr>
+                        </thead>
+                        <tbody className="text-sm">
+                          {userLogs.map((log: any) => (
+                            <tr key={log.id} className="border-b border-slate-100 hover:bg-slate-50 transition-all">
+                              <td className="py-4 px-4 font-mono text-xs text-text-sub">{log.timestamp}</td>
+                              <td className="py-4 px-4">
+                                <div className="font-bold">{log.user || log.userName}</div>
+                                {log.userId && <div className="text-[10px] text-text-sub uppercase tracking-widest">{log.userId}</div>}
+                              </td>
+                              <td className="py-4 px-4">
+                                <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest ${
+                                  log.action === 'Password Reset' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'
+                                }`}>
+                                  {log.action}
+                                </span>
+                              </td>
+                              <td className="py-4 px-4 text-text-sub">{log.details || log.ip || 'N/A'}</td>
+                            </tr>
+                          ))}
+                          {userLogs.length === 0 && (
+                            <tr>
+                              <td colSpan={4} className="py-12 text-center text-text-sub font-medium italic">No logs recorded yet.</td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </Card>
+                </div>
+              </motion.div>
+            )}
+            {view === 'super-admin-panel' && (
+              <SuperAdminPanel users={users} setUsers={setUsers} />
+            )}
             {view === 'dashboard' && (
               <motion.div
                 key="dashboard"
@@ -7115,6 +7799,7 @@ export default function App() {
                           <th className="pb-4 font-bold">Student ID</th>
                           <th className="pb-4 font-bold">Name</th>
                           <th className="pb-4 font-bold">Class</th>
+                          <th className="pb-4 font-bold">QR Code</th>
                           <th className="pb-4 font-bold">Father's Name</th>
                           <th className="pb-4 font-bold">Contact</th>
                           <th className="pb-4 font-bold">Actions</th>
@@ -7144,6 +7829,16 @@ export default function App() {
                                 </div>
                               </td>
                               <td className="py-4">{s.class} - {s.section}</td>
+                              <td className="py-4">
+                                <div className="w-10 h-10 bg-white border border-slate-200 p-1 rounded-lg">
+                                  <img 
+                                    src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${s.studentId}`} 
+                                    alt="QR" 
+                                    className="w-full h-full object-contain"
+                                    referrerPolicy="no-referrer"
+                                  />
+                                </div>
+                              </td>
                               <td className="py-4">{s.fatherName}</td>
                               <td className="py-4">
                                 <div className="flex items-center gap-1 text-text-secondary">
@@ -7153,7 +7848,15 @@ export default function App() {
                               </td>
                               <td className="py-4">
                                 <div className="flex items-center gap-2">
-                                  <button className="p-2 hover:bg-primary/10 hover:text-primary rounded-lg transition-all" title="View Details">
+                                  <button 
+                                    onClick={() => {
+                                      setSelectedPersonForID(s);
+                                      setIdCardTab('student');
+                                      setView('id-cards');
+                                    }}
+                                    className="p-2 hover:bg-primary/10 hover:text-primary rounded-lg transition-all" 
+                                    title="View Details"
+                                  >
                                     <FileText size={18} />
                                   </button>
                                   <button 
@@ -7166,6 +7869,28 @@ export default function App() {
                                     title="Edit Student"
                                   >
                                     <Edit2 size={18} />
+                                  </button>
+                                  <button 
+                                    onClick={() => {
+                                      const nextClass = masterData.classes[masterData.classes.indexOf(s.class) + 1];
+                                      if (!nextClass) {
+                                        alert('This student is already in the highest class.');
+                                        return;
+                                      }
+                                      showModal(
+                                        'Promote Student',
+                                        `Are you sure you want to promote ${s.name} from ${s.class} to ${nextClass}?`,
+                                        () => {
+                                          const updated = students.map(std => std.id === s.id ? { ...std, class: nextClass } : std);
+                                          setStudents(updated);
+                                          alert(`${s.name} promoted to ${nextClass}!`);
+                                        }
+                                      );
+                                    }}
+                                    className="p-2 hover:bg-amber-50 hover:text-amber-600 rounded-lg transition-all" 
+                                    title="Promote Student"
+                                  >
+                                    <ArrowUpCircle size={18} />
                                   </button>
                                   <button 
                                     onClick={() => {
@@ -7753,6 +8478,10 @@ export default function App() {
                   masterData={masterData}
                   schoolProfile={schoolProfile}
                   examResults={examResults}
+                  selectedPerson={selectedPersonForID}
+                  setSelectedPerson={setSelectedPersonForID}
+                  activeTab={idCardTab}
+                  setActiveTab={setIdCardTab}
                 />
               </motion.div>
             )}
@@ -7837,6 +8566,38 @@ export default function App() {
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">A Digital Communique Product</p>
         </footer>
       </main>
+
+      {/* Mobile Bottom Navigation */}
+      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 flex items-center justify-around p-2 z-[100] lg:hidden">
+        <button 
+          onClick={() => setView('dashboard')}
+          className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${view === 'dashboard' ? 'text-primary' : 'text-slate-400'}`}
+        >
+          <LayoutDashboard size={20} />
+          <span className="text-[10px] font-bold uppercase">Home</span>
+        </button>
+        <button 
+          onClick={() => setView('academics')}
+          className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${view === 'academics' ? 'text-primary' : 'text-slate-400'}`}
+        >
+          <BookOpen size={20} />
+          <span className="text-[10px] font-bold uppercase">Study</span>
+        </button>
+        <button 
+          onClick={() => setView('attendance')}
+          className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${view === 'attendance' ? 'text-primary' : 'text-slate-400'}`}
+        >
+          <UserCheck size={20} />
+          <span className="text-[10px] font-bold uppercase">Attend</span>
+        </button>
+        <button 
+          onClick={() => setIsSidebarOpen(true)}
+          className={`flex flex-col items-center gap-1 p-2 rounded-xl transition-all ${isSidebarOpen ? 'text-primary' : 'text-slate-400'}`}
+        >
+          <Menu size={20} />
+          <span className="text-[10px] font-bold uppercase">Menu</span>
+        </button>
+      </nav>
 
       {/* Custom Modal */}
       <AnimatePresence>
@@ -8715,11 +9476,19 @@ const HostelModule = ({
   );
 };
 
-const IDCardsModule = ({ students, staff, masterData, schoolProfile, examResults }: any) => {
-  const [activeTab, setActiveTab] = useState('student');
+const IDCardsModule = ({ 
+  students, 
+  staff, 
+  masterData, 
+  schoolProfile, 
+  examResults,
+  selectedPerson,
+  setSelectedPerson,
+  activeTab,
+  setActiveTab
+}: any) => {
   const [selectedClass, setSelectedClass] = useState('');
   const [selectedSection, setSelectedSection] = useState('');
-  const [selectedPerson, setSelectedPerson] = useState<any>(null);
   const [orientation, setOrientation] = useState<'portrait' | 'landscape'>('portrait');
 
   const filteredPeople = activeTab === 'teacher' || activeTab === 'experience' 
@@ -8766,18 +9535,29 @@ const IDCardsModule = ({ students, staff, masterData, schoolProfile, examResults
       </div>
 
       {/* Content */}
-      <div className={`flex-1 flex ${orientation === 'portrait' ? 'flex-col' : 'flex-row'} items-center ${orientation === 'portrait' ? 'pt-8 px-6' : 'p-6 gap-6'}`}>
-        <div className={`${orientation === 'portrait' ? 'w-32 h-32' : 'w-24 h-24'} rounded-2xl border-4 border-primary/10 p-1 ${orientation === 'portrait' ? 'mb-6' : ''} shrink-0`}>
+      <div className={`flex-1 flex ${orientation === 'portrait' ? 'flex-col' : 'flex-row'} items-center ${orientation === 'portrait' ? 'pt-6 px-6' : 'p-6 gap-6'}`}>
+        <div className={`${orientation === 'portrait' ? 'w-24 h-24' : 'w-24 h-24'} rounded-2xl border-4 border-primary/10 p-1 ${orientation === 'portrait' ? 'mb-4' : ''} shrink-0`}>
           <div className="w-full h-full rounded-xl bg-slate-100 flex items-center justify-center text-primary font-black text-4xl overflow-hidden">
             {person.photo ? <img src={person.photo} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" /> : person.name[0]}
           </div>
         </div>
 
+        {orientation === 'portrait' && (
+          <div className="w-24 h-24 bg-white rounded-xl p-2 shadow-sm border border-slate-100 mb-4 flex items-center justify-center">
+            <img 
+              src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${person.studentId || person.id || 'TCH-12345'}`} 
+              alt="QR Code" 
+              className="w-full h-full object-contain"
+              referrerPolicy="no-referrer"
+            />
+          </div>
+        )}
+
         <div className="flex-1 w-full">
           <h3 className={`${orientation === 'portrait' ? 'text-xl' : 'text-lg'} font-black text-text-heading ${orientation === 'portrait' ? 'text-center' : ''} uppercase tracking-tight`}>{person.name} {person.surname}</h3>
-          <p className={`text-primary font-bold text-sm ${orientation === 'portrait' ? 'mb-6 text-center' : 'mb-4'} uppercase tracking-widest`}>{type === 'teacher' ? 'Faculty Member' : 'Student'}</p>
+          <p className={`text-primary font-bold text-sm ${orientation === 'portrait' ? 'mb-4 text-center' : 'mb-4'} uppercase tracking-widest`}>{type === 'teacher' ? 'Faculty Member' : 'Student'}</p>
 
-          <div className="w-full space-y-2 bg-slate-50 p-3 rounded-2xl border border-slate-100">
+          <div className="w-full space-y-1.5 bg-slate-50 p-3 rounded-2xl border border-slate-100">
             <div className="flex justify-between items-center">
               <span className="text-[8px] font-bold text-text-secondary uppercase tracking-wider">ID Number</span>
               <span className="text-[10px] font-black text-text-heading font-mono">{person.studentId || person.id || 'TCH-12345'}</span>
@@ -8804,18 +9584,10 @@ const IDCardsModule = ({ students, staff, masterData, schoolProfile, examResults
 
       {/* Footer (Portrait Only) */}
       {orientation === 'portrait' && (
-        <div className="p-6 bg-white border-t border-slate-100 flex items-center justify-between">
-          <div className="flex flex-col gap-1">
-            <div className="w-20 h-8 border-b border-slate-300"></div>
-            <p className="text-[8px] font-bold text-text-secondary uppercase tracking-widest">Principal</p>
-          </div>
-          <div className="w-16 h-16 bg-slate-50 rounded-lg p-2 border border-slate-100 flex items-center justify-center">
-            <img 
-              src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${person.studentId || person.id || 'TCH-12345'}`} 
-              alt="QR Code" 
-              className="w-full h-full object-contain"
-              referrerPolicy="no-referrer"
-            />
+        <div className="p-6 bg-white border-t border-slate-100 flex items-center justify-center">
+          <div className="flex flex-col gap-1 items-center">
+            <div className="w-32 h-8 border-b border-slate-300"></div>
+            <p className="text-[8px] font-bold text-text-secondary uppercase tracking-widest">Authorized Signatory / Principal</p>
           </div>
         </div>
       )}
@@ -9125,6 +9897,40 @@ const IDCardsModule = ({ students, staff, masterData, schoolProfile, examResults
     window.print();
   };
 
+  const handleDownloadPDF = async (person: any) => {
+    const element = document.getElementById(`card-${person.id || person.studentId}`);
+    if (!element) return;
+    
+    try {
+      const canvas = await html2canvas(element, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff'
+      });
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF({
+        orientation: orientation === 'portrait' ? 'portrait' : 'landscape',
+        unit: 'px',
+        format: orientation === 'portrait' ? [canvas.width, canvas.height] : [canvas.width, canvas.height]
+      });
+      pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
+      pdf.save(`${activeTab}-${person.name}-${person.studentId || person.id}.pdf`);
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      alert('Error generating PDF. Please try printing instead.');
+    }
+  };
+
+  const handleBulkDownload = async () => {
+    alert('Bulk download started. This may take a moment...');
+    for (const p of filteredPeople) {
+      await handleDownloadPDF(p);
+      // Small delay to prevent browser from blocking multiple downloads
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+  };
+
   return (
     <div className="space-y-8 max-w-7xl mx-auto pb-20">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
@@ -9267,27 +10073,35 @@ const IDCardsModule = ({ students, staff, masterData, schoolProfile, examResults
                   <h3 className="font-black text-text-heading">Bulk Generation Mode</h3>
                   <p className="text-xs text-text-sub">Generating {filteredPeople.length} {activeTab}s for Class {selectedClass}</p>
                 </div>
-                <button onClick={handlePrint} className="btn-primary flex items-center gap-2">
-                  <Printer size={20} />
-                  Print All
-                </button>
+                <div className="flex items-center gap-2 no-print">
+                  <button onClick={handleBulkDownload} className="btn-secondary flex items-center gap-2">
+                    <Download size={20} />
+                    Download All
+                  </button>
+                  <button onClick={handlePrint} className="btn-primary flex items-center gap-2">
+                    <Printer size={20} />
+                    Print All
+                  </button>
+                </div>
               </div>
               <div className="space-y-12">
                 {filteredPeople.map((p: any) => (
                   <div key={p.id} className="flex flex-col items-center">
                     <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-xl">
-                      {activeTab === 'student' && <IDCard person={p} orientation={orientation} />}
-                      {activeTab === 'teacher' && <IDCard person={p} type="teacher" orientation={orientation} />}
-                      {activeTab === 'hostel' && <HostelCard student={p} />}
-                      {activeTab === 'transfer' && <TransferCertificate student={p} />}
-                      {activeTab === 'migration' && <MigrationCertificate student={p} />}
-                      {activeTab === 'awards' && <AwardCertificate student={p} />}
-                      {activeTab === 'appraisal' && <AppraisalCertificate person={p} />}
+                      {activeTab === 'student' && <div id={`card-${p.id || p.studentId}`}><IDCard person={p} orientation={orientation} /></div>}
+                      {activeTab === 'teacher' && <div id={`card-${p.id || p.studentId}`}><IDCard person={p} type="teacher" orientation={orientation} /></div>}
+                      {activeTab === 'hostel' && <div id={`card-${p.id || p.studentId}`}><HostelCard student={p} /></div>}
+                      {activeTab === 'transfer' && <div id={`card-${p.id || p.studentId}`}><TransferCertificate student={p} /></div>}
+                      {activeTab === 'migration' && <div id={`card-${p.id || p.studentId}`}><MigrationCertificate student={p} /></div>}
+                      {activeTab === 'awards' && <div id={`card-${p.id || p.studentId}`}><AwardCertificate student={p} /></div>}
+                      {activeTab === 'appraisal' && <div id={`card-${p.id || p.studentId}`}><AppraisalCertificate person={p} /></div>}
                       {activeTab === 'marksheet' && (
-                        <MarkSheet 
-                          student={p} 
-                          results={examResults.filter((r: any) => r.studentId === p.studentId)} 
-                        />
+                        <div id={`card-${p.id || p.studentId}`}>
+                          <MarkSheet 
+                            student={p} 
+                            results={examResults.filter((r: any) => r.studentId === p.studentId)} 
+                          />
+                        </div>
                       )}
                     </div>
                     <div className="w-full border-b-2 border-dashed border-slate-300 my-8 no-print"></div>
@@ -9303,7 +10117,7 @@ const IDCardsModule = ({ students, staff, masterData, schoolProfile, examResults
                   animate={{ opacity: 1, scale: 1 }}
                   className="flex flex-col items-center gap-8"
                 >
-                  <div className="bg-white p-4 rounded-[32px] shadow-2xl">
+                  <div className="bg-white p-4 rounded-[32px] shadow-2xl" id={`card-${selectedPerson.id || selectedPerson.studentId}`}>
                     {activeTab === 'student' && <IDCard person={selectedPerson} orientation={orientation} />}
                     {activeTab === 'teacher' && <IDCard person={selectedPerson} type="teacher" orientation={orientation} />}
                     {activeTab === 'hostel' && <HostelCard student={selectedPerson} />}
@@ -9328,7 +10142,10 @@ const IDCardsModule = ({ students, staff, masterData, schoolProfile, examResults
                       <Printer size={20} />
                       Print Document
                     </button>
-                    <button className="flex items-center gap-2 bg-white border border-slate-200 px-8 py-4 rounded-2xl font-black hover:bg-slate-50 transition-all">
+                    <button 
+                      onClick={() => handleDownloadPDF(selectedPerson)}
+                      className="flex items-center gap-2 bg-white border border-slate-200 px-8 py-4 rounded-2xl font-black hover:bg-slate-50 transition-all"
+                    >
                       <Download size={20} />
                       Download PDF
                     </button>

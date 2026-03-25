@@ -5,12 +5,12 @@
   --font-sans: "Roboto", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Poppins", "Inter", sans-serif;
   
-  --color-primary: #2F5D9F;
-  --color-primary-hover: #244A80;
-  --color-secondary: #27AE60;
-  --color-accent: #F2C94C;
+  --color-primary: #005696;
+  --color-primary-hover: #004477;
+  --color-secondary: #F37021;
+  --color-accent: #7AC143;
   --color-bg-soft: #F5F7FA;
-  --color-text-heading: #1F2937;
+  --color-text-heading: #1D3557;
   --color-text-sub: #6B7280;
   --color-text-placeholder: #9CA3AF;
 }
