@@ -361,12 +361,17 @@ interface Designation {
 interface AdmissionEnquiry {
   id: string;
   name: string;
+  surname: string;
   mobile: string;
   email: string;
   class: string;
   date: string;
   source: string;
-  status: 'Pending' | 'Follow-up' | 'Closed';
+  status: 'Pending' | 'Follow-up' | 'Closed' | 'Approved';
+  fatherName?: string;
+  motherName?: string;
+  address?: string;
+  gender?: string;
 }
 
 interface Visitor {
@@ -525,7 +530,7 @@ const Select = ({ label, options, required = false, ...props }: any) => (
   </div>
 );
 
-const FileUpload = ({ label, icon: Icon = Upload, required = false }: any) => (
+const FileUpload = ({ label, icon: Icon = Upload, required = false, onChange, preview }: any) => (
   <div className="w-full">
     <label className="label-text">
       {label} {required && <span className="text-red-500">*</span>}
@@ -534,10 +539,17 @@ const FileUpload = ({ label, icon: Icon = Upload, required = false }: any) => (
       <input
         type="file"
         className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+        onChange={onChange}
       />
-      <div className="flex flex-col items-center justify-center gap-2 p-4 border-2 border-dashed border-slate-200 rounded-xl group-hover:border-primary group-hover:bg-primary/5 transition-all">
-        <Icon className="text-slate-400 group-hover:text-primary" size={24} />
-        <span className="text-xs text-text-secondary group-hover:text-primary">Click or drag to upload</span>
+      <div className="flex flex-col items-center justify-center gap-2 p-4 border-2 border-dashed border-slate-200 rounded-xl group-hover:border-primary group-hover:bg-primary/5 transition-all overflow-hidden min-h-[120px]">
+        {preview ? (
+          <img src={preview} alt="Preview" className="max-h-20 w-auto object-contain rounded-lg" referrerPolicy="no-referrer" />
+        ) : (
+          <>
+            <Icon className="text-slate-400 group-hover:text-primary" size={24} />
+            <span className="text-xs text-text-secondary group-hover:text-primary">Click or drag to upload</span>
+          </>
+        )}
       </div>
     </div>
   </div>
@@ -2156,7 +2168,8 @@ const FeeManagement = ({
   schoolProfile,
   masterData,
   showModal,
-  leaveRequests
+  leaveRequests,
+  getStudentDueFees
 }: any) => {
   const [activeTab, setActiveTab] = useState<'collect' | 'master' | 'reports'>('collect');
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
@@ -2431,6 +2444,11 @@ const FeeManagement = ({
                       return fee ? (fee.amount - paymentDetails.discount - paymentDetails.scholarship) : 0;
                     })()}
                   </p>
+                  {selectedStudent && (
+                    <p className="text-xs text-red-500 font-bold mt-1">
+                      Total Outstanding Due: ₹{getStudentDueFees(selectedStudent).toLocaleString()}
+                    </p>
+                  )}
                 </div>
                 <button 
                   onClick={handleCollectFee}
@@ -2521,9 +2539,22 @@ const FeeManagement = ({
                   {feeTypes.map(f => (
                     <div key={f.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
                       <span className="font-medium">{f.name}</span>
-                      <button onClick={() => setFeeTypes(feeTypes.filter(t => t.id !== f.id))} className="text-red-500 hover:bg-red-50 p-1 rounded-lg">
-                        <Trash2 size={16} />
-                      </button>
+                      <div className="flex gap-1">
+                        <button 
+                          onClick={() => {
+                            const newName = prompt('Edit Fee Type Name:', f.name);
+                            if (newName && newName !== f.name) {
+                              setFeeTypes(feeTypes.map(t => t.id === f.id ? { ...t, name: newName } : t));
+                            }
+                          }}
+                          className="text-blue-500 hover:bg-blue-50 p-1 rounded-lg"
+                        >
+                          <Edit2 size={16} />
+                        </button>
+                        <button onClick={() => setFeeTypes(feeTypes.filter(t => t.id !== f.id))} className="text-red-500 hover:bg-red-50 p-1 rounded-lg">
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -4114,22 +4145,9 @@ const LiveCamera = ({ cameraUrls }: { cameraUrls: { id: string, name: string, ur
   );
 };
 
-const DueFeesModule = ({ students, feeMaster, feeTransactions, currentUser }: any) => {
+const DueFeesModule = ({ students, feeMaster, feeTransactions, currentUser, getStudentDueFees }: any) => {
   const isAdmin = currentUser?.role === 'admin';
   
-  const getStudentDueFees = (student: any) => {
-    const classFee = feeMaster.find((f: any) => f.class === student.class);
-    if (!classFee) return 0;
-    
-    const paidAmount = feeTransactions
-      .filter((t: any) => t.studentId === student.studentId)
-      .reduce((sum: number, t: any) => sum + t.totalPaid, 0);
-      
-    // Simplified calculation: assume 12 months for monthly fees
-    const totalDue = classFee.frequency === 'Monthly' ? classFee.amount * 12 : classFee.amount;
-    return Math.max(0, totalDue - paidAmount);
-  };
-
   const dueStudents = students.map((s: any) => ({
     ...s,
     dueAmount: getStudentDueFees(s)
@@ -5670,7 +5688,7 @@ const CommunicatePanel = ({ notifications, setNotifications, templates, setTempl
   );
 };
 
-const FrontOfficePanel = ({ enquiries, setEnquiries, visitors, setVisitors, complaints, setComplaints }: any) => {
+const FrontOfficePanel = ({ enquiries, setEnquiries, visitors, setVisitors, complaints, setComplaints, setView, setFormData, currentUser }: any) => {
   const [activeTab, setActiveTab] = useState('enquiry');
   const [showAddEnquiry, setShowAddEnquiry] = useState(false);
   const [newEnquiry, setNewEnquiry] = useState<Partial<AdmissionEnquiry>>({
@@ -5695,6 +5713,30 @@ const FrontOfficePanel = ({ enquiries, setEnquiries, visitors, setVisitors, comp
     setEnquiries([enquiry, ...enquiries]);
     setShowAddEnquiry(false);
     setNewEnquiry({ status: 'Pending', date: new Date().toISOString().split('T')[0] });
+  };
+
+  const handleApproveForAdmission = (enquiry: AdmissionEnquiry) => {
+    // 1. Update enquiry status
+    setEnquiries(enquiries.map((e: AdmissionEnquiry) => 
+      e.id === enquiry.id ? { ...e, status: 'Approved' } : e
+    ));
+
+    // 2. Pre-fill student registration form
+    setFormData({
+      name: enquiry.name,
+      surname: enquiry.surname,
+      mobile: enquiry.mobile,
+      email: enquiry.email,
+      class: enquiry.class,
+      fatherName: enquiry.fatherName,
+      motherName: enquiry.motherName,
+      address: enquiry.address,
+      gender: enquiry.gender,
+      fatherMobile: enquiry.mobile // Assuming mobile is father's mobile if not specified
+    });
+
+    // 3. Navigate to registration
+    setView('register-student');
   };
 
   return (
@@ -5737,28 +5779,41 @@ const FrontOfficePanel = ({ enquiries, setEnquiries, visitors, setVisitors, comp
               <thead>
                 <tr className="border-b border-slate-100">
                   <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Date</th>
-                  <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Name</th>
+                  <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Student Name</th>
                   <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Mobile</th>
                   <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Class</th>
-                  <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Source</th>
                   <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Status</th>
+                  <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
                 {enquiries.map((e: AdmissionEnquiry) => (
                   <tr key={e.id} className="hover:bg-slate-50/50 transition-colors">
                     <td className="py-4 text-sm text-text-sub">{e.date}</td>
-                    <td className="py-4 text-sm font-bold text-text-heading">{e.name}</td>
+                    <td className="py-4 text-sm font-bold text-text-heading">{e.name} {e.surname}</td>
                     <td className="py-4 text-sm text-text-sub">{e.mobile}</td>
                     <td className="py-4 text-sm text-text-sub">{e.class}</td>
-                    <td className="py-4 text-sm text-text-sub">{e.source}</td>
                     <td className="py-4">
                       <span className={`text-[10px] font-black px-2 py-1 rounded-full uppercase ${
                         e.status === 'Closed' ? 'bg-slate-100 text-slate-700' : 
-                        e.status === 'Follow-up' ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'
+                        e.status === 'Follow-up' ? 'bg-orange-100 text-orange-700' : 
+                        e.status === 'Approved' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'
                       }`}>
                         {e.status}
                       </span>
+                    </td>
+                    <td className="py-4 text-right">
+                      {currentUser?.role === 'admin' && e.status !== 'Approved' && (
+                        <button 
+                          onClick={() => handleApproveForAdmission(e)}
+                          className="text-[10px] font-black text-primary hover:underline uppercase"
+                        >
+                          Approve for Admission
+                        </button>
+                      )}
+                      {e.status === 'Approved' && (
+                        <span className="text-[10px] font-black text-green-600 uppercase">Admission Processed</span>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -5929,12 +5984,24 @@ const FrontOfficePanel = ({ enquiries, setEnquiries, visitors, setVisitors, comp
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <Input label="Name" required value={newEnquiry.name} onChange={(e: any) => setNewEnquiry({...newEnquiry, name: e.target.value})} />
+                <Input label="First Name" required value={newEnquiry.name} onChange={(e: any) => setNewEnquiry({...newEnquiry, name: e.target.value})} />
+                <Input label="Surname" required value={newEnquiry.surname} onChange={(e: any) => setNewEnquiry({...newEnquiry, surname: e.target.value})} />
                 <Input label="Mobile" required value={newEnquiry.mobile} onChange={(e: any) => setNewEnquiry({...newEnquiry, mobile: e.target.value})} />
                 <Input label="Email" value={newEnquiry.email} onChange={(e: any) => setNewEnquiry({...newEnquiry, email: e.target.value})} />
                 <Input label="Class" value={newEnquiry.class} onChange={(e: any) => setNewEnquiry({...newEnquiry, class: e.target.value})} />
+                <Input label="Gender" value={newEnquiry.gender} onChange={(e: any) => setNewEnquiry({...newEnquiry, gender: e.target.value})} />
+                <Input label="Father's Name" value={newEnquiry.fatherName} onChange={(e: any) => setNewEnquiry({...newEnquiry, fatherName: e.target.value})} />
+                <Input label="Mother's Name" value={newEnquiry.motherName} onChange={(e: any) => setNewEnquiry({...newEnquiry, motherName: e.target.value})} />
                 <Input label="Source" placeholder="e.g. Website, Newspaper" value={newEnquiry.source} onChange={(e: any) => setNewEnquiry({...newEnquiry, source: e.target.value})} />
                 <Input label="Date" type="date" value={newEnquiry.date} onChange={(e: any) => setNewEnquiry({...newEnquiry, date: e.target.value})} />
+                <div className="md:col-span-2">
+                  <label className="label-text">Address</label>
+                  <textarea 
+                    className="input-field min-h-[80px]" 
+                    value={newEnquiry.address}
+                    onChange={(e: any) => setNewEnquiry({...newEnquiry, address: e.target.value})}
+                  />
+                </div>
               </div>
 
               <div className="mt-8 flex gap-3">
@@ -6048,7 +6115,7 @@ const IncomeExpenseView = ({ incomes, setIncomes, expenses, setExpenses, incomeH
   );
 
   return (
-    <div className="space-y-8 max-w-7xl mx-auto pb-20">
+    <div className="space-y-8 pb-20">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
           <h1 className="text-3xl font-black text-text-heading tracking-tight uppercase">Income & Expense Management</h1>
@@ -6336,6 +6403,7 @@ const SuperAdminPanel = ({ users, setUsers }: any) => {
 
 export default function App() {
   const [view, setView] = useState<View>('login');
+  const [isViewOnly, setIsViewOnly] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [users, setUsers] = useState<any[]>([
     { id: 'admin', name: 'Administrator', role: 'admin', permissions: ['all'], password: '123' },
@@ -6347,11 +6415,30 @@ export default function App() {
     { id: 'PAR-12345', name: 'Parent of DS-12345', role: 'parent', studentId: 'DS-12345', permissions: ['QR Attendance', 'Leave Application', 'Fee Structure', 'Syllabus', 'Progress Report', 'Home Work Assign'], password: '123' }
   ]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+
+  const getStudentDueFees = (student: any) => {
+    const classFees = feeMaster.filter((f: any) => f.class === student.class);
+    if (classFees.length === 0) return 0;
+    
+    const paidAmount = feeTransactions
+      .filter((t: any) => t.studentId === student.studentId)
+      .reduce((sum: number, t: any) => sum + t.totalPaid, 0);
+      
+    // Sum all fees for the class
+    const totalDue = classFees.reduce((sum: number, f: any) => {
+      const multiplier = f.frequency === 'Monthly' ? 12 : 
+                         f.frequency === 'Quarterly' ? 4 : 
+                         f.frequency === 'Half-Yearly' ? 2 : 1;
+      return sum + (f.amount * multiplier);
+    }, 0);
+    
+    return Math.max(0, totalDue - paidAmount);
+  };
   const [students, setStudents] = useState<Student[]>([]);
   const [editingStudentId, setEditingStudentId] = useState<string | null>(null);
   const [schoolProfile, setSchoolProfile] = useState({
     name: 'Digital School Systems',
-    logo: 'https://storage.googleapis.com/cortex-dev-cortex-build-public-assets/ais-dev-b3e775v3rvj7egmf2trpz3-352124703760/tiedknot9%40gmail.com/1742831965561-image-0.png',
+    logo: 'https://storage.googleapis.com/cortex-dev-cortex-build-public-assets/ais-dev-b3e775v3rvj7egmf2trpz3-352124703760/tiedknot9%40gmail.com/1742920325178-image-0.png',
     signature: null,
     stamp: null,
     contact: '+91 9876543210',
@@ -6483,7 +6570,8 @@ export default function App() {
   const [admissionEnquiries, setAdmissionEnquiries] = useState<AdmissionEnquiry[]>([
     {
       id: 'ENQ-1',
-      name: 'Robert Brown',
+      name: 'Robert',
+      surname: 'Brown',
       mobile: '9988776655',
       email: 'robert@example.com',
       class: 'Class 5',
@@ -6493,7 +6581,8 @@ export default function App() {
     },
     {
       id: 'ENQ-2',
-      name: 'Emily Davis',
+      name: 'Emily',
+      surname: 'Davis',
       mobile: '9988776656',
       email: 'emily@example.com',
       class: 'Class 8',
@@ -6934,7 +7023,7 @@ export default function App() {
         <div className="p-6 flex items-center gap-3 border-b border-slate-50">
           <div className="shrink-0">
             <img 
-              src={schoolProfile.logo} 
+              src={schoolProfile.logo || 'https://images.unsplash.com/photo-1594608661623-aa0bd3a67d28?q=80&w=200&auto=format&fit=crop'} 
               alt="Logo" 
               className={`${isSidebarOpen ? 'w-12' : 'w-10'} h-auto transition-all`}
               referrerPolicy="no-referrer"
@@ -6948,7 +7037,7 @@ export default function App() {
           )}
         </div>
 
-        <nav className="flex-1 px-4 space-y-2 overflow-y-auto custom-scrollbar pb-10">
+        <nav className="flex-1 px-4 space-y-2 overflow-y-auto custom-scrollbar scrollbar-left pb-10">
           <SidebarItem 
             icon={LayoutDashboard} 
             label={isSidebarOpen ? "Dashboard" : ""} 
@@ -6989,7 +7078,12 @@ export default function App() {
                 icon={UserPlus} 
                 label={isSidebarOpen ? "Register Student" : ""} 
                 active={view === 'register-student'} 
-                onClick={() => setView('register-student')} 
+                onClick={() => {
+                  setEditingStudentId(null);
+                  setIsViewOnly(false);
+                  setFormData({});
+                  setView('register-student');
+                }} 
               />
               <SidebarItem 
                 icon={Users} 
@@ -7149,13 +7243,13 @@ export default function App() {
           <div className="flex items-center gap-2 md:gap-4">
             <button 
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="p-2 hover:bg-slate-100 rounded-lg text-text-secondary lg:hidden"
+              className="p-2 hover:bg-slate-100 rounded-lg text-text-secondary"
             >
               <Menu size={20} />
             </button>
             <div className="flex items-center gap-2 lg:hidden">
               <img 
-                src={schoolProfile.logo} 
+                src={schoolProfile.logo || 'https://images.unsplash.com/photo-1594608661623-aa0bd3a67d28?q=80&w=200&auto=format&fit=crop'} 
                 alt="Logo" 
                 className="w-8 h-8 object-contain"
                 referrerPolicy="no-referrer"
@@ -7227,7 +7321,7 @@ export default function App() {
           <AnimatePresence mode="wait">
             {view === 'profile-settings' && (
               <motion.div key="profile-settings" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
-                <div className="max-w-2xl mx-auto space-y-8">
+                <div className="space-y-8">
                   <div className="flex items-center justify-between">
                     <div>
                       <h1 className="text-3xl font-black text-text-heading tracking-tight uppercase">Profile Settings</h1>
@@ -7528,7 +7622,7 @@ export default function App() {
 
                 <form onSubmit={handleRegister} className="space-y-8">
                   {/* Basic Information */}
-                  <Card>
+                  <Card className={isViewOnly ? "pointer-events-none opacity-90" : ""}>
                     <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-primary">
                       <Users size={20} />
                       Basic Information
@@ -7613,7 +7707,7 @@ export default function App() {
                   </Card>
 
                   {/* Family Details */}
-                  <Card>
+                  <Card className={isViewOnly ? "pointer-events-none opacity-90" : ""}>
                     <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-primary">
                       <HeartPulse size={20} />
                       Family & Contact Details
@@ -7671,7 +7765,7 @@ export default function App() {
                   </Card>
 
                   {/* Health & Relations */}
-                  <Card>
+                  <Card className={isViewOnly ? "pointer-events-none opacity-90" : ""}>
                     <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-primary">
                       <AlertCircle size={20} />
                       Health & School Relations
@@ -7740,21 +7834,24 @@ export default function App() {
                     </div>
                   </Card>
 
-                  <div className="flex items-center justify-end gap-4 pb-12">
+                  <div className="flex justify-end gap-4 pb-10">
                     <button 
                       type="button" 
                       onClick={() => {
                         setEditingStudentId(null);
+                        setIsViewOnly(false);
                         setFormData({});
-                        setView('dashboard');
+                        setView('student-list');
                       }}
                       className="px-6 py-2.5 rounded-xl font-medium text-text-secondary hover:bg-slate-200 transition-all"
                     >
-                      Cancel
+                      {isViewOnly ? 'Back to List' : 'Cancel'}
                     </button>
-                    <button type="submit" className="btn-primary">
-                      {editingStudentId ? 'Update Student' : 'Register Student'}
-                    </button>
+                    {!isViewOnly && (
+                      <button type="submit" className="btn-primary">
+                        {editingStudentId ? 'Update Student' : 'Register Student'}
+                      </button>
+                    )}
                   </div>
                 </form>
               </motion.div>
@@ -7850,19 +7947,21 @@ export default function App() {
                                 <div className="flex items-center gap-2">
                                   <button 
                                     onClick={() => {
-                                      setSelectedPersonForID(s);
-                                      setIdCardTab('student');
-                                      setView('id-cards');
+                                      setEditingStudentId(s.id);
+                                      setFormData(s);
+                                      setIsViewOnly(true);
+                                      setView('register-student');
                                     }}
                                     className="p-2 hover:bg-primary/10 hover:text-primary rounded-lg transition-all" 
                                     title="View Details"
                                   >
-                                    <FileText size={18} />
+                                    <Eye size={18} />
                                   </button>
                                   <button 
                                     onClick={() => {
                                       setEditingStudentId(s.id);
                                       setFormData(s);
+                                      setIsViewOnly(false);
                                       setView('register-student');
                                     }}
                                     className="p-2 hover:bg-blue-50 hover:text-blue-600 rounded-lg transition-all" 
@@ -8014,13 +8113,16 @@ export default function App() {
                   setVisitors={setVisitors}
                   complaints={complaints}
                   setComplaints={setComplaints}
+                  setView={setView}
+                  setFormData={setFormData}
+                  currentUser={currentUser}
                 />
               </motion.div>
             )}
 
             {view === 'leave-management' && (
               <motion.div key="leave-management" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
-                <div className="space-y-8 max-w-7xl mx-auto pb-20">
+                <div className="space-y-8 pb-20">
                   <div className="flex items-center justify-between">
                     <div>
                       <h1 className="text-3xl font-black text-text-heading tracking-tight">Leave Management</h1>
@@ -8165,7 +8267,7 @@ export default function App() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -20 }}
-                className="space-y-8 max-w-6xl mx-auto pb-20"
+                className="space-y-8 pb-20"
               >
                 <div className="flex items-center justify-between">
                   <div>
@@ -8255,9 +8357,51 @@ export default function App() {
                           ></textarea>
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mt-8">
-                          <FileUpload label="School Logo" icon={ImageIcon} />
-                          <FileUpload label="Authorized Signature" icon={Signature} />
-                          <FileUpload label="Official Stamp" icon={Stamp} />
+                          <FileUpload 
+                            label="School Logo" 
+                            icon={ImageIcon} 
+                            preview={schoolProfile.logo}
+                            onChange={(e: any) => {
+                              const file = e.target.files[0];
+                              if (file) {
+                                const reader = new FileReader();
+                                reader.onloadend = () => {
+                                  setSchoolProfile({...schoolProfile, logo: reader.result as string});
+                                };
+                                reader.readAsDataURL(file);
+                              }
+                            }}
+                          />
+                          <FileUpload 
+                            label="Authorized Signature" 
+                            icon={Signature} 
+                            preview={schoolProfile.signature}
+                            onChange={(e: any) => {
+                              const file = e.target.files[0];
+                              if (file) {
+                                const reader = new FileReader();
+                                reader.onloadend = () => {
+                                  setSchoolProfile({...schoolProfile, signature: reader.result as string});
+                                };
+                                reader.readAsDataURL(file);
+                              }
+                            }}
+                          />
+                          <FileUpload 
+                            label="Official Stamp" 
+                            icon={Stamp} 
+                            preview={schoolProfile.stamp}
+                            onChange={(e: any) => {
+                              const file = e.target.files[0];
+                              if (file) {
+                                const reader = new FileReader();
+                                reader.onloadend = () => {
+                                  setSchoolProfile({...schoolProfile, stamp: reader.result as string});
+                                };
+                                reader.readAsDataURL(file);
+                              }
+                            }}
+                          />
                         </div>
                       </Card>
 
@@ -8416,6 +8560,7 @@ export default function App() {
                   masterData={masterData}
                   showModal={showModal}
                   leaveRequests={leaveRequests}
+                  getStudentDueFees={getStudentDueFees}
                 />
               </motion.div>
             )}
@@ -8556,6 +8701,7 @@ export default function App() {
                   feeMaster={feeMaster}
                   currentUser={currentUser}
                   masterData={masterData}
+                  getStudentDueFees={getStudentDueFees}
                 />
               </motion.div>
             )}
