@@ -45,6 +45,7 @@ import {
   Filter,
   Coins,
   ArrowRightLeft,
+  History,
   X,
   Clock,
   ArrowUpCircle,
@@ -2167,14 +2168,23 @@ const FeeManagement = ({
   setFeeMaster, 
   feeTransactions, 
   setFeeTransactions,
+  bankBalance,
+  setBankBalance,
+  cashBalance,
+  setCashBalance,
+  contraEntries,
+  setContraEntries,
+  adjustmentLogs,
+  setAdjustmentLogs,
   schoolProfile,
   masterData,
   showModal,
   leaveRequests,
   getStudentDueFees
 }: any) => {
-  const [activeTab, setActiveTab] = useState<'collect' | 'master' | 'reports'>('collect');
+  const [activeTab, setActiveTab] = useState<'collect' | 'master' | 'reports' | 'ledger' | 'bank-cash' | 'adjustment-logs'>('collect');
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+  const [selectedLedgerStudent, setSelectedLedgerStudent] = useState<Student | null>(null);
   const [selectedFeeType, setSelectedFeeType] = useState('');
   const [paymentDetails, setPaymentDetails] = useState({
     mode: 'Cash' as 'Cash' | 'UPI' | 'Bank Transfer',
@@ -2193,13 +2203,91 @@ const FeeManagement = ({
   const [filters, setFilters] = useState({
     date: '',
     class: '',
-    section: ''
+    section: '',
+    search: ''
   });
+
+  const [contraForm, setContraForm] = useState({
+    type: 'Bank to Cash' as 'Bank to Cash' | 'Cash to Bank' | 'Bank Adjustment' | 'Cash Adjustment',
+    amount: 0,
+    reference: '',
+    date: new Date().toISOString().split('T')[0]
+  });
+
+  const handleContraEntry = () => {
+    if (contraForm.amount === 0) {
+      alert('Please enter a valid amount');
+      return;
+    }
+
+    if (contraForm.type === 'Bank to Cash') {
+      if (bankBalance < contraForm.amount) {
+        alert('Insufficient bank balance');
+        return;
+      }
+      setBankBalance(bankBalance - contraForm.amount);
+      setCashBalance(cashBalance + contraForm.amount);
+    } else if (contraForm.type === 'Cash to Bank') {
+      if (cashBalance < contraForm.amount) {
+        alert('Insufficient cash balance');
+        return;
+      }
+      setCashBalance(cashBalance - contraForm.amount);
+      setBankBalance(bankBalance + contraForm.amount);
+    } else if (contraForm.type === 'Bank Adjustment') {
+      setBankBalance(bankBalance + contraForm.amount);
+    } else if (contraForm.type === 'Cash Adjustment') {
+      setCashBalance(cashBalance + contraForm.amount);
+    }
+
+    const newEntry = {
+      id: `CE${Date.now()}`,
+      ...contraForm,
+      timestamp: new Date().toLocaleString()
+    };
+
+    setContraEntries([newEntry, ...contraEntries]);
+    setAdjustmentLogs([{
+      id: `AL${Date.now()}`,
+      type: contraForm.type,
+      amount: contraForm.amount,
+      reference: contraForm.reference,
+      date: contraForm.date,
+      timestamp: new Date().toLocaleString()
+    }, ...adjustmentLogs]);
+
+    alert(`${contraForm.type} processed successfully`);
+    setContraForm({
+      type: 'Bank to Cash',
+      amount: 0,
+      reference: '',
+      date: new Date().toISOString().split('T')[0]
+    });
+  };
+
+  const handleBalanceAdjustment = (type: 'Bank' | 'Cash', amount: number, reason: string) => {
+    if (type === 'Bank') {
+      setBankBalance(bankBalance + amount);
+    } else {
+      setCashBalance(cashBalance + amount);
+    }
+
+    setAdjustmentLogs([{
+      id: `AL${Date.now()}`,
+      type: `${type} Adjustment`,
+      amount,
+      reference: reason,
+      date: new Date().toISOString().split('T')[0],
+      timestamp: new Date().toLocaleString()
+    }, ...adjustmentLogs]);
+
+    alert(`${type} balance adjusted by ₹${amount}`);
+  };
 
   const filteredStudentsForCollection = students.filter((s: any) => {
     return (!searchFilters.class || s.class === searchFilters.class) &&
            (!searchFilters.section || s.section === searchFilters.section) &&
-           (!searchFilters.rollNo || s.rollNo?.includes(searchFilters.rollNo) || s.studentId?.includes(searchFilters.rollNo));
+           (!searchFilters.rollNo || s.rollNo?.toLowerCase().includes(searchFilters.rollNo.toLowerCase()) || s.studentId?.toLowerCase().includes(searchFilters.rollNo.toLowerCase()) || s.name.toLowerCase().includes(searchFilters.rollNo.toLowerCase()));
   });
 
   const handleCollectFee = () => {
@@ -2271,9 +2359,13 @@ const FeeManagement = ({
   };
 
   const filteredTransactions = feeTransactions.filter(t => {
-    return (!filters.date || t.date === new Date(filters.date).toLocaleDateString()) &&
-           (!filters.class || t.class === filters.class) &&
-           (!filters.section || t.section === filters.section);
+    const matchesDate = !filters.date || t.date === new Date(filters.date).toLocaleDateString();
+    const matchesClass = !filters.class || t.class === filters.class;
+    const matchesSection = !filters.section || t.section === filters.section;
+    const matchesSearch = !filters.search || 
+                          t.studentName.toLowerCase().includes(filters.search.toLowerCase()) || 
+                          t.studentId.toLowerCase().includes(filters.search.toLowerCase());
+    return matchesDate && matchesClass && matchesSection && matchesSearch;
   });
 
   const [masterClass, setMasterClass] = useState('');
@@ -2346,6 +2438,24 @@ const FeeManagement = ({
           >
             Reports
           </button>
+          <button 
+            onClick={() => setActiveTab('ledger')}
+            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'ledger' ? 'bg-primary text-white shadow-md' : 'text-text-sub hover:bg-slate-50'}`}
+          >
+            Student Ledger
+          </button>
+          <button 
+            onClick={() => setActiveTab('bank-cash')}
+            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'bank-cash' ? 'bg-primary text-white shadow-md' : 'text-text-sub hover:bg-slate-50'}`}
+          >
+            Bank & Cash
+          </button>
+          <button 
+            onClick={() => setActiveTab('adjustment-logs')}
+            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'adjustment-logs' ? 'bg-primary text-white shadow-md' : 'text-text-sub hover:bg-slate-50'}`}
+          >
+            Adjustment Logs
+          </button>
         </div>
       </div>
 
@@ -2358,11 +2468,11 @@ const FeeManagement = ({
                 Search & Select Student
               </h3>
               
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8 p-6 bg-primary/5 rounded-3xl border border-primary/10 shadow-inner">
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-text-sub uppercase ml-1">Class</label>
+                  <label className="text-[10px] font-black text-primary uppercase ml-1 tracking-widest">Select Class</label>
                   <select 
-                    className="input-field py-2"
+                    className="input-field py-3 bg-white border-primary/20 focus:border-primary"
                     value={searchFilters.class}
                     onChange={(e) => setSearchFilters({...searchFilters, class: e.target.value})}
                   >
@@ -2371,9 +2481,9 @@ const FeeManagement = ({
                   </select>
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-text-sub uppercase ml-1">Section</label>
+                  <label className="text-[10px] font-black text-primary uppercase ml-1 tracking-widest">Select Section</label>
                   <select 
-                    className="input-field py-2"
+                    className="input-field py-3 bg-white border-primary/20 focus:border-primary"
                     value={searchFilters.section}
                     onChange={(e) => setSearchFilters({...searchFilters, section: e.target.value})}
                   >
@@ -2382,18 +2492,30 @@ const FeeManagement = ({
                   </select>
                 </div>
                 <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-text-sub uppercase ml-1">Roll / ID</label>
-                  <input 
-                    type="text"
-                    placeholder="Search..."
-                    className="input-field py-2"
-                    value={searchFilters.rollNo}
-                    onChange={(e) => setSearchFilters({...searchFilters, rollNo: e.target.value})}
-                  />
+                  <label className="text-[10px] font-black text-primary uppercase ml-1 tracking-widest">Roll No / ID</label>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-text-sub" size={14} />
+                    <input 
+                      type="text"
+                      placeholder="Enter Roll No..."
+                      className="input-field py-3 pl-10 bg-white border-primary/20 focus:border-primary"
+                      value={searchFilters.rollNo}
+                      onChange={(e) => setSearchFilters({...searchFilters, rollNo: e.target.value})}
+                    />
+                  </div>
                 </div>
                 <div className="flex items-end">
-                  <button className="w-full bg-primary text-white py-2 rounded-xl font-bold text-xs shadow-lg shadow-primary/20 flex items-center justify-center gap-2 hover:scale-105 transition-all">
-                    <Search size={14} /> Search
+                  <button 
+                    onClick={() => {
+                      if (filteredStudentsForCollection.length === 0) {
+                        alert('No students found matching these filters.');
+                      } else {
+                        alert(`Found ${filteredStudentsForCollection.length} students. Please select one from the dropdown below.`);
+                      }
+                    }}
+                    className="w-full bg-primary text-white py-3 rounded-2xl font-bold text-xs shadow-xl shadow-primary/20 flex items-center justify-center gap-2 hover:scale-105 active:scale-95 transition-all"
+                  >
+                    <Search size={16} /> Search Students
                   </button>
                 </div>
               </div>
@@ -2799,6 +2921,384 @@ const FeeManagement = ({
         </div>
       )}
 
+      {activeTab === 'ledger' && (
+        <div className="space-y-6">
+          <Card>
+            <div className="flex flex-col md:flex-row gap-6 items-end">
+              <div className="flex-1">
+                <label className="label-text">Select Student for Ledger</label>
+                <select 
+                  className="input-field"
+                  value={selectedLedgerStudent?.studentId || ''}
+                  onChange={(e) => {
+                    const student = students.find((s: any) => s.studentId === e.target.value);
+                    setSelectedLedgerStudent(student || null);
+                  }}
+                >
+                  <option value="">Select Student</option>
+                  {students.map((s: any) => (
+                    <option key={s.studentId} value={s.studentId}>
+                      {s.name} {s.surname} ({s.class}-{s.section}) - {s.studentId}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <button 
+                onClick={() => {
+                  if (!selectedLedgerStudent) return;
+                  const studentFees = feeMaster.filter(f => f.class === selectedLedgerStudent.class);
+                  const studentTransactions = feeTransactions.filter(t => t.studentId === selectedLedgerStudent.studentId);
+                  const ledgerData = [
+                    ...studentFees.map(f => ({
+                      Date: 'Session Start',
+                      Particulars: `Fee Assigned: ${f.feeType}`,
+                      Type: 'Debit',
+                      Amount: f.amount
+                    })),
+                    ...studentTransactions.map(t => ({
+                      Date: t.date,
+                      Particulars: `Fee Paid: ${t.feeType} (Inv: ${t.id})`,
+                      Type: 'Credit',
+                      Amount: t.totalPaid
+                    }))
+                  ];
+                  const ws = XLSX.utils.json_to_sheet(ledgerData);
+                  const wb = XLSX.utils.book_new();
+                  XLSX.utils.book_append_sheet(wb, ws, "Ledger");
+                  XLSX.writeFile(wb, `${selectedLedgerStudent.name}_Ledger.xlsx`);
+                }}
+                className="btn-secondary flex items-center gap-2 py-3 px-6"
+              >
+                <Download size={18} /> Export Ledger
+              </button>
+            </div>
+          </Card>
+
+          {selectedLedgerStudent ? (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                {(() => {
+                  const studentFees = feeMaster.filter(f => f.class === selectedLedgerStudent.class);
+                  const studentTransactions = feeTransactions.filter(t => t.studentId === selectedLedgerStudent.studentId);
+                  
+                  const totalAssigned = studentFees.reduce((sum, f) => sum + f.amount, 0);
+                  const totalPaid = studentTransactions.reduce((sum, t) => sum + t.totalPaid, 0);
+                  const totalDiscount = studentTransactions.reduce((sum, t) => sum + (t.discount || 0), 0);
+                  const totalScholarship = studentTransactions.reduce((sum, t) => sum + (t.scholarship || 0), 0);
+                  const balance = totalAssigned - totalPaid - totalDiscount - totalScholarship;
+
+                  return (
+                    <>
+                      <Card className="p-6 border-l-4 border-blue-500">
+                        <p className="text-[10px] font-black text-text-sub uppercase tracking-widest mb-1">Total Assigned</p>
+                        <p className="text-2xl font-black text-text-heading">₹{totalAssigned.toLocaleString()}</p>
+                      </Card>
+                      <Card className="p-6 border-l-4 border-green-500">
+                        <p className="text-[10px] font-black text-text-sub uppercase tracking-widest mb-1">Total Paid</p>
+                        <p className="text-2xl font-black text-green-600">₹{totalPaid.toLocaleString()}</p>
+                      </Card>
+                      <Card className="p-6 border-l-4 border-orange-500">
+                        <p className="text-[10px] font-black text-text-sub uppercase tracking-widest mb-1">Total Discounts</p>
+                        <p className="text-2xl font-black text-orange-600">₹{(totalDiscount + totalScholarship).toLocaleString()}</p>
+                      </Card>
+                      <Card className="p-6 border-l-4 border-red-500">
+                        <p className="text-[10px] font-black text-text-sub uppercase tracking-widest mb-1">Balance Due</p>
+                        <p className="text-2xl font-black text-red-600">₹{balance.toLocaleString()}</p>
+                      </Card>
+                    </>
+                  );
+                })()}
+              </div>
+
+              <Card>
+                <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-primary">
+                  <BookOpen size={20} />
+                  Transaction History (Ledger)
+                </h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left">
+                    <thead>
+                      <tr className="border-b border-slate-200">
+                        <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Date</th>
+                        <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Particulars</th>
+                        <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Type</th>
+                        <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider text-right">Debit (Due)</th>
+                        <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider text-right">Credit (Paid)</th>
+                        <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider text-right">Balance</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {(() => {
+                        const studentFees = feeMaster.filter(f => f.class === selectedLedgerStudent.class);
+                        const studentTransactions = feeTransactions.filter(t => t.studentId === selectedLedgerStudent.studentId);
+                        
+                        const ledgerItems = [
+                          ...studentFees.map(f => ({
+                            date: '2024-04-01', // Session start
+                            particulars: `Fee Assigned: ${f.feeType} (${f.frequency})`,
+                            type: 'Debit',
+                            amount: f.amount,
+                            isDebit: true
+                          })),
+                          ...studentTransactions.map(t => ({
+                            date: t.date,
+                            particulars: `Fee Paid: ${t.feeType} (Mode: ${t.paymentMode})`,
+                            type: 'Credit',
+                            amount: t.totalPaid + (t.discount || 0) + (t.scholarship || 0),
+                            isDebit: false,
+                            paidOnly: t.totalPaid,
+                            discount: (t.discount || 0) + (t.scholarship || 0)
+                          }))
+                        ].sort((a, b) => {
+                          if (a.date === '2024-04-01') return -1;
+                          if (b.date === '2024-04-01') return 1;
+                          return new Date(a.date).getTime() - new Date(b.date).getTime();
+                        });
+
+                        let runningBalance = 0;
+
+                        return ledgerItems.length === 0 ? (
+                          <tr>
+                            <td colSpan={6} className="py-12 text-center text-text-sub">No transactions found for this student.</td>
+                          </tr>
+                        ) : (
+                          ledgerItems.map((item, idx) => {
+                            if (item.isDebit) {
+                              runningBalance += item.amount;
+                            } else {
+                              runningBalance -= item.amount;
+                            }
+
+                            return (
+                              <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
+                                <td className="py-4 text-sm text-text-sub">{item.date}</td>
+                                <td className="py-4">
+                                  <p className="text-sm font-bold text-text-heading">{item.particulars}</p>
+                                  {!item.isDebit && item.discount > 0 && (
+                                    <p className="text-[10px] text-orange-600 font-bold uppercase">Incl. ₹{item.discount.toLocaleString()} Discount</p>
+                                  )}
+                                </td>
+                                <td className="py-4">
+                                  <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase ${item.isDebit ? 'bg-rose-100 text-rose-600' : 'bg-green-100 text-green-600'}`}>
+                                    {item.type}
+                                  </span>
+                                </td>
+                                <td className="py-4 text-sm font-black text-rose-600 text-right">
+                                  {item.isDebit ? `₹${item.amount.toLocaleString()}` : '-'}
+                                </td>
+                                <td className="py-4 text-sm font-black text-green-600 text-right">
+                                  {!item.isDebit ? `₹${item.amount.toLocaleString()}` : '-'}
+                                </td>
+                                <td className={`py-4 text-sm font-black text-right ${runningBalance > 0 ? 'text-rose-600' : 'text-green-600'}`}>
+                                  ₹{runningBalance.toLocaleString()}
+                                </td>
+                              </tr>
+                            );
+                          })
+                        );
+                      })()}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-20 text-center bg-white rounded-3xl border border-dashed border-slate-200">
+              <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center text-slate-300 mb-6">
+                <Users size={40} />
+              </div>
+              <h3 className="text-xl font-black text-text-heading uppercase">No Student Selected</h3>
+              <p className="text-text-sub font-medium max-w-xs mx-auto mt-2">Please select a student from the dropdown above to view their detailed financial ledger.</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {activeTab === 'bank-cash' && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 space-y-6">
+            <Card>
+              <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-primary">
+                <ArrowRightLeft size={20} />
+                Contra Entry (Bank & Cash)
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <label className="label-text">Transaction Type</label>
+                  <select 
+                    className="input-field"
+                    value={contraForm.type}
+                    onChange={(e: any) => setContraForm({...contraForm, type: e.target.value})}
+                  >
+                    <option value="Bank to Cash">Bank to Cash</option>
+                    <option value="Cash to Bank">Cash to Bank</option>
+                    <option value="Bank Adjustment">Bank Balance Adjustment</option>
+                    <option value="Cash Adjustment">Cash Balance Adjustment</option>
+                  </select>
+                </div>
+                <Input 
+                  label="Amount" 
+                  type="number" 
+                  value={contraForm.amount}
+                  onChange={(e: any) => setContraForm({...contraForm, amount: parseFloat(e.target.value) || 0})}
+                />
+                <Input 
+                  label="Reference / Reason" 
+                  placeholder="e.g. Withdrawal for petty cash" 
+                  value={contraForm.reference}
+                  onChange={(e: any) => setContraForm({...contraForm, reference: e.target.value})}
+                />
+                <Input 
+                  label="Date" 
+                  type="date" 
+                  value={contraForm.date}
+                  onChange={(e: any) => setContraForm({...contraForm, date: e.target.value})}
+                />
+              </div>
+              <div className="mt-8 flex justify-end">
+                <button 
+                  onClick={handleContraEntry}
+                  className="btn-primary px-8 py-3 flex items-center gap-2"
+                >
+                  <ArrowRightLeft size={20} />
+                  Process Entry
+                </button>
+              </div>
+            </Card>
+
+            <Card>
+              <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-primary">
+                <ClipboardList size={20} />
+                Recent Contra Entries
+              </h3>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                  <thead>
+                    <tr className="border-b border-slate-200">
+                      <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Date</th>
+                      <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Type</th>
+                      <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Amount</th>
+                      <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Reference</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {contraEntries.length === 0 ? (
+                      <tr>
+                        <td colSpan={4} className="py-12 text-center text-text-sub">No contra entries recorded yet.</td>
+                      </tr>
+                    ) : (
+                      contraEntries.map((e: any) => (
+                        <tr key={e.id} className="hover:bg-slate-50/50 transition-colors">
+                          <td className="py-4 text-sm">{e.date}</td>
+                          <td className="py-4">
+                            <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase ${e.type === 'Bank to Cash' ? 'bg-blue-100 text-blue-600' : 'bg-green-100 text-green-600'}`}>
+                              {e.type}
+                            </span>
+                          </td>
+                          <td className="py-4 text-sm font-black">₹{e.amount.toLocaleString()}</td>
+                          <td className="py-4 text-sm text-text-sub">{e.reference}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          </div>
+
+          <div className="space-y-6">
+            <Card className="bg-primary/5 border-primary/10">
+              <h3 className="text-sm font-bold mb-6 uppercase tracking-wider text-primary flex items-center gap-2">
+                <Wallet size={16} />
+                Current Balances
+              </h3>
+              <div className="space-y-4">
+                <div className="p-4 bg-white rounded-2xl border border-primary/10 shadow-sm">
+                  <p className="text-[10px] font-bold text-text-sub uppercase mb-1">Bank Balance</p>
+                  <div className="flex items-center justify-between">
+                    <p className="text-2xl font-black text-primary">₹{bankBalance.toLocaleString()}</p>
+                    <button 
+                      onClick={() => {
+                        const amt = prompt('Enter adjustment amount (use negative for deduction):');
+                        const reason = prompt('Enter reason for adjustment:');
+                        if (amt && reason) handleBalanceAdjustment('Bank', parseFloat(amt), reason);
+                      }}
+                      className="p-2 text-primary hover:bg-primary/10 rounded-lg transition-colors"
+                    >
+                      <Edit2 size={16} />
+                    </button>
+                  </div>
+                </div>
+                <div className="p-4 bg-white rounded-2xl border border-primary/10 shadow-sm">
+                  <p className="text-[10px] font-bold text-text-sub uppercase mb-1">Cash in Hand</p>
+                  <div className="flex items-center justify-between">
+                    <p className="text-2xl font-black text-green-600">₹{cashBalance.toLocaleString()}</p>
+                    <button 
+                      onClick={() => {
+                        const amt = prompt('Enter adjustment amount (use negative for deduction):');
+                        const reason = prompt('Enter reason for adjustment:');
+                        if (amt && reason) handleBalanceAdjustment('Cash', parseFloat(amt), reason);
+                      }}
+                      className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                    >
+                      <Edit2 size={16} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </Card>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'adjustment-logs' && (
+        <Card>
+          <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-primary">
+            <History size={20} />
+            Adjustment & Contra Logs
+          </h3>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="border-b border-slate-200">
+                  <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Timestamp</th>
+                  <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Type</th>
+                  <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Amount</th>
+                  <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Reference/Reason</th>
+                  <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Date</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {adjustmentLogs.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="py-12 text-center text-text-sub">No adjustment logs found.</td>
+                  </tr>
+                ) : (
+                  adjustmentLogs.map((log: any) => (
+                    <tr key={log.id} className="hover:bg-slate-50/50 transition-colors">
+                      <td className="py-4 text-xs font-medium text-text-sub">{log.timestamp}</td>
+                      <td className="py-4">
+                        <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase ${
+                          log.type.includes('Bank') ? 'bg-blue-100 text-blue-600' : 
+                          log.type.includes('Cash') ? 'bg-green-100 text-green-600' : 'bg-slate-100 text-slate-600'
+                        }`}>
+                          {log.type}
+                        </span>
+                      </td>
+                      <td className={`py-4 text-sm font-black ${log.amount < 0 ? 'text-rose-600' : 'text-green-600'}`}>
+                        {log.amount < 0 ? '-' : '+'}₹{Math.abs(log.amount).toLocaleString()}
+                      </td>
+                      <td className="py-4 text-sm text-text-sub">{log.reference}</td>
+                      <td className="py-4 text-sm">{log.date}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
       {activeTab === 'reports' && (
         <Card>
           <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
@@ -2825,6 +3325,15 @@ const FeeManagement = ({
                 <option value="">All Sections</option>
                 {masterData.sections.map((s: string) => <option key={s} value={s}>{s}</option>)}
               </select>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-text-sub" size={16} />
+                <input 
+                  type="text" 
+                  placeholder="Search student..." 
+                  className="bg-slate-100 pl-10 pr-4 py-2 rounded-xl border border-slate-200 outline-none text-sm font-medium w-64"
+                  onChange={(e) => setFilters({...filters, search: e.target.value})}
+                />
+              </div>
             </div>
             <button 
               onClick={exportToExcel}
@@ -2868,12 +3377,28 @@ const FeeManagement = ({
                     </td>
                     <td className="py-4 text-right font-black text-primary">₹{t.totalPaid}</td>
                     <td className="py-4 text-center">
-                      <button 
-                        onClick={() => setShowReceipt(t)}
-                        className="p-2 text-primary hover:bg-primary/10 rounded-lg transition-all"
-                      >
-                        <Printer size={16} />
-                      </button>
+                      <div className="flex items-center justify-center gap-2">
+                        <button 
+                          onClick={() => setShowReceipt(t)}
+                          className="p-2 text-primary hover:bg-primary/10 rounded-lg transition-all"
+                          title="Print Receipt"
+                        >
+                          <Printer size={16} />
+                        </button>
+                        <button 
+                          onClick={() => {
+                            const newAmount = prompt('Edit Transaction Amount:', t.totalPaid.toString());
+                            if (newAmount && !isNaN(parseFloat(newAmount))) {
+                              setFeeTransactions(feeTransactions.map(tr => tr.id === t.id ? { ...tr, totalPaid: parseFloat(newAmount) } : tr));
+                              alert('Transaction updated successfully!');
+                            }
+                          }}
+                          className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-all"
+                          title="Edit Transaction"
+                        >
+                          <Edit2 size={16} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -6544,6 +7069,10 @@ export default function App() {
     { id: '2', class: 'Class 2', feeType: 'Tuition Fee', amount: 2600, frequency: 'Monthly' }
   ]);
   const [feeTransactions, setFeeTransactions] = useState<FeeTransaction[]>([]);
+  const [bankBalance, setBankBalance] = useState(500000);
+  const [cashBalance, setCashBalance] = useState(50000);
+  const [contraEntries, setContraEntries] = useState<any[]>([]);
+  const [adjustmentLogs, setAdjustmentLogs] = useState<any[]>([]);
   
   // Academics State
   const [timeTables, setTimeTables] = useState<ClassTimeTable[]>([]);
@@ -6814,7 +7343,7 @@ export default function App() {
   const [loginError, setLoginError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isQRLogin, setIsQRLogin] = useState(false);
-  const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
+  const [facingMode, setFacingMode] = useState<'user' | 'environment'>('environment');
   const sidebarNavRef = React.useRef<HTMLDivElement>(null);
 
   const scrollSidebar = (direction: 'up' | 'down') => {
@@ -7306,30 +7835,30 @@ export default function App() {
             onClick={() => setView('settings')} 
           />
           
-          {/* Desktop Scroll Buttons */}
-          <div className="hidden lg:flex flex-col gap-2 absolute right-2 top-1/2 -translate-y-1/2 z-50 pointer-events-none">
-            <button 
-              onClick={(e) => { e.stopPropagation(); scrollSidebar('up'); }} 
-              className="p-2 bg-pink-500 text-white rounded-full hover:bg-pink-600 transition-all shadow-lg pointer-events-auto"
-              title="Scroll Up"
-            >
-              <ChevronUp size={16} />
-            </button>
-            <button 
-              onClick={(e) => { e.stopPropagation(); scrollSidebar('down'); }} 
-              className="p-2 bg-pink-500 text-white rounded-full hover:bg-pink-600 transition-all shadow-lg pointer-events-auto"
-              title="Scroll Down"
-            >
-              <ChevronDown size={16} />
-            </button>
-          </div>
-
           <div className="mt-auto p-4 text-center border-t border-slate-100">
             <p className="text-[8px] font-black text-slate-400 uppercase tracking-[0.2em]">A Digital Communique Product</p>
           </div>
         </nav>
 
-        <div className="p-4 border-t border-slate-100">
+        <div className="p-4 border-t border-slate-100 flex flex-col gap-3">
+          {/* Scroll Buttons - Fixed at the bottom of the sidebar */}
+          <div className="flex items-center justify-center gap-4 mb-2">
+            <button 
+              onClick={(e) => { e.stopPropagation(); scrollSidebar('up'); }} 
+              className="p-3 bg-pink-500 text-white rounded-full hover:bg-pink-600 transition-all shadow-lg active:scale-95"
+              title="Scroll Up"
+            >
+              <ChevronUp size={20} />
+            </button>
+            <button 
+              onClick={(e) => { e.stopPropagation(); scrollSidebar('down'); }} 
+              className="p-3 bg-pink-500 text-white rounded-full hover:bg-pink-600 transition-all shadow-lg active:scale-95"
+              title="Scroll Down"
+            >
+              <ChevronDown size={20} />
+            </button>
+          </div>
+
           <button 
             onClick={() => setView('login')}
             className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-red-500 hover:bg-red-50 transition-all"
@@ -8663,6 +9192,14 @@ export default function App() {
                   setFeeMaster={setFeeMaster}
                   feeTransactions={feeTransactions}
                   setFeeTransactions={setFeeTransactions}
+                  bankBalance={bankBalance}
+                  setBankBalance={setBankBalance}
+                  cashBalance={cashBalance}
+                  setCashBalance={setCashBalance}
+                  contraEntries={contraEntries}
+                  setContraEntries={setContraEntries}
+                  adjustmentLogs={adjustmentLogs}
+                  setAdjustmentLogs={setAdjustmentLogs}
                   schoolProfile={schoolProfile}
                   masterData={masterData}
                   showModal={showModal}

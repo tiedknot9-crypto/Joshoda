@@ -18,7 +18,9 @@ import {
   X,
   Eye,
   FileEdit,
-  ClipboardList
+  ClipboardList,
+  BookOpen,
+  Users
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import * as XLSX from 'xlsx';
@@ -53,12 +55,19 @@ export const FeeManagement = ({
   currentUser,
   onShowReceipt
 }: FeeManagementProps) => {
-  const [activeTab, setActiveTab] = useState<'collect' | 'master' | 'reports'>('collect');
+  const [activeTab, setActiveTab] = useState<'collect' | 'master' | 'reports' | 'ledger'>('collect');
   const [selectedClass, setSelectedClass] = useState('');
   const [selectedSection, setSelectedSection] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [showCollectModal, setShowCollectModal] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+  const [selectedLedgerStudent, setSelectedLedgerStudent] = useState<Student | null>(null);
+  const [formData, setFormData] = useState<any>({
+    class: '',
+    feeType: '',
+    amount: 0,
+    frequency: 'Monthly'
+  });
   const [paymentData, setPaymentData] = useState<any>({
     paymentMethod: 'Cash',
     date: new Date().toISOString().split('T')[0]
@@ -82,10 +91,14 @@ export const FeeManagement = ({
       feeType: paymentData.feeType,
       amount: paymentData.amount,
       discount: paymentData.discount || 0,
+      discountReason: paymentData.discountReason || '',
+      scholarship: paymentData.scholarship || 0,
       fine: paymentData.fine || 0,
       totalPaid: paymentData.amount - (paymentData.discount || 0) + (paymentData.fine || 0),
+      paymentMode: paymentData.paymentMethod || 'Cash',
       paymentMethod: paymentData.paymentMethod,
       date: paymentData.date,
+      dueDate: paymentData.dueDate || paymentData.date,
       invoiceNumber: `INV-${Date.now().toString().slice(-6)}`,
       status: 'Paid',
       remarks: paymentData.remarks
@@ -114,6 +127,7 @@ export const FeeManagement = ({
       <div className="flex gap-4 border-b border-slate-200">
         <button onClick={() => setActiveTab('collect')} className={`px-6 py-3 font-bold text-sm transition-all border-b-2 ${activeTab === 'collect' ? 'border-primary text-primary' : 'border-transparent text-text-sub'}`}>Collect Fee</button>
         <button onClick={() => setActiveTab('master')} className={`px-6 py-3 font-bold text-sm transition-all border-b-2 ${activeTab === 'master' ? 'border-primary text-primary' : 'border-transparent text-text-sub'}`}>Fee Master</button>
+        <button onClick={() => setActiveTab('ledger')} className={`px-6 py-3 font-bold text-sm transition-all border-b-2 ${activeTab === 'ledger' ? 'border-primary text-primary' : 'border-transparent text-text-sub'}`}>Student Ledger</button>
         <button onClick={() => setActiveTab('reports')} className={`px-6 py-3 font-bold text-sm transition-all border-b-2 ${activeTab === 'reports' ? 'border-primary text-primary' : 'border-transparent text-text-sub'}`}>Reports</button>
       </div>
 
@@ -214,6 +228,139 @@ export const FeeManagement = ({
               </table>
             </div>
           </Card>
+        </div>
+      )}
+
+      {activeTab === 'ledger' && (
+        <div className="space-y-8">
+          <Card className="p-6">
+            <div className="flex flex-col md:flex-row gap-6 items-end">
+              <div className="flex-1">
+                <Select 
+                  label="Select Student for Ledger" 
+                  options={students.map(s => `${s.name} (${s.studentId})`)} 
+                  value={selectedLedgerStudent ? `${selectedLedgerStudent.name} (${selectedLedgerStudent.studentId})` : ''} 
+                  onChange={(e: any) => {
+                    const id = e.target.value.split('(')[1].replace(')', '');
+                    setSelectedLedgerStudent(students.find(s => s.studentId === id) || null);
+                  }} 
+                />
+              </div>
+              <button className="btn-secondary flex items-center gap-2 py-3 px-6"><Download size={18} /> Export Ledger</button>
+            </div>
+          </Card>
+
+          {selectedLedgerStudent ? (
+            <div className="space-y-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                {(() => {
+                  const studentFees = feeMaster.filter(f => f.class === selectedLedgerStudent.class);
+                  const studentTransactions = feeTransactions.filter(t => t.studentId === selectedLedgerStudent.studentId);
+                  
+                  const totalAssigned = studentFees.reduce((sum, f) => sum + f.amount, 0);
+                  const totalPaid = studentTransactions.reduce((sum, t) => sum + t.totalPaid, 0);
+                  const totalDiscount = studentTransactions.reduce((sum, t) => sum + (t.discount || 0), 0);
+                  const totalFine = studentTransactions.reduce((sum, t) => sum + (t.fine || 0), 0);
+                  const balance = totalAssigned + totalFine - totalPaid - totalDiscount;
+
+                  return (
+                    <>
+                      <Card className="p-6 border-l-4 border-blue-500">
+                        <p className="text-[10px] font-black text-text-sub uppercase tracking-widest mb-1">Total Assigned</p>
+                        <p className="text-2xl font-black text-text-heading">₹{totalAssigned.toLocaleString()}</p>
+                      </Card>
+                      <Card className="p-6 border-l-4 border-green-500">
+                        <p className="text-[10px] font-black text-text-sub uppercase tracking-widest mb-1">Total Paid</p>
+                        <p className="text-2xl font-black text-green-600">₹{totalPaid.toLocaleString()}</p>
+                      </Card>
+                      <Card className="p-6 border-l-4 border-orange-500">
+                        <p className="text-[10px] font-black text-text-sub uppercase tracking-widest mb-1">Total Discount</p>
+                        <p className="text-2xl font-black text-orange-600">₹{totalDiscount.toLocaleString()}</p>
+                      </Card>
+                      <Card className="p-6 border-l-4 border-red-500">
+                        <p className="text-[10px] font-black text-text-sub uppercase tracking-widest mb-1">Balance Due</p>
+                        <p className="text-2xl font-black text-red-600">₹{balance.toLocaleString()}</p>
+                      </Card>
+                    </>
+                  );
+                })()}
+              </div>
+
+              <Card className="p-8">
+                <h3 className="text-xl font-black text-text-heading uppercase mb-8 flex items-center gap-3">
+                  <BookOpen className="text-primary" /> Transaction History
+                </h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left">
+                    <thead>
+                      <tr className="border-b border-slate-100">
+                        <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Date</th>
+                        <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Particulars</th>
+                        <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Type</th>
+                        <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Debit (Due)</th>
+                        <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Credit (Paid)</th>
+                        <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Balance</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50">
+                      {(() => {
+                        const studentFees = feeMaster.filter(f => f.class === selectedLedgerStudent.class);
+                        const studentTransactions = feeTransactions.filter(t => t.studentId === selectedLedgerStudent.studentId);
+                        
+                        // Combine and sort by date
+                        // For simplicity, we'll treat FeeMaster as assigned at the start of the session
+                        const ledgerItems = [
+                          ...studentFees.map(f => ({
+                            date: '2024-04-01', // Session start
+                            particulars: `Fee Assigned: ${f.feeType} (${f.frequency})`,
+                            type: 'Debit',
+                            amount: f.amount,
+                            isDebit: true
+                          })),
+                          ...studentTransactions.map(t => ({
+                            date: t.date,
+                            particulars: `Fee Paid: ${t.feeType} (Inv: ${t.invoiceNumber})`,
+                            type: 'Credit',
+                            amount: t.totalPaid,
+                            isDebit: false
+                          }))
+                        ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+                        let runningBalance = 0;
+                        return ledgerItems.map((item, idx) => {
+                          if (item.isDebit) runningBalance += item.amount;
+                          else runningBalance -= item.amount;
+
+                          return (
+                            <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
+                              <td className="py-4 text-sm text-text-sub font-medium">{item.date}</td>
+                              <td className="py-4 text-sm font-bold text-text-heading">{item.particulars}</td>
+                              <td className="py-4">
+                                <span className={`text-[10px] font-black px-2 py-1 rounded-full uppercase ${item.isDebit ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+                                  {item.type}
+                                </span>
+                              </td>
+                              <td className="py-4 text-sm font-black text-red-600">{item.isDebit ? `₹${item.amount.toLocaleString()}` : '-'}</td>
+                              <td className="py-4 text-sm font-black text-green-600">{!item.isDebit ? `₹${item.amount.toLocaleString()}` : '-'}</td>
+                              <td className="py-4 text-sm font-black text-primary">₹{runningBalance.toLocaleString()}</td>
+                            </tr>
+                          );
+                        });
+                      })()}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-20 text-center">
+              <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center text-slate-400 mb-6">
+                <Users size={40} />
+              </div>
+              <h3 className="text-xl font-black text-text-heading uppercase">No Student Selected</h3>
+              <p className="text-text-sub font-medium max-w-xs mx-auto mt-2">Please select a student from the dropdown above to view their detailed financial ledger.</p>
+            </div>
+          )}
         </div>
       )}
 

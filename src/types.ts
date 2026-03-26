@@ -176,6 +176,7 @@ export interface Homework {
   teacherName: string;
   date: string;
   file?: string;
+  status?: 'Pending' | 'Completed' | 'Submitted';
   submissions: HomeworkSubmission[];
 }
 
@@ -227,7 +228,11 @@ export interface FeeTransaction {
   scholarship: number;
   totalPaid: number;
   paymentMode: 'Cash' | 'UPI' | 'Bank Transfer';
+  paymentMethod?: string;
   transactionId?: string;
+  invoiceNumber?: string;
+  fine?: number;
+  remarks?: string;
   date: string;
   dueDate: string;
   status: 'Paid' | 'Partial' | 'Due';
@@ -235,6 +240,7 @@ export interface FeeTransaction {
 
 export interface Staff {
   id: string;
+  staffId: string;
   name: string;
   surname: string;
   email: string;
@@ -345,6 +351,9 @@ export interface Student {
   class: string;
   section: string;
   studentId: string;
+  rollNo?: string;
+  mobile?: string;
+  dob?: string;
   caste: string;
   category: string;
   fatherName: string;

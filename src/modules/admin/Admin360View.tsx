@@ -22,7 +22,8 @@ import {
   TrendingUp,
   TrendingDown,
   ArrowUpRight,
-  ArrowDownRight
+  ArrowDownRight,
+  UserPlus
 } from 'lucide-react';
 import { 
   LineChart, 

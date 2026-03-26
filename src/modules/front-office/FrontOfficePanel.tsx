@@ -183,7 +183,7 @@ export const FrontOfficePanel = ({
               <button 
                 onClick={() => {
                   if (!newVisitor.name || !newVisitor.mobile) return;
-                  setVisitors([{...newVisitor, id: Date.now().toString()}, ...visitors]);
+                  setVisitors([{...newVisitor as Visitor, id: Date.now().toString()}, ...visitors]);
                   setNewVisitor({
                     date: new Date().toISOString().split('T')[0],
                     inTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -254,7 +254,7 @@ export const FrontOfficePanel = ({
               <button 
                 onClick={() => {
                   if (!newComplaint.name || !newComplaint.description) return;
-                  setComplaints([{...newComplaint, id: Date.now().toString()}, ...complaints]);
+                  setComplaints([{...newComplaint as Complaint, id: Date.now().toString()}, ...complaints]);
                   setNewComplaint({
                     date: new Date().toISOString().split('T')[0],
                     status: 'Pending'

@@ -32,7 +32,8 @@ import {
   Home,
   FileOutput,
   HeartPulse,
-  MessageCircle
+  MessageCircle,
+  Receipt
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Card } from '../../components/common/Card';
