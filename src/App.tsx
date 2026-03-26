@@ -76,7 +76,8 @@ import {
   PieChart as PieChartIcon,
   Menu,
   ChevronUp,
-  ChevronDown
+  ChevronDown,
+  ChevronLeft
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import * as XLSX from 'xlsx';
@@ -332,6 +333,10 @@ interface FeeTransaction {
   totalPaid: number;
   paymentMode: 'Cash' | 'UPI' | 'Bank Transfer';
   transactionId?: string;
+  invoiceNumber?: string;
+  rollNo?: string;
+  collectedBy?: string;
+  period?: string;
   date: string;
   dueDate: string;
   status: 'Paid' | 'Partial' | 'Due';
@@ -375,6 +380,7 @@ interface AdmissionEnquiry {
   motherName?: string;
   address?: string;
   gender?: string;
+  note?: string;
 }
 
 interface Visitor {
@@ -449,6 +455,7 @@ interface Student {
   class: string;
   section: string;
   studentId: string;
+  rollNo?: string;
   caste: string;
   category: string;
   fatherName: string;
@@ -479,23 +486,26 @@ const SidebarItem = ({
   icon: Icon, 
   label, 
   active, 
-  onClick 
+  onClick,
+  isSidebarOpen
 }: { 
   icon: any, 
   label: string, 
   active: boolean, 
-  onClick: () => void 
+  onClick: () => void,
+  isSidebarOpen: boolean
 }) => (
   <button
     onClick={onClick}
+    title={!isSidebarOpen ? label : ''}
     className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
       active 
         ? 'bg-primary text-white shadow-lg shadow-primary/20' 
         : 'text-text-sub hover:bg-slate-100'
-    }`}
+    } ${!isSidebarOpen ? 'justify-center px-0' : ''}`}
   >
-    <Icon size={20} />
-    <span className="font-medium">{label}</span>
+    <Icon size={20} className="shrink-0" />
+    {isSidebarOpen && <span className="font-medium whitespace-nowrap overflow-hidden text-ellipsis">{label}</span>}
   </button>
 );
 
@@ -2185,7 +2195,11 @@ const FeeManagement = ({
   const [activeTab, setActiveTab] = useState<'collect' | 'master' | 'reports' | 'ledger' | 'bank-cash' | 'adjustment-logs'>('collect');
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [selectedLedgerStudent, setSelectedLedgerStudent] = useState<Student | null>(null);
-  const [selectedFeeType, setSelectedFeeType] = useState('');
+  const [selectedMonth, setSelectedMonth] = useState(new Date().toLocaleString('default', { month: 'long' }));
+  const months = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
   const [paymentDetails, setPaymentDetails] = useState({
     mode: 'Cash' as 'Cash' | 'UPI' | 'Bank Transfer',
     transactionId: '',
@@ -2291,16 +2305,20 @@ const FeeManagement = ({
   });
 
   const handleCollectFee = () => {
-    if (!selectedStudent || !selectedFeeType) {
-      alert('Please select student and fee type');
+    if (!selectedStudent) {
+      alert('Please select student');
       return;
     }
 
-    const feeInfo = feeMaster.find((f: any) => f.class === selectedStudent.class && f.feeType === selectedFeeType);
-    if (!feeInfo) {
-      alert('Fee not configured for this class and type in Fee Master');
+    // Find all monthly fees for this class to consolidate
+    const monthlyFees = feeMaster.filter((f: any) => f.class === selectedStudent.class && f.frequency === 'Monthly');
+    
+    if (monthlyFees.length === 0) {
+      alert('No monthly fees configured for this class in Fee Master. Please configure fees first.');
       return;
     }
+
+    const totalMonthlyAmount = monthlyFees.reduce((sum: number, f: any) => sum + f.amount, 0);
 
     // Duplicate Transaction ID check
     if (paymentDetails.mode !== 'Cash' && paymentDetails.transactionId) {
@@ -2311,22 +2329,27 @@ const FeeManagement = ({
       }
     }
 
-    const totalPaid = feeInfo.amount - paymentDetails.discount - paymentDetails.scholarship;
+    const totalPaid = totalMonthlyAmount - paymentDetails.discount - paymentDetails.scholarship;
+    const invoiceNumber = `REC-${Date.now().toString().slice(-6)}`;
     
     const newTransaction: FeeTransaction = {
       id: `FT${Date.now()}`,
       studentId: selectedStudent.studentId,
       studentName: `${selectedStudent.name} ${selectedStudent.surname}`,
+      rollNo: selectedStudent.rollNo || 'N/A',
       class: selectedStudent.class,
       section: selectedStudent.section,
-      feeType: selectedFeeType,
-      amount: feeInfo.amount,
+      feeType: `Consolidated Monthly Fees (${selectedMonth})`,
+      amount: totalMonthlyAmount,
       discount: paymentDetails.discount,
       discountReason: paymentDetails.discountReason,
       scholarship: paymentDetails.scholarship,
       totalPaid,
       paymentMode: paymentDetails.mode,
       transactionId: paymentDetails.transactionId,
+      invoiceNumber,
+      collectedBy: 'Admin',
+      period: selectedMonth,
       date: new Date().toLocaleDateString(),
       dueDate: paymentDetails.dueDate,
       status: 'Paid'
@@ -2336,11 +2359,10 @@ const FeeManagement = ({
     setShowReceipt(newTransaction);
     
     // Alert success
-    alert(`Fee of ₹${totalPaid} collected for ${selectedStudent.name}`);
+    alert(`Consolidated Fee of ₹${totalPaid} collected for ${selectedStudent.name} for ${selectedMonth}`);
     
     // Reset form
     setSelectedStudent(null);
-    setSelectedFeeType('');
     setPaymentDetails({
       mode: 'Cash',
       transactionId: '',
@@ -2529,7 +2551,6 @@ const FeeManagement = ({
                     onChange={(e) => {
                       const student = students.find((s: any) => s.studentId === e.target.value);
                       setSelectedStudent(student || null);
-                      setSelectedFeeType('');
                     }}
                   >
                     <option value="">Select Student</option>
@@ -2542,24 +2563,38 @@ const FeeManagement = ({
                   <p className="text-[10px] text-text-sub italic ml-1">{filteredStudentsForCollection.length} students found matching filters.</p>
                 </div>
                 <div className="space-y-2">
-                  <label className="label-text">Fee Type</label>
+                  <label className="label-text">Select Month</label>
                   <select 
                     className="input-field"
-                    value={selectedFeeType}
-                    onChange={(e) => setSelectedFeeType(e.target.value)}
+                    value={selectedMonth}
+                    onChange={(e) => setSelectedMonth(e.target.value)}
                   >
-                    <option value="">Select Fee Type</option>
-                    {feeMaster
-                      .filter(fm => fm.class === selectedStudent?.class)
-                      .map(fm => (
-                        <option key={fm.id} value={fm.feeType}>
-                          {fm.feeType} (₹{fm.amount})
-                        </option>
-                      ))
-                    }
+                    {months.map(m => <option key={m} value={m}>{m}</option>)}
                   </select>
-                  {selectedStudent && feeMaster.filter(fm => fm.class === selectedStudent.class).length === 0 && (
-                    <p className="text-[10px] text-red-500 italic">No fees assigned to Class {selectedStudent.class} in Fee Master.</p>
+                  {selectedStudent && (
+                    <div className="mt-2 p-3 bg-slate-50 rounded-xl border border-slate-100">
+                      <p className="text-[10px] font-black text-primary uppercase tracking-widest mb-2">Consolidated Fees for {selectedStudent.class}</p>
+                      <div className="space-y-1">
+                        {feeMaster
+                          .filter(fm => fm.class === selectedStudent.class && fm.frequency === 'Monthly')
+                          .map(fm => (
+                            <div key={fm.id} className="flex justify-between text-[10px] font-bold">
+                              <span className="text-text-sub">{fm.feeType}</span>
+                              <span className="text-text-heading">₹{fm.amount}</span>
+                            </div>
+                          ))
+                        }
+                        <div className="pt-2 mt-2 border-t border-slate-200 flex justify-between text-xs font-black">
+                          <span className="text-primary">TOTAL MONTHLY</span>
+                          <span className="text-primary">₹{feeMaster
+                            .filter(fm => fm.class === selectedStudent?.class && fm.frequency === 'Monthly')
+                            .reduce((sum, fm) => sum + fm.amount, 0)}</span>
+                        </div>
+                      </div>
+                      {feeMaster.filter(fm => fm.class === selectedStudent.class && fm.frequency === 'Monthly').length === 0 && (
+                        <p className="text-[10px] text-red-500 italic">No monthly fees assigned to Class {selectedStudent.class}.</p>
+                      )}
+                    </div>
                   )}
                 </div>
               </div>
@@ -2616,9 +2651,10 @@ const FeeManagement = ({
                   <p className="text-sm font-bold text-primary uppercase tracking-wider">Total Payable</p>
                   <p className="text-3xl font-black text-primary">
                     ₹{(() => {
-                      if (!selectedStudent || !selectedFeeType) return 0;
-                      const fee = feeMaster.find((f: any) => f.class === selectedStudent.class && f.feeType === selectedFeeType);
-                      return fee ? (fee.amount - paymentDetails.discount - paymentDetails.scholarship) : 0;
+                      if (!selectedStudent) return 0;
+                      const monthlyFees = feeMaster.filter((f: any) => f.class === selectedStudent.class && f.frequency === 'Monthly');
+                      const totalMonthly = monthlyFees.reduce((sum: number, f: any) => sum + f.amount, 0);
+                      return totalMonthly > 0 ? (totalMonthly - paymentDetails.discount - paymentDetails.scholarship) : 0;
                     })()}
                   </p>
                   {selectedStudent && (
@@ -3427,6 +3463,7 @@ const FeeManagement = ({
 // --- Fee Management Sub-components ---
 
 const ReceiptModal = ({ transaction, schoolProfile, onClose }: { transaction: FeeTransaction, schoolProfile: any, onClose: () => void }) => {
+  const [printSize, setPrintSize] = useState<'58mm' | 'A4-half'>('58mm');
   const receiptRef = React.useRef<HTMLDivElement>(null);
 
   const handlePrint = () => {
@@ -3442,12 +3479,12 @@ const ReceiptModal = ({ transaction, schoolProfile, onClose }: { transaction: Fe
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
       pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-      pdf.save(`Receipt_${transaction.id}.pdf`);
+      pdf.save(`Receipt_${transaction.invoiceNumber || transaction.id}.pdf`);
     }
   };
 
   const shareOnWhatsApp = () => {
-    const text = `*Fee Receipt - ${schoolProfile.name}*\n\nStudent: ${transaction.studentName}\nClass: ${transaction.class}-${transaction.section}\nFee Type: ${transaction.feeType}\nAmount Paid: ₹${transaction.totalPaid}\nDate: ${transaction.date}\nTransaction ID: ${transaction.transactionId || 'N/A'}\nStatus: ${transaction.status}`;
+    const text = `*Fee Receipt - ${schoolProfile.name}*\n_${schoolProfile.tagline}_\n\nReceipt No: ${transaction.invoiceNumber || transaction.id}\nStudent: ${transaction.studentName}\nClass: ${transaction.class}-${transaction.section}\nPeriod: ${transaction.period || 'N/A'}\nFee Type: ${transaction.feeType}\nTotal Amount: ₹${transaction.amount}\nPaid Amount: ₹${transaction.totalPaid}\nDate: ${transaction.date}\nTxn ID: ${transaction.transactionId || 'N/A'}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
   };
 
@@ -3458,88 +3495,173 @@ const ReceiptModal = ({ transaction, schoolProfile, onClose }: { transaction: Fe
         animate={{ scale: 1, opacity: 1 }}
         className="bg-white rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl"
       >
-        <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-primary text-white">
+        <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-primary text-white no-print">
           <h2 className="text-xl font-bold flex items-center gap-2">
             <Receipt size={24} />
             Fee Receipt
           </h2>
+          <div className="flex gap-2">
+            <button 
+              onClick={() => setPrintSize('58mm')}
+              className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${printSize === '58mm' ? 'bg-white text-primary shadow-lg' : 'bg-white/20 text-white hover:bg-white/30'}`}
+            >
+              58mm Thermal
+            </button>
+            <button 
+              onClick={() => setPrintSize('A4-half')}
+              className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${printSize === 'A4-half' ? 'bg-white text-primary shadow-lg' : 'bg-white/20 text-white hover:bg-white/30'}`}
+            >
+              A4 Half
+            </button>
+          </div>
           <button onClick={onClose} className="p-2 hover:bg-white/20 rounded-full transition-all">
             <X size={20} />
           </button>
         </div>
         
-        <div className="p-8 overflow-y-auto max-h-[70vh]" ref={receiptRef}>
-          <div className="text-center mb-8">
-            <h1 className="text-2xl font-black text-primary uppercase tracking-tighter">{schoolProfile.name}</h1>
-            <p className="text-sm text-text-secondary">{schoolProfile.address}</p>
-            <p className="text-sm text-text-secondary">Contact: {schoolProfile.contact} | Reg No: {schoolProfile.regNo}</p>
-          </div>
-
-          <div className="grid grid-cols-2 gap-8 mb-8 p-6 bg-slate-50 rounded-2xl border border-slate-100">
-            <div className="space-y-2">
-              <p className="text-xs font-bold text-text-secondary uppercase tracking-wider">Student Details</p>
-              <p className="font-bold text-lg">{transaction.studentName}</p>
-              <p className="text-sm text-text-sub">Class: {transaction.class} | Section: {transaction.section}</p>
-              <p className="text-sm text-text-sub">ID: {transaction.studentId}</p>
-            </div>
-            <div className="space-y-2 text-right">
-              <p className="text-xs font-bold text-text-secondary uppercase tracking-wider">Receipt Info</p>
-              <p className="font-bold text-lg">#{transaction.id}</p>
-              <p className="text-sm text-text-sub">Date: {transaction.date}</p>
-              <p className="text-sm text-text-sub">Mode: {transaction.paymentMode}</p>
-            </div>
-          </div>
-
-          <table className="w-full mb-8">
-            <thead>
-              <tr className="border-b-2 border-slate-200">
-                <th className="text-left py-3 font-bold text-text-heading">Description</th>
-                <th className="text-right py-3 font-bold text-text-heading">Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr className="border-b border-slate-100">
-                <td className="py-4 text-text-sub">{transaction.feeType}</td>
-                <td className="py-4 text-right font-medium">₹{transaction.amount}</td>
-              </tr>
-              {transaction.discount > 0 && (
-                <tr className="border-b border-slate-100 text-green-600">
-                  <td className="py-4 italic">Discount ({transaction.discountReason})</td>
-                  <td className="py-4 text-right font-medium">-₹{transaction.discount}</td>
-                </tr>
-              )}
-              {transaction.scholarship > 0 && (
-                <tr className="border-b border-slate-100 text-blue-600">
-                  <td className="py-4 italic">Scholarship</td>
-                  <td className="py-4 text-right font-medium">-₹{transaction.scholarship}</td>
-                </tr>
-              )}
-            </tbody>
-            <tfoot>
-              <tr>
-                <td className="py-6 text-xl font-black text-text-heading uppercase">Total Paid</td>
-                <td className="py-6 text-right text-2xl font-black text-primary">₹{transaction.totalPaid}</td>
-              </tr>
-            </tfoot>
-          </table>
-
-          <div className="flex justify-between items-end pt-8 border-t border-dashed border-slate-200">
-            <div className="text-center">
-              <div className="w-24 h-24 bg-slate-100 rounded-lg mb-2 flex items-center justify-center border border-slate-200">
-                <QrCode size={48} className="text-slate-400" />
-              </div>
-              <p className="text-[10px] font-bold text-text-secondary uppercase">Scan to Verify</p>
-            </div>
-            <div className="text-center">
-              <div className="w-32 h-12 border-b border-slate-400 mb-2"></div>
-              <p className="text-[10px] font-bold text-text-secondary uppercase">Authorized Signatory</p>
-            </div>
-          </div>
+        <div className="p-8 overflow-y-auto max-h-[70vh] flex justify-center bg-slate-100">
+           <div 
+             ref={receiptRef}
+             className={`bg-white shadow-lg p-6 font-mono text-slate-800 transition-all duration-300 ${
+               printSize === '58mm' ? 'w-[220px] text-[10px]' : 'w-[560px] text-sm'
+             }`}
+             id="printable-receipt"
+           >
+             <style>{`
+               @media print {
+                 body * { visibility: hidden; }
+                 #printable-receipt, #printable-receipt * { visibility: visible; }
+                 #printable-receipt {
+                   position: absolute !important;
+                   left: 0 !important;
+                   top: 0 !important;
+                   width: ${printSize === '58mm' ? '58mm' : '148mm'} !important;
+                   box-shadow: none !important;
+                   padding: ${printSize === '58mm' ? '2mm' : '10mm'} !important;
+                   margin: 0 !important;
+                 }
+                 .no-print { display: none !important; }
+               }
+             `}</style>
+             
+             <div className="text-center mb-4">
+               <h1 className="font-black uppercase text-lg leading-tight">{schoolProfile.name}</h1>
+               <p className="italic text-xs">{schoolProfile.tagline}</p>
+               <p className="text-[10px] mt-1">{schoolProfile.address}</p>
+             </div>
+             
+             <div className="border-t border-dashed border-slate-400 my-2"></div>
+             
+             <div className="space-y-1">
+               <div className="flex justify-between">
+                 <span>Receipt No :</span>
+                 <span className="font-bold">{transaction.invoiceNumber || transaction.id}</span>
+               </div>
+               <div className="flex justify-between">
+                 <span>Date :</span>
+                 <span>{transaction.date}</span>
+               </div>
+             </div>
+             
+             <div className="border-t border-dashed border-slate-400 my-2"></div>
+             
+             <div className="space-y-1">
+               <div className="flex justify-between">
+                 <span>Student Name :</span>
+                 <span className="font-bold">{transaction.studentName}</span>
+               </div>
+               <div className="flex justify-between">
+                 <span>Class :</span>
+                 <span>{transaction.class} - {transaction.section}</span>
+               </div>
+               <div className="flex justify-between">
+                 <span>Roll No :</span>
+                 <span>{transaction.rollNo || 'N/A'}</span>
+               </div>
+             </div>
+             
+             <div className="border-t border-dashed border-slate-400 my-2"></div>
+             
+             <div className="mb-2">
+               <p className="font-bold italic underline mb-1">{transaction.period || 'For month to month'}</p>
+               <p className="font-bold mb-1">Fee Details:</p>
+               <div className="space-y-1">
+                 <div className="flex justify-between">
+                   <span>{transaction.feeType} :</span>
+                   <span>₹ {transaction.amount}</span>
+                 </div>
+                 {transaction.discount > 0 && (
+                   <div className="flex justify-between text-green-600">
+                     <span>Discount :</span>
+                     <span>- ₹ {transaction.discount}</span>
+                   </div>
+                 )}
+                 {transaction.scholarship > 0 && (
+                   <div className="flex justify-between text-blue-600">
+                     <span>Scholarship :</span>
+                     <span>- ₹ {transaction.scholarship}</span>
+                   </div>
+                 )}
+               </div>
+             </div>
+             
+             <div className="border-t border-dashed border-slate-400 my-2"></div>
+             
+             <div className="space-y-1 font-bold">
+               <div className="flex justify-between">
+                 <span>Total Amount :</span>
+                 <span>₹ {transaction.amount}</span>
+               </div>
+               <div className="flex justify-between">
+                 <span>Paid Amount :</span>
+                 <span className="text-primary">₹ {transaction.totalPaid}</span>
+               </div>
+               <div className="flex justify-between">
+                 <span>Balance :</span>
+                 <span>₹ 0</span>
+               </div>
+             </div>
+             
+             <div className="border-t border-dashed border-slate-400 my-2"></div>
+             
+             <div className="space-y-1">
+               <div className="flex justify-between">
+                 <span>Payment Mode :</span>
+                 <span>{transaction.paymentMode}</span>
+               </div>
+               {transaction.transactionId && (
+                 <div className="flex justify-between">
+                   <span>Txn ID :</span>
+                   <span className="text-[8px] break-all ml-2 text-right">{transaction.transactionId}</span>
+                 </div>
+               )}
+             </div>
+             
+             <div className="border-t border-dashed border-slate-400 my-2"></div>
+             
+             <div className="flex justify-between">
+               <span>Collected By :</span>
+               <span className="font-bold">{transaction.collectedBy || 'Admin'}</span>
+             </div>
+             
+             <div className="border-t border-dashed border-slate-400 my-2"></div>
+             
+             <div className="text-center mt-4 space-y-1">
+               <p className="font-black uppercase tracking-widest">THANK YOU</p>
+               <p className="text-xs">Visit Again 🙏</p>
+             </div>
+             
+             {printSize === 'A4-half' && (
+               <div className="mt-8 flex justify-center opacity-20">
+                 <QrCode size={48} />
+               </div>
+             )}
+           </div>
         </div>
 
-        <div className="p-6 bg-slate-50 border-t border-slate-100 flex flex-wrap gap-3 justify-center">
-          <button onClick={handlePrint} className="flex items-center gap-2 bg-white border border-slate-200 px-4 py-2 rounded-xl text-sm font-bold hover:bg-slate-100 transition-all">
-            <Printer size={16} /> Print
+        <div className="p-6 bg-slate-50 border-t border-slate-100 flex flex-wrap gap-3 justify-center no-print">
+          <button onClick={handlePrint} className="flex items-center gap-2 bg-primary text-white px-6 py-2 rounded-xl text-sm font-bold hover:bg-primary/90 transition-all shadow-lg shadow-primary/20">
+            <Printer size={16} /> Print Receipt
           </button>
           <button onClick={handleDownloadPDF} className="flex items-center gap-2 bg-white border border-slate-200 px-4 py-2 rounded-xl text-sm font-bold hover:bg-slate-100 transition-all">
             <Download size={16} /> PDF
@@ -3629,11 +3751,11 @@ const TeacherPanel = ({ syllabuses, setSyllabuses, leaveRequests, setLeaveReques
 
       <div className="flex flex-wrap gap-2 border-b border-slate-200">
         {[
-          { id: 'syllabus', label: 'Syllabus', icon: BookOpen, permission: 'Syllabus' },
-          { id: 'attendance', label: 'Attendance', icon: UserCheck, permission: 'QR Attendance' },
           { id: 'leaves', label: 'Leaves', icon: CalendarRange, permission: 'Leave Application' },
           { id: 'activities', label: 'Homework', icon: ClipboardList, permission: 'Home Work Assign' },
+          { id: 'attendance', label: 'Attendance', icon: UserCheck, permission: 'QR Attendance' },
           { id: 'progress', label: 'Progress', icon: GraduationCap, permission: 'Progress Report' },
+          { id: 'syllabus', label: 'Syllabus', icon: BookOpen, permission: 'Syllabus' },
           { id: 'fees', label: 'Fees', icon: Wallet, permission: 'Fee Structure' },
           { id: 'hostel', label: 'Hostel', icon: Bed, permission: 'Hostel' },
           { id: 'tools', label: 'Tools', icon: Settings, permission: 'all' },
@@ -4870,13 +4992,25 @@ const Admin360View = ({ students, masterData, feeTransactions, attendance }: any
     { month: 'Jun', amount: 670000 },
   ];
 
-  const attendanceData = [
-    { day: 'Mon', rate: 92 },
-    { day: 'Tue', rate: 94 },
-    { day: 'Wed', rate: 89 },
-    { day: 'Thu', rate: 95 },
-    { day: 'Fri', rate: 91 },
-    { day: 'Sat', rate: 85 },
+  const feeClassData = [
+    { class: 'Class X', amount: 120000 },
+    { class: 'Class IX', amount: 110000 },
+    { class: 'Class VIII', amount: 95000 },
+    { class: 'Class VII', amount: 88000 },
+    { class: 'Class VI', amount: 82000 },
+  ];
+
+  const financeData = [
+    { period: 'Daily', received: 45000, expense: 12000 },
+    { period: 'Weekly', received: 280000, expense: 85000 },
+    { period: 'Monthly', received: 1200000, expense: 450000 },
+  ];
+
+  const staffAttendanceData = [
+    { name: 'Mr. Sharma', status: 'Present', days: 24 },
+    { name: 'Ms. Gupta', status: 'Present', days: 26 },
+    { name: 'Mr. Verma', status: 'Absent', days: 22 },
+    { name: 'Ms. Singh', status: 'Present', days: 25 },
   ];
 
   const COLORS = ['#4F46E5', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'];
@@ -4944,7 +5078,7 @@ const Admin360View = ({ students, masterData, feeTransactions, attendance }: any
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <Card className="p-6">
-          <h3 className="font-bold text-text-heading mb-6 flex items-center gap-2">
+          <h3 className="font-bold text-text-heading mb-6 flex items-center gap-2 uppercase tracking-tighter">
             <BarChart3 size={18} className="text-primary" />
             Fee Collection Trend
           </h3>
@@ -4958,8 +5092,8 @@ const Admin360View = ({ students, masterData, feeTransactions, attendance }: any
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
-                <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748B' }} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748B' }} />
+                <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#64748B', fontWeight: 'bold' }} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#64748B', fontWeight: 'bold' }} />
                 <Tooltip 
                   contentStyle={{ backgroundColor: '#fff', borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
                   itemStyle={{ color: '#4F46E5', fontWeight: 'bold' }}
@@ -4971,71 +5105,99 @@ const Admin360View = ({ students, masterData, feeTransactions, attendance }: any
         </Card>
 
         <Card className="p-6">
-          <h3 className="font-bold text-text-heading mb-6 flex items-center gap-2">
-            <UserCheck size={18} className="text-primary" />
-            Weekly Attendance Rate (%)
+          <h3 className="font-bold text-text-heading mb-6 flex items-center gap-2 uppercase tracking-tighter">
+            <PieChartIcon size={18} className="text-primary" />
+            Class-wise Fee View
           </h3>
           <div className="h-64 w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={attendanceData}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
-                <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748B' }} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748B' }} domain={[0, 100]} />
-                <Tooltip 
-                  cursor={{ fill: '#F1F5F9' }}
-                  contentStyle={{ backgroundColor: '#fff', borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-                />
-                <Bar dataKey="rate" fill="#10B981" radius={[6, 6, 0, 0]} barSize={40} />
-              </BarChart>
+              <PieChart>
+                <Pie
+                  data={feeClassData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={60}
+                  outerRadius={80}
+                  paddingAngle={5}
+                  dataKey="amount"
+                >
+                  {feeClassData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip />
+              </PieChart>
             </ResponsiveContainer>
+          </div>
+          <div className="grid grid-cols-2 gap-2 mt-4">
+            {feeClassData.map((item, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }}></div>
+                <span className="text-[10px] font-bold text-text-sub uppercase">{item.class}</span>
+              </div>
+            ))}
           </div>
         </Card>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <Card className="p-6">
-          <h3 className="font-bold text-text-heading mb-6 flex items-center gap-2">
-            <BarChart3 size={18} className="text-primary" />
-            Class-wise Performance
+          <h3 className="font-bold text-text-heading mb-6 flex items-center gap-2 uppercase tracking-tighter">
+            <Wallet size={18} className="text-primary" />
+            Finance View (Received vs Expense)
           </h3>
-          <div className="space-y-4">
-            {masterData.classes.slice(0, 6).map((c: string) => (
-              <div key={c} className="space-y-2">
-                <div className="flex justify-between items-center text-sm">
-                  <span className="font-bold">{c}</span>
-                  <span className="text-text-secondary">88% Avg Score</span>
-                </div>
-                <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                  <div className="h-full bg-primary" style={{ width: '88%' }}></div>
-                </div>
-              </div>
-            ))}
+          <div className="h-64 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={financeData}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+                <XAxis dataKey="period" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#64748B', fontWeight: 'bold' }} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#64748B', fontWeight: 'bold' }} />
+                <Tooltip 
+                  cursor={{ fill: '#F1F5F9' }}
+                  contentStyle={{ backgroundColor: '#fff', borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                />
+                <Bar dataKey="received" fill="#10B981" radius={[4, 4, 0, 0]} barSize={30} />
+                <Bar dataKey="expense" fill="#EF4444" radius={[4, 4, 0, 0]} barSize={30} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="flex gap-4 mt-4 justify-center">
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+              <span className="text-[10px] font-black uppercase tracking-widest">Received</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+              <span className="text-[10px] font-black uppercase tracking-widest">Expense</span>
+            </div>
           </div>
         </Card>
 
         <Card className="p-6">
-          <h3 className="font-bold text-text-heading mb-6 flex items-center gap-2">
-            <Clock size={18} className="text-primary" />
-            Recent Activities
+          <h3 className="font-bold text-text-heading mb-6 flex items-center gap-2 uppercase tracking-tighter">
+            <UserCheck size={18} className="text-primary" />
+            Staff Attendance (Daily/Weekly/Monthly)
           </h3>
           <div className="space-y-4">
-            {[
-              { text: 'New student registered in Class 5', time: '2 mins ago', icon: UserPlus, color: 'text-blue-500' },
-              { text: 'Fee payment received from DS-102938', time: '15 mins ago', icon: Receipt, color: 'text-emerald-500' },
-              { text: 'Attendance marked for Class 10-A', time: '1 hour ago', icon: UserCheck, color: 'text-orange-500' },
-              { text: 'New exam schedule published', time: '3 hours ago', icon: ClipboardList, color: 'text-purple-500' }
-            ].map((activity, i) => (
-              <div key={i} className="flex items-start gap-4 p-3 hover:bg-slate-50 rounded-xl transition-all">
-                <div className={`w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center ${activity.color}`}>
-                  <activity.icon size={16} />
+            {staffAttendanceData.map((staff, i) => (
+              <div key={i} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl hover:bg-slate-100 transition-all">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-black text-xs">
+                    {staff.name.charAt(0)}
+                  </div>
+                  <div>
+                    <p className="text-xs font-black text-text-heading uppercase tracking-tighter">{staff.name}</p>
+                    <p className="text-[10px] text-text-sub font-bold uppercase tracking-widest">{staff.status}</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-sm font-medium text-text-heading">{activity.text}</p>
-                  <p className="text-[10px] text-text-secondary uppercase font-bold">{activity.time}</p>
+                <div className="text-right">
+                  <p className="text-xs font-black text-primary">{staff.days} Days</p>
+                  <p className="text-[9px] text-text-sub font-bold uppercase tracking-widest">Attendance</p>
                 </div>
               </div>
             ))}
           </div>
+          <button className="w-full mt-6 py-3 rounded-xl border border-slate-200 text-[10px] font-black uppercase tracking-widest hover:bg-slate-50 transition-all">View Full Staff Report</button>
         </Card>
       </div>
     </div>
@@ -6268,7 +6430,7 @@ const CommunicatePanel = ({ notifications, setNotifications, templates, setTempl
   );
 };
 
-const FrontOfficePanel = ({ enquiries, setEnquiries, visitors, setVisitors, complaints, setComplaints, setView, setFormData, currentUser }: any) => {
+const FrontOfficePanel = ({ enquiries, setEnquiries, visitors, setVisitors, complaints, setComplaints, setView, setFormData, currentUser, masterData }: any) => {
   const [activeTab, setActiveTab] = useState('enquiry');
   const [showAddEnquiry, setShowAddEnquiry] = useState(false);
   const [newEnquiry, setNewEnquiry] = useState<Partial<AdmissionEnquiry>>({
@@ -6353,54 +6515,114 @@ const FrontOfficePanel = ({ enquiries, setEnquiries, visitors, setVisitors, comp
       </div>
 
       {activeTab === 'enquiry' && (
-        <Card>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left">
-              <thead>
-                <tr className="border-b border-slate-100">
-                  <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Date</th>
-                  <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Student Name</th>
-                  <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Mobile</th>
-                  <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Class</th>
-                  <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Status</th>
-                  <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50">
-                {enquiries.map((e: AdmissionEnquiry) => (
-                  <tr key={e.id} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="py-4 text-sm text-text-sub">{e.date}</td>
-                    <td className="py-4 text-sm font-bold text-text-heading">{e.name} {e.surname}</td>
-                    <td className="py-4 text-sm text-text-sub">{e.mobile}</td>
-                    <td className="py-4 text-sm text-text-sub">{e.class}</td>
-                    <td className="py-4">
-                      <span className={`text-[10px] font-black px-2 py-1 rounded-full uppercase ${
-                        e.status === 'Closed' ? 'bg-slate-100 text-slate-700' : 
-                        e.status === 'Follow-up' ? 'bg-orange-100 text-orange-700' : 
-                        e.status === 'Approved' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'
-                      }`}>
-                        {e.status}
-                      </span>
-                    </td>
-                    <td className="py-4 text-right">
-                      {currentUser?.role === 'admin' && e.status !== 'Approved' && (
-                        <button 
-                          onClick={() => handleApproveForAdmission(e)}
-                          className="text-[10px] font-black text-primary hover:underline uppercase"
-                        >
-                          Approve for Admission
-                        </button>
-                      )}
-                      {e.status === 'Approved' && (
-                        <span className="text-[10px] font-black text-green-600 uppercase">Admission Processed</span>
-                      )}
-                    </td>
+        <div className="space-y-8">
+          <Card>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="border-b border-slate-100">
+                    <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Date</th>
+                    <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Student Name</th>
+                    <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Mobile</th>
+                    <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Class</th>
+                    <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Status</th>
+                    <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider text-right">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Card>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {enquiries.map((e: AdmissionEnquiry) => (
+                    <tr key={e.id} className="hover:bg-slate-50/50 transition-colors">
+                      <td className="py-4 text-sm text-text-sub">{e.date}</td>
+                      <td className="py-4 text-sm font-bold text-text-heading">{e.name} {e.surname}</td>
+                      <td className="py-4 text-sm text-text-sub">{e.mobile}</td>
+                      <td className="py-4 text-sm text-text-sub">{e.class}</td>
+                      <td className="py-4">
+                        <span className={`text-[10px] font-black px-2 py-1 rounded-full uppercase ${
+                          e.status === 'Closed' ? 'bg-slate-100 text-slate-700' : 
+                          e.status === 'Follow-up' ? 'bg-orange-100 text-orange-700' : 
+                          e.status === 'Approved' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'
+                        }`}>
+                          {e.status}
+                        </span>
+                      </td>
+                      <td className="py-4 text-right">
+                        {currentUser?.role === 'admin' && e.status !== 'Approved' && (
+                          <button 
+                            onClick={() => handleApproveForAdmission(e)}
+                            className="text-[10px] font-black text-primary hover:underline uppercase"
+                          >
+                            Convert to Admission
+                          </button>
+                        )}
+                        {e.status === 'Approved' && (
+                          <span className="text-[10px] font-black text-green-600 uppercase">Admission Processed</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+
+          <Card className="p-8 border-2 border-primary/10 bg-primary/5">
+            <h3 className="text-xl font-black text-primary uppercase tracking-tighter mb-6 flex items-center gap-2">
+              <UserPlus size={24} />
+              Quick Admission Enquiry
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <Input 
+                label="Student Name" 
+                placeholder="Full Name" 
+                value={newEnquiry.name || ''} 
+                onChange={(e: any) => setNewEnquiry({...newEnquiry, name: e.target.value})} 
+              />
+              <Input 
+                label="Father's Name" 
+                placeholder="Father's Name" 
+                value={newEnquiry.fatherName || ''} 
+                onChange={(e: any) => setNewEnquiry({...newEnquiry, fatherName: e.target.value})} 
+              />
+              <Input 
+                label="Mobile Number" 
+                placeholder="10-digit mobile" 
+                value={newEnquiry.mobile || ''} 
+                onChange={(e: any) => setNewEnquiry({...newEnquiry, mobile: e.target.value})} 
+              />
+              <div className="space-y-1">
+                <label className="label-text">Class</label>
+                <select 
+                  className="input-field"
+                  value={newEnquiry.class || ''}
+                  onChange={(e) => setNewEnquiry({...newEnquiry, class: e.target.value})}
+                >
+                  <option value="">Select Class</option>
+                  {masterData.classes.map((c: string) => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+              <Input 
+                label="Source" 
+                placeholder="e.g. Website, Walk-in" 
+                value={newEnquiry.source || ''} 
+                onChange={(e: any) => setNewEnquiry({...newEnquiry, source: e.target.value})} 
+              />
+              <Input 
+                label="Note" 
+                placeholder="Any special notes..." 
+                value={newEnquiry.note || ''} 
+                onChange={(e: any) => setNewEnquiry({...newEnquiry, note: e.target.value})} 
+              />
+            </div>
+            <div className="mt-8 flex justify-end">
+              <button 
+                onClick={handleAddEnquiry}
+                className="bg-primary text-white px-10 py-4 rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl shadow-primary/20 hover:scale-105 active:scale-95 transition-all"
+              >
+                Save Enquiry
+              </button>
+            </div>
+          </Card>
+        </div>
       )}
 
       {activeTab === 'visitors' && (
@@ -7018,6 +7240,7 @@ export default function App() {
   const [editingStudentId, setEditingStudentId] = useState<string | null>(null);
   const [schoolProfile, setSchoolProfile] = useState({
     name: 'Digital School Systems',
+    tagline: 'Excellence in Education',
     logo: 'https://storage.googleapis.com/cortex-dev-cortex-build-public-assets/ais-dev-b3e775v3rvj7egmf2trpz3-352124703760/tiedknot9%40gmail.com/1742920325178-image-0.png',
     signature: null,
     stamp: null,
@@ -7637,7 +7860,7 @@ export default function App() {
         ${isSidebarOpen ? 'w-72 translate-x-0' : 'w-0 -translate-x-full lg:w-24 lg:translate-x-0'} 
         bg-white border-r border-slate-200 flex flex-col transition-all duration-300 ease-in-out overflow-hidden
       `}>
-        <div className="p-6 flex items-center gap-3 border-b border-slate-50">
+        <div className="p-6 flex items-center gap-3 border-b border-slate-50 relative">
           <div className="shrink-0">
             <img 
               src={schoolProfile.logo || 'https://images.unsplash.com/photo-1594608661623-aa0bd3a67d28?q=80&w=200&auto=format&fit=crop'} 
@@ -7652,6 +7875,12 @@ export default function App() {
               <p className="text-[9px] text-secondary font-bold uppercase tracking-widest">SYSTEMS</p>
             </div>
           )}
+          <button 
+            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+            className="absolute -right-3 top-1/2 -translate-y-1/2 w-6 h-6 bg-white border border-slate-200 rounded-full flex items-center justify-center text-slate-400 hover:text-primary hover:border-primary transition-all z-10 shadow-sm hidden lg:flex"
+          >
+            <ChevronLeft size={14} className={`transition-transform duration-300 ${!isSidebarOpen ? 'rotate-180' : ''}`} />
+          </button>
         </div>
 
         <nav ref={sidebarNavRef} className="flex-1 px-4 space-y-2 overflow-y-auto custom-scrollbar scrollbar-left pb-10 relative">
@@ -7660,6 +7889,7 @@ export default function App() {
             label={isSidebarOpen ? "Dashboard" : ""} 
             active={view === 'dashboard'} 
             onClick={() => setView('dashboard')} 
+            isSidebarOpen={isSidebarOpen}
           />
           {currentUser?.role === 'teacher' && (
             <SidebarItem 
@@ -7667,6 +7897,7 @@ export default function App() {
               label={isSidebarOpen ? "Teacher Panel" : ""} 
               active={view === 'teacher-panel'} 
               onClick={() => setView('teacher-panel')} 
+              isSidebarOpen={isSidebarOpen}
             />
           )}
           {currentUser?.role === 'parent' && (
@@ -7675,6 +7906,7 @@ export default function App() {
               label={isSidebarOpen ? "Parent Portal" : ""} 
               active={view === 'parent-panel'} 
               onClick={() => setView('parent-panel')} 
+              isSidebarOpen={isSidebarOpen}
             />
           )}
           {currentUser?.role === 'admin' && (
@@ -7684,12 +7916,14 @@ export default function App() {
                 label={isSidebarOpen ? "Admin 360" : ""} 
                 active={view === 'admin-360'} 
                 onClick={() => setView('admin-360')} 
+                isSidebarOpen={isSidebarOpen}
               />
               <SidebarItem 
                 icon={Users} 
                 label={isSidebarOpen ? "Class 360" : ""} 
                 active={view === 'class-360'} 
                 onClick={() => setView('class-360')} 
+                isSidebarOpen={isSidebarOpen}
               />
               <SidebarItem 
                 icon={UserPlus} 
@@ -7701,66 +7935,77 @@ export default function App() {
                   setFormData({});
                   setView('register-student');
                 }} 
+                isSidebarOpen={isSidebarOpen}
               />
               <SidebarItem 
                 icon={Users} 
                 label={isSidebarOpen ? "Student List" : ""} 
                 active={view === 'student-list'} 
                 onClick={() => setView('student-list')} 
+                isSidebarOpen={isSidebarOpen}
               />
               <SidebarItem 
                 icon={Receipt} 
                 label={isSidebarOpen ? "Fee Management" : ""} 
                 active={view === 'fee-management'} 
                 onClick={() => setView('fee-management')} 
+                isSidebarOpen={isSidebarOpen}
               />
               <SidebarItem 
                 icon={Wallet} 
                 label={isSidebarOpen ? "Due Fees" : ""} 
                 active={view === 'due-fees'} 
                 onClick={() => setView('due-fees')} 
+                isSidebarOpen={isSidebarOpen}
               />
               <SidebarItem 
                 icon={CalendarRange} 
                 label={isSidebarOpen ? "Leave Management" : ""} 
                 active={view === 'leave-management'} 
                 onClick={() => setView('leave-management')} 
+                isSidebarOpen={isSidebarOpen}
               />
               <SidebarItem 
                 icon={UserCog} 
                 label={isSidebarOpen ? "Role Assign" : ""} 
                 active={view === 'role-assign'} 
                 onClick={() => setView('role-assign')} 
+                isSidebarOpen={isSidebarOpen}
               />
               <SidebarItem 
                 icon={Building2} 
                 label={isSidebarOpen ? "Front Office" : ""} 
                 active={view === 'front-office'} 
                 onClick={() => setView('front-office')} 
+                isSidebarOpen={isSidebarOpen}
               />
               <SidebarItem 
                 icon={UserCog} 
                 label={isSidebarOpen ? "Human Resource" : ""} 
                 active={view === 'human-resource'} 
                 onClick={() => setView('human-resource')} 
+                isSidebarOpen={isSidebarOpen}
               />
               <SidebarItem 
                 icon={MessageCircle} 
                 label={isSidebarOpen ? "Communicate" : ""} 
                 active={view === 'communicate'} 
                 onClick={() => setView('communicate')} 
+                isSidebarOpen={isSidebarOpen}
               />
               <SidebarItem 
                 icon={Coins} 
                 label={isSidebarOpen ? "Income & Expense" : ""} 
                 active={view === 'income-expense'} 
                 onClick={() => setView('income-expense')} 
+                isSidebarOpen={isSidebarOpen}
               />
               <SidebarItem 
                 icon={ShieldCheck} 
                 label={isSidebarOpen ? "User Logs" : ""} 
                 active={view === 'user-logs'} 
                 onClick={() => setView('user-logs')} 
+                isSidebarOpen={isSidebarOpen}
               />
             </>
           )}
@@ -7770,6 +8015,7 @@ export default function App() {
               label={isSidebarOpen ? "My Due Fees" : ""} 
               active={view === 'due-fees'} 
               onClick={() => setView('due-fees')} 
+              isSidebarOpen={isSidebarOpen}
             />
           )}
           {currentUser?.role === 'super-admin' && (
@@ -7778,6 +8024,7 @@ export default function App() {
               label={isSidebarOpen ? "Super Admin Panel" : ""} 
               active={view === 'super-admin-panel'} 
               onClick={() => setView('super-admin-panel')} 
+              isSidebarOpen={isSidebarOpen}
             />
           )}
           <SidebarItem 
@@ -7785,54 +8032,63 @@ export default function App() {
             label={isSidebarOpen ? "Academics" : ""} 
             active={view === 'academics'} 
             onClick={() => setView('academics')} 
+            isSidebarOpen={isSidebarOpen}
           />
           <SidebarItem 
             icon={UserCheck} 
             label={isSidebarOpen ? "Attendance" : ""} 
             active={view === 'attendance'} 
             onClick={() => setView('attendance')} 
+            isSidebarOpen={isSidebarOpen}
           />
           <SidebarItem 
             icon={ClipboardList} 
             label={isSidebarOpen ? "Examination" : ""} 
             active={view === 'examination'} 
             onClick={() => setView('examination')} 
+            isSidebarOpen={isSidebarOpen}
           />
           <SidebarItem 
             icon={UserPlus} 
             label={isSidebarOpen ? "ID Cards & Certs" : ""} 
             active={view === 'id-cards'} 
             onClick={() => setView('id-cards')} 
+            isSidebarOpen={isSidebarOpen}
           />
           <SidebarItem 
             icon={Home} 
             label={isSidebarOpen ? "Hostel" : ""} 
             active={view === 'hostel'} 
             onClick={() => setView('hostel')} 
+            isSidebarOpen={isSidebarOpen}
           />
           <SidebarItem 
             icon={Camera} 
             label={isSidebarOpen ? "Live Camera" : ""} 
             active={view === 'live-camera'} 
             onClick={() => setView('live-camera')} 
+            isSidebarOpen={isSidebarOpen}
           />
           <SidebarItem 
             icon={Calendar} 
             label={isSidebarOpen ? "Calendar" : ""} 
             active={view === 'calendar'} 
             onClick={() => setView('calendar')} 
+            isSidebarOpen={isSidebarOpen}
           />
           <SidebarItem 
             icon={BarChart3} 
             label={isSidebarOpen ? "Reports" : ""} 
             active={view === 'reports'} 
             onClick={() => setView('reports')} 
+            isSidebarOpen={isSidebarOpen}
           />
           <SidebarItem 
             icon={Settings} 
             label={isSidebarOpen ? "Settings" : ""} 
             active={view === 'settings'} 
             onClick={() => setView('settings')} 
+            isSidebarOpen={isSidebarOpen}
           />
           
           <div className="mt-auto p-4 text-center border-t border-slate-100">
@@ -7902,6 +8158,13 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-2 md:gap-4 relative">
+            <button 
+              onClick={() => setView('register-student')}
+              className="hidden sm:flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-xl hover:bg-primary/90 transition-all font-black text-[10px] uppercase tracking-widest shadow-lg shadow-primary/20"
+            >
+              <UserPlus size={16} />
+              New Registration
+            </button>
             <button className="p-2 hover:bg-slate-100 rounded-full text-text-secondary relative hidden sm:block">
               <Bell size={20} />
               <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-accent-warning rounded-full border-2 border-white"></span>
@@ -8097,148 +8360,246 @@ export default function App() {
             {view === 'dashboard' && (
               <motion.div
                 key="dashboard"
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
                 className="space-y-8"
               >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h1 className="text-3xl font-bold">Welcome Back! 🌿</h1>
-                    <p className="text-text-secondary">Here's what's happening in your school today.</p>
-                  </div>
-                  <button 
-                    onClick={() => {
-                      setEditingStudentId(null);
-                      setFormData({});
-                      setView('register-student');
-                    }} 
-                    className="btn-primary flex items-center gap-2"
-                  >
-                    <UserPlus size={20} />
-                    New Registration
-                  </button>
+                {/* Stats Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                  <Card className="p-6 bg-gradient-to-br from-primary to-primary/80 text-white border-none shadow-xl shadow-primary/20">
+                    <div className="flex justify-between items-start mb-4">
+                      <div className="p-3 bg-white/20 rounded-xl backdrop-blur-sm">
+                        <Users size={24} />
+                      </div>
+                      <span className="text-[10px] font-black bg-white/20 px-2 py-1 rounded-full uppercase tracking-widest">Today</span>
+                    </div>
+                    <p className="text-white/70 text-xs font-bold uppercase tracking-widest mb-1">Students Present</p>
+                    <div className="flex items-end gap-2">
+                      <h3 className="text-3xl font-black">842</h3>
+                      <span className="text-sm font-bold mb-1 opacity-60">/ {students.length + 1240}</span>
+                    </div>
+                    <div className="mt-4 h-1.5 bg-white/20 rounded-full overflow-hidden">
+                      <div className="h-full bg-white rounded-full" style={{ width: '92%' }}></div>
+                    </div>
+                    <p className="text-[10px] mt-2 font-black uppercase tracking-widest opacity-80">92% Attendance Rate</p>
+                  </Card>
+
+                  <Card className="p-6 bg-white border-slate-100 shadow-sm">
+                    <div className="flex justify-between items-start mb-4">
+                      <div className="p-3 bg-blue-50 text-blue-600 rounded-xl">
+                        <UserCheck size={24} />
+                      </div>
+                      <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-2 py-1 rounded-full uppercase tracking-widest">Today</span>
+                    </div>
+                    <p className="text-text-secondary text-xs font-bold uppercase tracking-widest mb-1">Teachers Present</p>
+                    <div className="flex items-end gap-2">
+                      <h3 className="text-3xl font-black text-text-heading">42</h3>
+                      <span className="text-sm font-bold text-text-sub mb-1">/ 45</span>
+                    </div>
+                    <div className="mt-4 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                      <div className="h-full bg-blue-500 rounded-full" style={{ width: '93%' }}></div>
+                    </div>
+                    <p className="text-[10px] mt-2 font-black text-blue-600 uppercase tracking-widest">93% Attendance Rate</p>
+                  </Card>
+
+                  <Card className="p-6 bg-white border-slate-100 shadow-sm">
+                    <div className="flex justify-between items-start mb-4">
+                      <div className="p-3 bg-green-50 text-green-600 rounded-xl">
+                        <Coins size={24} />
+                      </div>
+                    </div>
+                    <p className="text-text-secondary text-xs font-bold uppercase tracking-widest mb-1">Fee Collection</p>
+                    <h3 className="text-3xl font-black text-text-heading">₹ 1.2M</h3>
+                    <div className="flex items-center gap-1 mt-2 text-green-600">
+                      <ArrowUpCircle size={14} />
+                      <span className="text-[10px] font-black uppercase tracking-widest">+12% from last month</span>
+                    </div>
+                  </Card>
+
+                  <Card className="p-6 bg-white border-slate-100 shadow-sm">
+                    <div className="flex justify-between items-start mb-4">
+                      <div className="p-3 bg-red-50 text-red-600 rounded-xl">
+                        <AlertCircle size={24} />
+                      </div>
+                    </div>
+                    <p className="text-text-secondary text-xs font-bold uppercase tracking-widest mb-1">Due Fees</p>
+                    <h3 className="text-3xl font-black text-text-heading">₹ 450K</h3>
+                    <p className="text-[10px] text-text-sub mt-2 font-black uppercase tracking-widest">124 students pending</p>
+                  </Card>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                  {[
-                    { label: 'Total Students', value: students.length + 1240, icon: Users, color: 'bg-primary' },
-                    { label: 'Attendance', value: '94%', icon: CheckCircle2, color: 'bg-secondary' },
-                    { label: 'Pending Fees', value: '12', icon: AlertCircle, color: 'bg-accent' },
-                    { label: 'New Admissions', value: students.length, icon: GraduationCap, color: 'bg-purple-600' },
-                  ].map((stat, i) => (
-                    <Card key={i} className="flex items-center gap-4 p-6">
-                      <div className={`w-12 h-12 ${stat.color} rounded-xl flex items-center justify-center text-white shadow-lg shadow-black/5`}>
-                        <stat.icon size={24} />
-                      </div>
-                      <div>
-                        <p className="text-[10px] text-text-sub uppercase font-bold tracking-wider">{stat.label}</p>
-                        <p className="text-2xl font-bold text-text-heading">{stat.value}</p>
+                {/* Quick Access & Notice Board */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                  <div className="lg:col-span-2 space-y-8">
+                    {/* Quick Access */}
+                    <Card className="p-6">
+                      <h3 className="text-lg font-black text-text-heading mb-6 flex items-center gap-2 uppercase tracking-tighter">
+                        <Sparkles size={20} className="text-primary" />
+                        Quick Access
+                      </h3>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                        <button onClick={() => setView('income-expense')} className="flex flex-col items-center gap-3 p-4 rounded-2xl bg-slate-50 hover:bg-primary hover:text-white transition-all group">
+                          <div className="p-3 bg-white rounded-xl shadow-sm group-hover:bg-white/20">
+                            <Plus size={24} className="text-primary group-hover:text-white" />
+                          </div>
+                          <span className="text-[10px] font-black uppercase tracking-widest">Add Expense</span>
+                        </button>
+                        <button onClick={() => setView('human-resource')} className="flex flex-col items-center gap-3 p-4 rounded-2xl bg-slate-50 hover:bg-primary hover:text-white transition-all group">
+                          <div className="p-3 bg-white rounded-xl shadow-sm group-hover:bg-white/20">
+                            <CheckCircle2 size={24} className="text-primary group-hover:text-white" />
+                          </div>
+                          <span className="text-[10px] font-black uppercase tracking-widest">Leave Approval</span>
+                        </button>
+                        <button onClick={() => setView('hostel')} className="flex flex-col items-center gap-3 p-4 rounded-2xl bg-slate-50 hover:bg-primary hover:text-white transition-all group">
+                          <div className="p-3 bg-white rounded-xl shadow-sm group-hover:bg-white/20">
+                            <UserCheck2 size={24} className="text-primary group-hover:text-white" />
+                          </div>
+                          <span className="text-[10px] font-black uppercase tracking-widest">Hostel Attend.</span>
+                        </button>
+                        <button onClick={() => setView('register-student')} className="flex flex-col items-center gap-3 p-4 rounded-2xl bg-slate-50 hover:bg-primary hover:text-white transition-all group">
+                          <div className="p-3 bg-white rounded-xl shadow-sm group-hover:bg-white/20">
+                            <UserPlus size={24} className="text-primary group-hover:text-white" />
+                          </div>
+                          <span className="text-[10px] font-black uppercase tracking-widest">New Admission</span>
+                        </button>
                       </div>
                     </Card>
-                  ))}
-                </div>
 
-                <div className="space-y-4">
-                  <h3 className="text-lg font-bold flex items-center gap-2">
-                    <Sparkles size={20} className="text-primary" />
-                    Quick Access
-                  </h3>
-                  <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                    {[
-                      { label: 'Attendance', icon: UserCheck, view: 'attendance', color: 'bg-blue-500' },
-                      { label: 'Fees', icon: Wallet, view: 'fee-management', color: 'bg-green-500' },
-                      { label: 'Early Leave', icon: CalendarRange, view: 'leave-management', color: 'bg-purple-500' },
-                      { label: 'Homework', icon: BookOpen, view: 'teacher-panel', color: 'bg-orange-500' },
-                      { label: 'Hostel', icon: Bed, view: 'hostel', color: 'bg-rose-500' },
-                    ].map((shortcut, i) => (
-                      <button 
-                        key={i} 
-                        onClick={() => setView(shortcut.view as any)}
-                        className="flex flex-col items-center justify-center p-4 bg-white rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all group"
-                      >
-                        <div className={`w-12 h-12 ${shortcut.color} rounded-xl flex items-center justify-center text-white mb-2 group-hover:scale-110 transition-transform`}>
-                          <shortcut.icon size={24} />
+                    {/* Recent Activities & Performance */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                      <Card className="p-6">
+                        <h3 className="text-lg font-black text-text-heading mb-6 flex items-center gap-2 uppercase tracking-tighter">
+                          <History size={20} className="text-primary" />
+                          Recent Activities
+                        </h3>
+                        <div className="space-y-4">
+                          {[
+                            { title: 'Fee Collected', desc: 'Rahul Das paid Tuition Fee', time: '10 mins ago', icon: Coins, color: 'text-green-600', bg: 'bg-green-50' },
+                            { title: 'New Admission', desc: 'Priya Sharma joined Class VI-A', time: '1 hr ago', icon: UserPlus, color: 'text-blue-600', bg: 'bg-blue-50' },
+                            { title: 'Exam Scheduled', desc: 'Unit Test II for Class X', time: '3 hrs ago', icon: ClipboardList, color: 'text-purple-600', bg: 'bg-purple-50' },
+                            { title: 'Staff Attendance', desc: 'All teachers marked present', time: '4 hrs ago', icon: UserCheck, color: 'text-amber-600', bg: 'bg-amber-50' }
+                          ].map((item, i) => (
+                            <div key={i} className="flex gap-4 p-3 rounded-xl hover:bg-slate-50 transition-all group">
+                              <div className={`p-2 rounded-lg ${item.bg} ${item.color} group-hover:scale-110 transition-transform`}>
+                                <item.icon size={18} />
+                              </div>
+                              <div className="flex-1">
+                                <p className="text-xs font-black text-text-heading uppercase tracking-tighter">{item.title}</p>
+                                <p className="text-[10px] text-text-sub font-medium mt-0.5">{item.desc}</p>
+                                <p className="text-[9px] text-text-sub/60 font-black uppercase tracking-widest mt-1">{item.time}</p>
+                              </div>
+                            </div>
+                          ))}
                         </div>
-                        <span className="text-xs font-bold text-text-secondary">{shortcut.label}</span>
-                      </button>
-                    ))}
+                      </Card>
+
+                      <Card className="p-6">
+                        <h3 className="text-lg font-black text-text-heading mb-6 flex items-center gap-2 uppercase tracking-tighter">
+                          <BarChart3 size={20} className="text-primary" />
+                          Class Performance
+                        </h3>
+                        <div className="space-y-4">
+                          {[
+                            { class: 'Class X-A', perf: 92, color: 'bg-green-500' },
+                            { class: 'Class IX-B', perf: 85, color: 'bg-blue-500' },
+                            { class: 'Class VIII-C', perf: 78, color: 'bg-orange-500' },
+                            { class: 'Class VII-A', perf: 64, color: 'bg-red-500' },
+                          ].map((item, i) => (
+                            <div key={i} className="space-y-2">
+                              <div className="flex justify-between text-[10px] font-black uppercase tracking-widest">
+                                <span className="text-text-secondary">{item.class}</span>
+                                <span className="text-text-heading">{item.perf}%</span>
+                              </div>
+                              <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                                <div className={`h-full ${item.color} rounded-full`} style={{ width: `${item.perf}%` }}></div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </Card>
+                    </div>
                   </div>
-                </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                  <Card className="lg:col-span-2">
-                    <h3 className="text-lg font-bold mb-6 flex items-center gap-2">
-                      <Users size={20} className="text-primary" />
-                      Recent Registrations
-                    </h3>
-                    <div className="overflow-x-auto">
-                      <table className="w-full">
-                        <thead>
-                          <tr className="text-left text-xs text-text-secondary uppercase border-b border-slate-100">
-                            <th className="pb-4 font-bold">Student</th>
-                            <th className="pb-4 font-bold">ID</th>
-                            <th className="pb-4 font-bold">Class</th>
-                            <th className="pb-4 font-bold">Status</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-50">
-                          {students.length === 0 ? (
-                            <tr>
-                              <td colSpan={4} className="py-8 text-center text-text-secondary italic">No recent registrations</td>
-                            </tr>
-                          ) : (
-                            students.slice(-5).reverse().map((s) => (
-                              <tr key={s.id} className="text-sm">
-                                <td className="py-4">
-                                  <div className="flex items-center gap-3">
-                                    <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-primary font-bold">
-                                      {s.name[0]}
-                                    </div>
-                                    <span className="font-medium">{s.name} {s.surname}</span>
-                                  </div>
-                                </td>
-                                <td className="py-4 font-mono text-xs">{s.studentId}</td>
-                                <td className="py-4">{s.class} - {s.section}</td>
-                                <td className="py-4">
-                                  <span className="px-2 py-1 bg-green-100 text-green-600 rounded-md text-[10px] font-bold uppercase">Active</span>
-                                </td>
-                              </tr>
-                            ))
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </Card>
-
-                  <Card>
-                    <div className="flex items-center justify-between mb-6">
-                      <h3 className="text-lg font-bold">School Calendar</h3>
-                      <button onClick={() => setView('calendar')} className="text-xs font-bold text-primary hover:underline">View All</button>
-                    </div>
-                    <div className="space-y-4">
-                      {calendarEvents
-                        .filter(e => new Date(e.date) >= new Date())
-                        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-                        .slice(0, 3)
-                        .map((event, i) => (
-                        <div key={i} className="p-4 rounded-xl bg-slate-50 border border-slate-100">
-                          <div className="flex items-center justify-between mb-1">
-                            <p className="text-[10px] font-black text-primary uppercase tracking-wider">{event.type}</p>
-                            {event.icon && <span className="text-sm">{event.icon}</span>}
+                  <div className="space-y-8">
+                    {/* Notice Board */}
+                    <Card className="p-6 bg-slate-900 text-white border-none shadow-2xl">
+                      <h3 className="text-lg font-black mb-6 flex items-center gap-2 uppercase tracking-tighter">
+                        <Bell size={20} className="text-primary" />
+                        Notice Board
+                      </h3>
+                      <div className="space-y-4">
+                        {[
+                          { title: 'Summer Vacation', date: 'April 15, 2026', type: 'Holiday' },
+                          { title: 'Annual Sports Day', date: 'April 20, 2026', type: 'Event' },
+                          { title: 'Parent Teacher Meeting', date: 'May 05, 2026', type: 'PTM' },
+                        ].map((notice, i) => (
+                          <div key={i} className="p-4 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all">
+                            <p className="text-[10px] font-black text-primary uppercase tracking-widest mb-1">{notice.type}</p>
+                            <p className="text-sm font-bold mb-2">{notice.title}</p>
+                            <div className="flex items-center gap-2 text-[10px] text-white/50 font-bold uppercase tracking-widest">
+                              <Calendar size={12} />
+                              <span>{notice.date}</span>
+                            </div>
                           </div>
-                          <p className="font-bold text-sm text-text-heading">{event.title}</p>
-                          <p className="text-[10px] text-text-sub mt-1 flex items-center gap-1">
-                            <Clock size={10} />
-                            {new Date(event.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                          </p>
-                        </div>
-                      ))}
-                      {calendarEvents.length === 0 && (
-                        <p className="text-center py-8 text-text-sub italic text-sm">No upcoming events</p>
-                      )}
-                    </div>
-                  </Card>
+                        ))}
+                      </div>
+                      <button className="w-full mt-6 py-3 rounded-xl bg-white/10 hover:bg-white/20 text-[10px] font-black uppercase tracking-widest transition-all">
+                        View All Notices
+                      </button>
+                    </Card>
+
+                    {/* Birthdays */}
+                    <Card className="p-6">
+                      <h3 className="text-lg font-black text-text-heading mb-6 flex items-center gap-2 uppercase tracking-tighter">
+                        <Sparkles size={20} className="text-primary" />
+                        Today's Birthdays
+                      </h3>
+                      <div className="space-y-4">
+                        {[
+                          { name: 'Aman Gupta', role: 'Student', class: 'X-A', img: 'https://i.pravatar.cc/150?u=aman' },
+                          { name: 'Mrs. Sunita', role: 'Teacher', class: 'Maths', img: 'https://i.pravatar.cc/150?u=sunita' },
+                        ].map((bday, i) => (
+                          <div key={i} className="flex items-center gap-4">
+                            <img src={bday.img} alt="" className="w-10 h-10 rounded-full border-2 border-primary/20" />
+                            <div>
+                              <p className="text-sm font-bold text-text-heading">{bday.name}</p>
+                              <p className="text-[10px] text-text-sub uppercase tracking-widest font-black">{bday.role} • {bday.class}</p>
+                            </div>
+                            <div className="ml-auto text-primary">
+                              <Sparkles size={16} />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </Card>
+
+                    {/* School Calendar */}
+                    <Card className="p-6">
+                      <h3 className="text-lg font-black text-text-heading mb-6 flex items-center gap-2 uppercase tracking-tighter">
+                        <Calendar size={20} className="text-primary" />
+                        School Calendar
+                      </h3>
+                      <div className="space-y-4">
+                        {[
+                          { day: '28', month: 'MAR', event: 'Sports Day', type: 'Event' },
+                          { day: '29', month: 'MAR', event: 'Holi Holiday', type: 'Holiday' },
+                          { day: '05', month: 'APR', event: 'PTM Meeting', type: 'Meeting' }
+                        ].map((item, i) => (
+                          <div key={i} className="flex items-center gap-4">
+                            <div className="flex flex-col items-center justify-center w-12 h-12 rounded-xl bg-slate-50 border border-slate-100">
+                              <span className="text-xs font-black text-primary leading-none">{item.day}</span>
+                              <span className="text-[8px] font-black text-text-sub uppercase tracking-widest mt-0.5">{item.month}</span>
+                            </div>
+                            <div>
+                              <p className="text-xs font-black text-text-heading uppercase tracking-tighter">{item.event}</p>
+                              <p className="text-[9px] text-text-sub font-bold uppercase tracking-widest">{item.type}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </Card>
+                  </div>
                 </div>
               </motion.div>
             )}
@@ -8752,6 +9113,7 @@ export default function App() {
                   setView={setView}
                   setFormData={setFormData}
                   currentUser={currentUser}
+                  masterData={masterData}
                 />
               </motion.div>
             )}

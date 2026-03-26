@@ -231,6 +231,9 @@ export interface FeeTransaction {
   paymentMethod?: string;
   transactionId?: string;
   invoiceNumber?: string;
+  rollNo?: string;
+  collectedBy?: string;
+  period?: string;
   fine?: number;
   remarks?: string;
   date: string;
