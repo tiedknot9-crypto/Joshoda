@@ -5,14 +5,14 @@
   --font-sans: "Roboto", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Poppins", "Inter", sans-serif;
   
-  --color-primary: #db2777; /* pink-600 */
-  --color-primary-hover: #be185d; /* pink-700 */
-  --color-secondary: #e11d48; /* rose-600 */
-  --color-accent: #c026d3; /* fuchsia-600 */
-  --color-bg-soft: #fff1f2; /* rose-50 */
-  --color-text-heading: #881337; /* rose-900 */
-  --color-text-sub: #9f1239; /* rose-800 */
-  --color-text-placeholder: #fda4af; /* rose-300 */
+  --color-primary: #0056b3; /* Blue from logo */
+  --color-primary-hover: #004494;
+  --color-secondary: #4caf50; /* Green from logo */
+  --color-accent: #ff6600; /* Orange from logo */
+  --color-bg-soft: #f8fafc; /* Neutral light blue-gray */
+  --color-text-heading: #0f172a; /* Slate-900 */
+  --color-text-sub: #475569; /* Slate-600 */
+  --color-text-placeholder: #94a3b8; /* Slate-400 */
 }
 
 @layer base {

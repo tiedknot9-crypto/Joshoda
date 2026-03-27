@@ -52,6 +52,7 @@ import {
   FileEdit,
   ClipboardList,
   Eye,
+  EyeOff,
   FileDown,
   Sparkles,
   UserCircle,
@@ -7413,7 +7414,7 @@ export default function App() {
   const [schoolProfile, setSchoolProfile] = useState({
     name: 'Digital School Systems',
     tagline: 'Excellence in Education',
-    logo: 'https://storage.googleapis.com/cortex-dev-cortex-build-public-assets/ais-dev-b3e775v3rvj7egmf2trpz3-352124703760/tiedknot9%40gmail.com/1742920325178-image-0.png',
+    logo: 'https://ais-pre-b3e775v3rvj7egmf2trpz3-352124703760.asia-southeast1.run.app/logo.png',
     signature: null,
     stamp: null,
     contact: '+91 9876543210',
@@ -7870,60 +7871,60 @@ export default function App() {
   if (view === 'login') {
     return (
       <div 
-        className="min-h-screen flex flex-col items-center justify-center p-4 md:p-6 bg-cover bg-center relative"
-        style={{ backgroundImage: 'url("https://images.unsplash.com/photo-1541339907198-e08756ebafe3?q=80&w=2070&auto=format&fit=crop")' }}
+        className="min-h-screen flex flex-col items-center justify-center p-4 md:p-6 bg-slate-900 relative font-display overflow-hidden"
       >
-        {/* Overlay for better readability */}
-        <div className="absolute inset-0 bg-blue-900/20 backdrop-blur-[2px]"></div>
+        {/* Professional Academic Background (Library/Books) - No trees/grass */}
+        <div 
+          className="absolute inset-0 bg-cover bg-center opacity-40"
+          style={{ backgroundImage: 'url("https://images.unsplash.com/photo-1507842217343-583bb7270b66?q=80&w=2000&auto=format&fit=crop")' }}
+        ></div>
+        
+        {/* Subtle overlay for focus */}
+        <div className="absolute inset-0 bg-linear-to-b from-slate-900/80 via-slate-900/40 to-slate-900/80 backdrop-blur-[2px]"></div>
 
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="w-full max-w-md relative z-10"
+          className="w-full max-w-lg relative z-10"
         >
-          {/* Central Logo Area */}
-          <div className="text-center mb-10 relative">
-            <div className="relative inline-block">
-              <img 
-                src={schoolProfile.logo} 
-                alt="Digital School Systems Logo" 
-                className="w-64 md:w-80 h-auto drop-shadow-2xl mx-auto"
-                referrerPolicy="no-referrer"
-              />
+          {/* Stylized Logo Area - Built with icons to avoid "tree" images */}
+          <div className="text-center mb-[-45px] relative z-20">
+            <div className="relative inline-flex flex-col items-center justify-center bg-white p-6 rounded-[32px] shadow-2xl border-4 border-slate-100">
+              <div className="flex items-center justify-center gap-3 mb-2">
+                <div className="p-3 bg-blue-600 rounded-2xl text-white shadow-lg">
+                  <School size={32} />
+                </div>
+                <div className="p-3 bg-orange-500 rounded-2xl text-white shadow-lg">
+                  <BookOpen size={32} />
+                </div>
+                <div className="p-3 bg-green-600 rounded-2xl text-white shadow-lg">
+                  <Laptop size={32} />
+                </div>
+              </div>
+              <div className="text-center">
+                <h1 className="text-3xl font-black tracking-tighter text-blue-900 leading-none">DIGITAL <span className="text-green-700">SCHOOL</span></h1>
+                <div className="mt-1 px-4 py-0.5 bg-orange-500 rounded-full">
+                  <p className="text-[10px] font-black text-white uppercase tracking-[0.3em]">SYSTEMS</p>
+                </div>
+              </div>
             </div>
           </div>
 
-          <div className="login-glass rounded-[32px] overflow-hidden shadow-2xl border-white/40">
-            <div className="bg-linear-to-b from-primary/10 to-transparent py-8 text-center border-b border-white/20">
-              <h2 className="text-xl font-bold text-text-heading tracking-tight">Portal Access</h2>
-              <p className="text-slate-500 font-medium text-xs mt-1 uppercase tracking-widest">Secure Login for Students & Staff</p>
+          <div className="bg-white/90 backdrop-blur-xl rounded-[32px] overflow-hidden shadow-[0_30px_60px_rgba(0,0,0,0.3)] border border-white/50">
+            <div className="pt-20 pb-4 text-center">
+              <h2 className="text-2xl font-bold text-slate-800 tracking-tight">Digital School Login</h2>
             </div>
 
-            <div className="p-8 space-y-5">
-              <div className="flex gap-4 p-1 bg-slate-100 rounded-xl mb-4">
-                <button 
-                  onClick={() => setIsQRLogin(false)}
-                  className={`flex-1 py-2 rounded-lg font-bold text-sm transition-all ${!isQRLogin ? 'bg-white text-primary shadow-sm' : 'text-slate-500'}`}
-                >
-                  ID/Password
-                </button>
-                <button 
-                  onClick={() => setIsQRLogin(true)}
-                  className={`flex-1 py-2 rounded-lg font-bold text-sm transition-all ${isQRLogin ? 'bg-white text-primary shadow-sm' : 'text-slate-500'}`}
-                >
-                  QR Login
-                </button>
-              </div>
-
+            <div className="px-10 pb-10 space-y-6">
               {!isQRLogin ? (
                 <form onSubmit={(e) => handleLogin(e)} className="space-y-5">
                   <div className="space-y-1">
-                    <div className="relative">
-                      <UserCircle className="absolute left-4 top-1/2 -translate-y-1/2 text-primary" size={20} />
+                    <div className="relative group">
+                      <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-600 transition-colors" size={20} />
                       <input 
                         type="text" 
-                        className="w-full pl-12 pr-4 py-4 rounded-xl border border-slate-200 focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none transition-all bg-white/90 placeholder:text-slate-400 text-base font-medium" 
-                        placeholder="Username"
+                        className="w-full pl-12 pr-4 py-4 rounded-2xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all bg-white placeholder:text-slate-400 text-base font-medium" 
+                        placeholder="Email / Username"
                         value={loginId}
                         onChange={(e) => setLoginId(e.target.value)}
                       />
@@ -7931,11 +7932,11 @@ export default function App() {
                   </div>
 
                   <div className="space-y-1">
-                    <div className="relative">
-                      <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-primary" size={20} />
+                    <div className="relative group">
+                      <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-600 transition-colors" size={20} />
                       <input 
                         type={showPassword ? "text" : "password"} 
-                        className="w-full pl-12 pr-12 py-4 rounded-xl border border-slate-200 focus:border-primary focus:ring-4 focus:ring-primary/10 outline-none transition-all bg-white/90 placeholder:text-slate-400 text-base font-medium" 
+                        className="w-full pl-12 pr-12 py-4 rounded-2xl border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all bg-white placeholder:text-slate-400 text-base font-medium" 
                         placeholder="Password"
                         value={loginPassword}
                         onChange={(e) => setLoginPassword(e.target.value)}
@@ -7943,9 +7944,9 @@ export default function App() {
                       <button 
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-primary transition-colors"
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-blue-600 transition-colors"
                       >
-                        {showPassword ? <Eye size={20} /> : <ScanLine size={20} />}
+                        {showPassword ? <Eye size={20} /> : <EyeOff size={20} />}
                       </button>
                     </div>
                   </div>
@@ -7954,7 +7955,7 @@ export default function App() {
                     <motion.div 
                       initial={{ opacity: 0, height: 0 }}
                       animate={{ opacity: 1, height: 'auto' }}
-                      className="p-4 bg-red-50 text-red-600 text-sm font-bold rounded-xl border border-red-100 flex items-center gap-2"
+                      className="p-4 bg-red-50 text-red-600 text-sm font-bold rounded-2xl border border-red-100 flex items-center gap-2"
                     >
                       <AlertCircle size={18} />
                       {loginError}
@@ -7963,51 +7964,63 @@ export default function App() {
 
                   <button 
                     type="submit"
-                    className="w-full bg-primary text-white py-4 rounded-xl font-black text-lg shadow-xl shadow-primary/30 hover:scale-[1.02] active:scale-[0.98] transition-all uppercase tracking-wider"
+                    className="w-full bg-linear-to-r from-green-700 to-green-600 hover:from-green-600 hover:to-green-500 text-white py-4 rounded-2xl font-bold text-xl shadow-lg shadow-green-900/20 active:scale-[0.98] transition-all"
                   >
-                    Enter Dashboard
+                    Login
                   </button>
 
-                  <div className="flex items-center justify-between pt-2">
-                    <label className="flex items-center gap-2 cursor-pointer group">
-                      <div className="relative flex items-center justify-center">
-                        <input type="checkbox" className="peer sr-only" />
-                        <div className="w-5 h-5 border-2 border-slate-300 rounded peer-checked:bg-primary peer-checked:border-primary transition-all"></div>
-                        <CheckCircle2 className="absolute text-white opacity-0 peer-checked:opacity-100 transition-opacity" size={14} />
-                      </div>
-                      <span className="text-sm font-semibold text-slate-600 group-hover:text-primary transition-colors">Remember Me</span>
-                    </label>
-                    <button type="button" className="text-sm font-bold text-primary hover:underline">Forgot Password?</button>
+                  <div className="flex items-center justify-center gap-8 pt-2">
+                    <button type="button" className="text-sm font-bold text-blue-700 hover:text-blue-900 transition-colors">Forgot Password?</button>
+                    <span className="text-slate-200">|</span>
+                    <button type="button" className="text-sm font-bold text-blue-700 hover:text-blue-900 transition-colors">Register</button>
+                  </div>
+
+                  <div className="flex justify-center pt-2">
+                    <button 
+                      type="button"
+                      onClick={() => setIsQRLogin(true)}
+                      className="flex items-center gap-2 px-6 py-3 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all font-bold text-xs uppercase tracking-widest"
+                    >
+                      <QrCode size={18} />
+                      Login with QR
+                    </button>
                   </div>
                 </form>
               ) : (
                 <div className="space-y-5">
-                  <div className="relative aspect-square bg-slate-100 rounded-2xl overflow-hidden border-2 border-slate-200">
+                  <div className="relative aspect-square bg-slate-100 rounded-3xl overflow-hidden border-2 border-slate-200 shadow-inner">
                     <div id="login-qr-reader" className="w-full h-full"></div>
                     <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                      <div className="w-48 h-48 border-2 border-primary/50 rounded-2xl border-dashed animate-pulse"></div>
-                      <p className="mt-4 text-xs font-bold text-slate-500 uppercase tracking-widest">Scan your ID Card QR</p>
+                      <div className="w-56 h-56 border-4 border-blue-500/50 rounded-3xl border-dashed animate-pulse"></div>
+                      <p className="mt-6 text-xs font-black text-slate-500 uppercase tracking-[0.2em]">Scan your ID Card QR</p>
                     </div>
-                    <button 
-                      onClick={() => setFacingMode(prev => prev === 'user' ? 'environment' : 'user')}
-                      className="absolute top-4 right-4 p-3 bg-white/90 backdrop-blur-sm rounded-xl shadow-lg text-primary hover:scale-110 transition-all pointer-events-auto"
-                      title="Swap Camera"
-                    >
-                      <Camera size={20} />
-                    </button>
+                    <div className="absolute top-4 right-4 flex gap-2 pointer-events-auto">
+                      <button 
+                        onClick={() => setFacingMode(prev => prev === 'user' ? 'environment' : 'user')}
+                        className="p-4 bg-white/90 backdrop-blur-sm rounded-2xl shadow-xl text-blue-600 hover:scale-110 transition-all"
+                        title="Swap Camera"
+                      >
+                        <Camera size={24} />
+                      </button>
+                      <button 
+                        onClick={() => setIsQRLogin(false)}
+                        className="p-4 bg-white/90 backdrop-blur-sm rounded-2xl shadow-xl text-red-600 hover:scale-110 transition-all"
+                        title="Close QR"
+                      >
+                        <X size={24} />
+                      </button>
+                    </div>
                   </div>
-                  <div className="p-4 bg-primary/5 rounded-xl border border-primary/10 text-center">
-                    <p className="text-xs font-bold text-primary uppercase tracking-widest">Camera active: {facingMode === 'user' ? 'Front' : 'Back'}</p>
+                  <div className="p-4 bg-blue-50 rounded-2xl border border-blue-100 text-center">
+                    <p className="text-xs font-bold text-blue-800 uppercase tracking-widest">Camera active: {facingMode === 'user' ? 'Front' : 'Back'}</p>
                   </div>
                 </div>
               )}
             </div>
 
-            <div className="bg-primary/5 py-4 text-center border-t border-white/20">
-              <p className="text-[10px] text-text-heading/60 font-black uppercase tracking-[0.3em] flex items-center justify-center gap-2">
-                <span className="w-8 h-[1px] bg-primary/20"></span>
-                Powered by <span className="text-primary">JOSHODA</span>
-                <span className="w-8 h-[1px] bg-primary/20"></span>
+            <div className="bg-slate-50 py-6 text-center border-t border-slate-100">
+              <p className="text-sm text-slate-500 font-bold">
+                Powered by <span className="text-blue-900 font-black">JOSHODA</span> • North-East India
               </p>
             </div>
           </div>
@@ -8063,29 +8076,11 @@ export default function App() {
             onClick={() => setView('dashboard')} 
             isSidebarOpen={isSidebarOpen}
           />
-          {currentUser?.role === 'teacher' && (
-            <SidebarItem 
-              icon={UserCog} 
-              label={isSidebarOpen ? "Teacher Panel" : ""} 
-              active={view === 'teacher-panel'} 
-              onClick={() => setView('teacher-panel')} 
-              isSidebarOpen={isSidebarOpen}
-            />
-          )}
-          {currentUser?.role === 'parent' && (
-            <SidebarItem 
-              icon={Users} 
-              label={isSidebarOpen ? "Parent Portal" : ""} 
-              active={view === 'parent-panel'} 
-              onClick={() => setView('parent-panel')} 
-              isSidebarOpen={isSidebarOpen}
-            />
-          )}
           {currentUser?.role === 'admin' && (
             <>
               <SidebarItem 
                 icon={BarChart3} 
-                label={isSidebarOpen ? "Admin 360" : ""} 
+                label={isSidebarOpen ? "Admin 360." : ""} 
                 active={view === 'admin-360'} 
                 onClick={() => setView('admin-360')} 
                 isSidebarOpen={isSidebarOpen}
@@ -8095,6 +8090,13 @@ export default function App() {
                 label={isSidebarOpen ? "Class 360" : ""} 
                 active={view === 'class-360'} 
                 onClick={() => setView('class-360')} 
+                isSidebarOpen={isSidebarOpen}
+              />
+              <SidebarItem 
+                icon={Building2} 
+                label={isSidebarOpen ? "Front Office" : ""} 
+                active={view === 'front-office'} 
+                onClick={() => setView('front-office')} 
                 isSidebarOpen={isSidebarOpen}
               />
               <SidebarItem 
@@ -8117,6 +8119,13 @@ export default function App() {
                 isSidebarOpen={isSidebarOpen}
               />
               <SidebarItem 
+                icon={CalendarRange} 
+                label={isSidebarOpen ? "Leave Management" : ""} 
+                active={view === 'leave-management'} 
+                onClick={() => setView('leave-management')} 
+                isSidebarOpen={isSidebarOpen}
+              />
+              <SidebarItem 
                 icon={Receipt} 
                 label={isSidebarOpen ? "Fee Management" : ""} 
                 active={view === 'fee-management'} 
@@ -8131,27 +8140,6 @@ export default function App() {
                 isSidebarOpen={isSidebarOpen}
               />
               <SidebarItem 
-                icon={CalendarRange} 
-                label={isSidebarOpen ? "Leave Management" : ""} 
-                active={view === 'leave-management'} 
-                onClick={() => setView('leave-management')} 
-                isSidebarOpen={isSidebarOpen}
-              />
-              <SidebarItem 
-                icon={UserCog} 
-                label={isSidebarOpen ? "Role Assign" : ""} 
-                active={view === 'role-assign'} 
-                onClick={() => setView('role-assign')} 
-                isSidebarOpen={isSidebarOpen}
-              />
-              <SidebarItem 
-                icon={Building2} 
-                label={isSidebarOpen ? "Front Office" : ""} 
-                active={view === 'front-office'} 
-                onClick={() => setView('front-office')} 
-                isSidebarOpen={isSidebarOpen}
-              />
-              <SidebarItem 
                 icon={UserCog} 
                 label={isSidebarOpen ? "Human Resource" : ""} 
                 active={view === 'human-resource'} 
@@ -8160,16 +8148,101 @@ export default function App() {
               />
               <SidebarItem 
                 icon={MessageCircle} 
-                label={isSidebarOpen ? "Communicate" : ""} 
+                label={isSidebarOpen ? "Communication" : ""} 
                 active={view === 'communicate'} 
                 onClick={() => setView('communicate')} 
                 isSidebarOpen={isSidebarOpen}
               />
               <SidebarItem 
                 icon={Coins} 
-                label={isSidebarOpen ? "Income & Expense" : ""} 
+                label={isSidebarOpen ? "Income Expance" : ""} 
                 active={view === 'income-expense'} 
                 onClick={() => setView('income-expense')} 
+                isSidebarOpen={isSidebarOpen}
+              />
+            </>
+          )}
+          {currentUser?.role === 'teacher' && (
+            <SidebarItem 
+              icon={UserCog} 
+              label={isSidebarOpen ? "Teacher Panel" : ""} 
+              active={view === 'teacher-panel'} 
+              onClick={() => setView('teacher-panel')} 
+              isSidebarOpen={isSidebarOpen}
+            />
+          )}
+          {currentUser?.role === 'parent' && (
+            <SidebarItem 
+              icon={Users} 
+              label={isSidebarOpen ? "Parent Portal" : ""} 
+              active={view === 'parent-panel'} 
+              onClick={() => setView('parent-panel')} 
+              isSidebarOpen={isSidebarOpen}
+            />
+          )}
+          <SidebarItem 
+            icon={BookOpen} 
+            label={isSidebarOpen ? "Academics" : ""} 
+            active={view === 'academics'} 
+            onClick={() => setView('academics')} 
+            isSidebarOpen={isSidebarOpen}
+          />
+          <SidebarItem 
+            icon={UserCheck} 
+            label={isSidebarOpen ? "Attendance" : ""} 
+            active={view === 'attendance'} 
+            onClick={() => setView('attendance')} 
+            isSidebarOpen={isSidebarOpen}
+          />
+          <SidebarItem 
+            icon={ClipboardList} 
+            label={isSidebarOpen ? "Examination" : ""} 
+            active={view === 'examination'} 
+            onClick={() => setView('examination')} 
+            isSidebarOpen={isSidebarOpen}
+          />
+          <SidebarItem 
+            icon={UserPlus} 
+            label={isSidebarOpen ? "ID Card & Cert" : ""} 
+            active={view === 'id-cards'} 
+            onClick={() => setView('id-cards')} 
+            isSidebarOpen={isSidebarOpen}
+          />
+          <SidebarItem 
+            icon={Home} 
+            label={isSidebarOpen ? "Hostel" : ""} 
+            active={view === 'hostel'} 
+            onClick={() => setView('hostel')} 
+            isSidebarOpen={isSidebarOpen}
+          />
+          <SidebarItem 
+            icon={Camera} 
+            label={isSidebarOpen ? "Live Camera" : ""} 
+            active={view === 'live-camera'} 
+            onClick={() => setView('live-camera')} 
+            isSidebarOpen={isSidebarOpen}
+          />
+          <SidebarItem 
+            icon={Calendar} 
+            label={isSidebarOpen ? "Calender" : ""} 
+            active={view === 'calendar'} 
+            onClick={() => setView('calendar')} 
+            isSidebarOpen={isSidebarOpen}
+          />
+          <SidebarItem 
+            icon={BarChart3} 
+            label={isSidebarOpen ? "Reports" : ""} 
+            active={view === 'reports'} 
+            onClick={() => setView('reports')} 
+            isSidebarOpen={isSidebarOpen}
+          />
+          {currentUser?.role === 'admin' && (
+            <>
+              <SidebarItem 
+                icon={UserCog} 
+                label={isSidebarOpen ? "Role Assign" : ""} 
+                active={view === 'role-assign'} 
+                onClick={() => setView('role-assign')} 
                 isSidebarOpen={isSidebarOpen}
               />
               <SidebarItem 
@@ -8199,62 +8272,6 @@ export default function App() {
               isSidebarOpen={isSidebarOpen}
             />
           )}
-          <SidebarItem 
-            icon={BookOpen} 
-            label={isSidebarOpen ? "Academics" : ""} 
-            active={view === 'academics'} 
-            onClick={() => setView('academics')} 
-            isSidebarOpen={isSidebarOpen}
-          />
-          <SidebarItem 
-            icon={UserCheck} 
-            label={isSidebarOpen ? "Attendance" : ""} 
-            active={view === 'attendance'} 
-            onClick={() => setView('attendance')} 
-            isSidebarOpen={isSidebarOpen}
-          />
-          <SidebarItem 
-            icon={ClipboardList} 
-            label={isSidebarOpen ? "Examination" : ""} 
-            active={view === 'examination'} 
-            onClick={() => setView('examination')} 
-            isSidebarOpen={isSidebarOpen}
-          />
-          <SidebarItem 
-            icon={UserPlus} 
-            label={isSidebarOpen ? "ID Cards & Certs" : ""} 
-            active={view === 'id-cards'} 
-            onClick={() => setView('id-cards')} 
-            isSidebarOpen={isSidebarOpen}
-          />
-          <SidebarItem 
-            icon={Home} 
-            label={isSidebarOpen ? "Hostel" : ""} 
-            active={view === 'hostel'} 
-            onClick={() => setView('hostel')} 
-            isSidebarOpen={isSidebarOpen}
-          />
-          <SidebarItem 
-            icon={Camera} 
-            label={isSidebarOpen ? "Live Camera" : ""} 
-            active={view === 'live-camera'} 
-            onClick={() => setView('live-camera')} 
-            isSidebarOpen={isSidebarOpen}
-          />
-          <SidebarItem 
-            icon={Calendar} 
-            label={isSidebarOpen ? "Calendar" : ""} 
-            active={view === 'calendar'} 
-            onClick={() => setView('calendar')} 
-            isSidebarOpen={isSidebarOpen}
-          />
-          <SidebarItem 
-            icon={BarChart3} 
-            label={isSidebarOpen ? "Reports" : ""} 
-            active={view === 'reports'} 
-            onClick={() => setView('reports')} 
-            isSidebarOpen={isSidebarOpen}
-          />
           <SidebarItem 
             icon={Settings} 
             label={isSidebarOpen ? "Settings" : ""} 
