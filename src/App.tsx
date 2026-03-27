@@ -340,6 +340,7 @@ interface FeeTransaction {
   date: string;
   dueDate: string;
   status: 'Paid' | 'Partial' | 'Due';
+  breakdown?: Record<string, number>;
 }
 
 interface Staff {
@@ -2206,6 +2207,7 @@ const FeeManagement = ({
     discount: 0,
     discountReason: '',
     scholarship: 0,
+    amountPaid: 0,
     dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
   });
   const [showReceipt, setShowReceipt] = useState<FeeTransaction | null>(null);
@@ -2214,6 +2216,7 @@ const FeeManagement = ({
     section: '',
     rollNo: ''
   });
+  const [reportType, setReportType] = useState<'fees' | 'bank-cash'>('fees');
   const [filters, setFilters] = useState({
     date: '',
     class: '',
@@ -2304,13 +2307,26 @@ const FeeManagement = ({
            (!searchFilters.rollNo || s.rollNo?.toLowerCase().includes(searchFilters.rollNo.toLowerCase()) || s.studentId?.toLowerCase().includes(searchFilters.rollNo.toLowerCase()) || s.name.toLowerCase().includes(searchFilters.rollNo.toLowerCase()));
   });
 
+  const getMonthlyDuesBreakdown = (student: any, month: string) => {
+    const classFees = feeMaster.filter((f: any) => f.class === student.class && f.frequency === 'Monthly');
+    const paidTransactions = feeTransactions.filter((t: any) => t.studentId === student.studentId && t.period === month);
+    
+    const breakdown: Record<string, number> = {};
+    classFees.forEach((f: any) => {
+      const totalPaidForType = paidTransactions.reduce((sum: number, t: any) => {
+        return sum + (t.breakdown?.[f.feeType] || 0);
+      }, 0);
+      breakdown[f.feeType] = Math.max(0, f.amount - totalPaidForType);
+    });
+    return breakdown;
+  };
+
   const handleCollectFee = () => {
     if (!selectedStudent) {
       alert('Please select student');
       return;
     }
 
-    // Find all monthly fees for this class to consolidate
     const monthlyFees = feeMaster.filter((f: any) => f.class === selectedStudent.class && f.frequency === 'Monthly');
     
     if (monthlyFees.length === 0) {
@@ -2318,7 +2334,21 @@ const FeeManagement = ({
       return;
     }
 
-    const totalMonthlyAmount = monthlyFees.reduce((sum: number, f: any) => sum + f.amount, 0);
+    const currentDuesBreakdown = getMonthlyDuesBreakdown(selectedStudent, selectedMonth);
+    const totalRemainingDue = Object.values(currentDuesBreakdown).reduce((sum, val) => sum + val, 0);
+
+    if (totalRemainingDue <= 0) {
+      alert(`All fees for ${selectedMonth} are already paid for ${selectedStudent.name}.`);
+      return;
+    }
+
+    const totalPayable = totalRemainingDue - paymentDetails.discount - paymentDetails.scholarship;
+    const amountToCollect = paymentDetails.amountPaid > 0 ? paymentDetails.amountPaid : totalPayable;
+
+    if (amountToCollect <= 0) {
+      alert('Please enter a valid amount to pay');
+      return;
+    }
 
     // Duplicate Transaction ID check
     if (paymentDetails.mode !== 'Cash' && paymentDetails.transactionId) {
@@ -2329,7 +2359,23 @@ const FeeManagement = ({
       }
     }
 
-    const totalPaid = totalMonthlyAmount - paymentDetails.discount - paymentDetails.scholarship;
+    // Distribute payment across fee types in order
+    let remainingPayment = amountToCollect;
+    const paymentBreakdown: Record<string, number> = {};
+    
+    // Sort monthly fees to ensure consistent distribution order (e.g. Tuition first)
+    // For now, we'll just use the order in feeMaster
+    monthlyFees.forEach((f: any) => {
+      const dueForType = currentDuesBreakdown[f.feeType] || 0;
+      if (dueForType > 0 && remainingPayment > 0) {
+        const paymentForType = Math.min(dueForType, remainingPayment);
+        paymentBreakdown[f.feeType] = paymentForType;
+        remainingPayment -= paymentForType;
+      } else {
+        paymentBreakdown[f.feeType] = 0;
+      }
+    });
+
     const invoiceNumber = `REC-${Date.now().toString().slice(-6)}`;
     
     const newTransaction: FeeTransaction = {
@@ -2340,11 +2386,11 @@ const FeeManagement = ({
       class: selectedStudent.class,
       section: selectedStudent.section,
       feeType: `Consolidated Monthly Fees (${selectedMonth})`,
-      amount: totalMonthlyAmount,
+      amount: totalRemainingDue,
       discount: paymentDetails.discount,
       discountReason: paymentDetails.discountReason,
       scholarship: paymentDetails.scholarship,
-      totalPaid,
+      totalPaid: amountToCollect,
       paymentMode: paymentDetails.mode,
       transactionId: paymentDetails.transactionId,
       invoiceNumber,
@@ -2352,14 +2398,14 @@ const FeeManagement = ({
       period: selectedMonth,
       date: new Date().toLocaleDateString(),
       dueDate: paymentDetails.dueDate,
-      status: 'Paid'
+      status: amountToCollect >= totalPayable ? 'Paid' : 'Partial',
+      breakdown: paymentBreakdown
     };
 
     setFeeTransactions([newTransaction, ...feeTransactions]);
     setShowReceipt(newTransaction);
     
-    // Alert success
-    alert(`Consolidated Fee of ₹${totalPaid} collected for ${selectedStudent.name} for ${selectedMonth}`);
+    alert(`Fee of ₹${amountToCollect} collected for ${selectedStudent.name} for ${selectedMonth}. Status: ${newTransaction.status}`);
     
     // Reset form
     setSelectedStudent(null);
@@ -2369,6 +2415,7 @@ const FeeManagement = ({
       discount: 0,
       discountReason: '',
       scholarship: 0,
+      amountPaid: 0,
       dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
     });
   };
@@ -2573,26 +2620,23 @@ const FeeManagement = ({
                   </select>
                   {selectedStudent && (
                     <div className="mt-2 p-3 bg-slate-50 rounded-xl border border-slate-100">
-                      <p className="text-[10px] font-black text-primary uppercase tracking-widest mb-2">Consolidated Fees for {selectedStudent.class}</p>
+                      <p className="text-[10px] font-black text-primary uppercase tracking-widest mb-2">Remaining Monthly Dues for {selectedMonth}</p>
                       <div className="space-y-1">
-                        {feeMaster
-                          .filter(fm => fm.class === selectedStudent.class && fm.frequency === 'Monthly')
-                          .map(fm => (
-                            <div key={fm.id} className="flex justify-between text-[10px] font-bold">
-                              <span className="text-text-sub">{fm.feeType}</span>
-                              <span className="text-text-heading">₹{fm.amount}</span>
-                            </div>
-                          ))
-                        }
+                        {Object.entries(getMonthlyDuesBreakdown(selectedStudent, selectedMonth)).map(([type, amount]) => (
+                          <div key={type} className="flex justify-between text-[10px] font-bold">
+                            <span className="text-text-sub">{type}</span>
+                            <span className={amount > 0 ? "text-red-500" : "text-emerald-500"}>
+                              {amount > 0 ? `₹${amount}` : 'Paid'}
+                            </span>
+                          </div>
+                        ))}
                         <div className="pt-2 mt-2 border-t border-slate-200 flex justify-between text-xs font-black">
-                          <span className="text-primary">TOTAL MONTHLY</span>
-                          <span className="text-primary">₹{feeMaster
-                            .filter(fm => fm.class === selectedStudent?.class && fm.frequency === 'Monthly')
-                            .reduce((sum, fm) => sum + fm.amount, 0)}</span>
+                          <span className="text-primary">TOTAL REMAINING</span>
+                          <span className="text-primary">₹{Object.values(getMonthlyDuesBreakdown(selectedStudent, selectedMonth)).reduce((s, a) => s + (a as number), 0)}</span>
                         </div>
                       </div>
-                      {feeMaster.filter(fm => fm.class === selectedStudent.class && fm.frequency === 'Monthly').length === 0 && (
-                        <p className="text-[10px] text-red-500 italic">No monthly fees assigned to Class {selectedStudent.class}.</p>
+                      {Object.values(getMonthlyDuesBreakdown(selectedStudent, selectedMonth)).reduce((s, a) => s + (a as number), 0) === 0 && (
+                        <p className="text-[10px] text-emerald-500 italic mt-2">All monthly fees for this month are fully paid.</p>
                       )}
                     </div>
                   )}
@@ -2644,6 +2688,13 @@ const FeeManagement = ({
                   value={paymentDetails.scholarship}
                   onChange={(e: any) => setPaymentDetails({...paymentDetails, scholarship: parseFloat(e.target.value) || 0})}
                 />
+                <Input 
+                  label="Amount to Pay" 
+                  type="number" 
+                  placeholder="Leave empty for full payment"
+                  value={paymentDetails.amountPaid || ''}
+                  onChange={(e: any) => setPaymentDetails({...paymentDetails, amountPaid: parseFloat(e.target.value) || 0})}
+                />
               </div>
               
               <div className="mt-8 p-6 bg-primary/5 rounded-2xl border border-primary/10 flex items-center justify-between">
@@ -2652,9 +2703,10 @@ const FeeManagement = ({
                   <p className="text-3xl font-black text-primary">
                     ₹{(() => {
                       if (!selectedStudent) return 0;
-                      const monthlyFees = feeMaster.filter((f: any) => f.class === selectedStudent.class && f.frequency === 'Monthly');
-                      const totalMonthly = monthlyFees.reduce((sum: number, f: any) => sum + f.amount, 0);
-                      return totalMonthly > 0 ? (totalMonthly - paymentDetails.discount - paymentDetails.scholarship) : 0;
+                      const currentDues = getMonthlyDuesBreakdown(selectedStudent, selectedMonth);
+                      const totalRemaining = Object.values(currentDues).reduce((s, a) => s + (a as number), 0);
+                      const totalPayable = totalRemaining - paymentDetails.discount - paymentDetails.scholarship;
+                      return paymentDetails.amountPaid > 0 ? paymentDetails.amountPaid : Math.max(0, totalPayable);
                     })()}
                   </p>
                   {selectedStudent && (
@@ -3079,6 +3131,7 @@ const FeeManagement = ({
                           ...studentTransactions.map(t => ({
                             date: t.date,
                             particulars: `Fee Paid: ${t.feeType} (Mode: ${t.paymentMode})`,
+                            breakdown: t.breakdown,
                             type: 'Credit',
                             amount: t.totalPaid + (t.discount || 0) + (t.scholarship || 0),
                             isDebit: false,
@@ -3110,8 +3163,17 @@ const FeeManagement = ({
                                 <td className="py-4 text-sm text-text-sub">{item.date}</td>
                                 <td className="py-4">
                                   <p className="text-sm font-bold text-text-heading">{item.particulars}</p>
+                                  {item.breakdown && Object.keys(item.breakdown).length > 0 && (
+                                    <div className="mt-1 flex flex-wrap gap-2">
+                                      {Object.entries(item.breakdown).map(([type, amt]) => (
+                                        <span key={type} className="text-[9px] font-bold bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded uppercase">
+                                          {type}: ₹{amt.toLocaleString()}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  )}
                                   {!item.isDebit && item.discount > 0 && (
-                                    <p className="text-[10px] text-orange-600 font-bold uppercase">Incl. ₹{item.discount.toLocaleString()} Discount</p>
+                                    <p className="text-[10px] text-orange-600 font-bold uppercase mt-1">Incl. ₹{item.discount.toLocaleString()} Discount</p>
                                   )}
                                 </td>
                                 <td className="py-4">
@@ -3336,117 +3398,227 @@ const FeeManagement = ({
       )}
 
       {activeTab === 'reports' && (
-        <Card>
-          <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
-            <div className="flex flex-wrap items-center gap-4">
-              <div className="flex items-center gap-2 bg-slate-100 px-3 py-2 rounded-xl border border-slate-200">
-                <Calendar size={16} className="text-text-secondary" />
-                <input 
-                  type="date" 
-                  className="bg-transparent outline-none text-sm font-medium"
-                  onChange={(e) => setFilters({...filters, date: e.target.value})}
-                />
-              </div>
-              <select 
-                className="bg-slate-100 px-3 py-2 rounded-xl border border-slate-200 outline-none text-sm font-medium"
-                onChange={(e) => setFilters({...filters, class: e.target.value})}
-              >
-                <option value="">All Classes</option>
-                {masterData.classes.map((c: string) => <option key={c} value={c}>{c}</option>)}
-              </select>
-              <select 
-                className="bg-slate-100 px-3 py-2 rounded-xl border border-slate-200 outline-none text-sm font-medium"
-                onChange={(e) => setFilters({...filters, section: e.target.value})}
-              >
-                <option value="">All Sections</option>
-                {masterData.sections.map((s: string) => <option key={s} value={s}>{s}</option>)}
-              </select>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-text-sub" size={16} />
-                <input 
-                  type="text" 
-                  placeholder="Search student..." 
-                  className="bg-slate-100 pl-10 pr-4 py-2 rounded-xl border border-slate-200 outline-none text-sm font-medium w-64"
-                  onChange={(e) => setFilters({...filters, search: e.target.value})}
-                />
-              </div>
-            </div>
+        <div className="space-y-6">
+          <div className="flex gap-2 p-1 bg-slate-100 rounded-2xl w-fit">
             <button 
-              onClick={exportToExcel}
-              className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-green-700 transition-all"
+              onClick={() => setReportType('fees')}
+              className={`px-6 py-2 rounded-xl font-bold text-xs transition-all ${reportType === 'fees' ? 'bg-white text-primary shadow-sm' : 'text-text-sub hover:text-primary'}`}
             >
-              <FileSpreadsheet size={18} />
-              Export Excel
+              Fee Transactions
+            </button>
+            <button 
+              onClick={() => setReportType('bank-cash')}
+              className={`px-6 py-2 rounded-xl font-bold text-xs transition-all ${reportType === 'bank-cash' ? 'bg-white text-primary shadow-sm' : 'text-text-sub hover:text-primary'}`}
+            >
+              Bank & Cash Statement
             </button>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="text-left border-b border-slate-200">
-                  <th className="pb-4 font-bold text-text-secondary text-xs uppercase tracking-wider">Date</th>
-                  <th className="pb-4 font-bold text-text-secondary text-xs uppercase tracking-wider">Student</th>
-                  <th className="pb-4 font-bold text-text-secondary text-xs uppercase tracking-wider">Class</th>
-                  <th className="pb-4 font-bold text-text-secondary text-xs uppercase tracking-wider">Fee Type</th>
-                  <th className="pb-4 font-bold text-text-secondary text-xs uppercase tracking-wider">Mode</th>
-                  <th className="pb-4 font-bold text-text-secondary text-xs uppercase tracking-wider text-right">Amount</th>
-                  <th className="pb-4 font-bold text-text-secondary text-xs uppercase tracking-wider text-center">Receipt</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {filteredTransactions.map(t => (
-                  <tr key={t.id} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="py-4 text-sm font-medium text-text-sub">{t.date}</td>
-                    <td className="py-4">
-                      <p className="text-sm font-bold text-text-heading">{t.studentName}</p>
-                      <p className="text-[10px] text-text-sub uppercase">{t.studentId}</p>
-                    </td>
-                    <td className="py-4 text-sm font-medium text-text-sub">{t.class}-{t.section}</td>
-                    <td className="py-4 text-sm font-medium text-text-sub">{t.feeType}</td>
-                    <td className="py-4">
-                      <span className={`text-[10px] font-black px-2 py-1 rounded-full uppercase ${
-                        t.paymentMode === 'Cash' ? 'bg-green-100 text-green-700' : 
-                        t.paymentMode === 'UPI' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'
-                      }`}>
-                        {t.paymentMode}
-                      </span>
-                    </td>
-                    <td className="py-4 text-right font-black text-primary">₹{t.totalPaid}</td>
-                    <td className="py-4 text-center">
-                      <div className="flex items-center justify-center gap-2">
-                        <button 
-                          onClick={() => setShowReceipt(t)}
-                          className="p-2 text-primary hover:bg-primary/10 rounded-lg transition-all"
-                          title="Print Receipt"
-                        >
-                          <Printer size={16} />
-                        </button>
-                        <button 
-                          onClick={() => {
-                            const newAmount = prompt('Edit Transaction Amount:', t.totalPaid.toString());
-                            if (newAmount && !isNaN(parseFloat(newAmount))) {
-                              setFeeTransactions(feeTransactions.map(tr => tr.id === t.id ? { ...tr, totalPaid: parseFloat(newAmount) } : tr));
-                              alert('Transaction updated successfully!');
-                            }
-                          }}
-                          className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-all"
-                          title="Edit Transaction"
-                        >
-                          <Edit2 size={16} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {filteredTransactions.length === 0 && (
-              <div className="text-center py-12">
-                <p className="text-text-secondary font-medium">No transactions found matching your filters.</p>
+          <Card>
+            {reportType === 'fees' ? (
+              <>
+                <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
+                  <div className="flex flex-wrap items-center gap-4">
+                    <div className="flex items-center gap-2 bg-slate-100 px-3 py-2 rounded-xl border border-slate-200">
+                      <Calendar size={16} className="text-text-secondary" />
+                      <input 
+                        type="date" 
+                        className="bg-transparent outline-none text-sm font-medium"
+                        onChange={(e) => setFilters({...filters, date: e.target.value})}
+                      />
+                    </div>
+                    <select 
+                      className="bg-slate-100 px-3 py-2 rounded-xl border border-slate-200 outline-none text-sm font-medium"
+                      onChange={(e) => setFilters({...filters, class: e.target.value})}
+                    >
+                      <option value="">All Classes</option>
+                      {masterData.classes.map((c: string) => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                    <select 
+                      className="bg-slate-100 px-3 py-2 rounded-xl border border-slate-200 outline-none text-sm font-medium"
+                      onChange={(e) => setFilters({...filters, section: e.target.value})}
+                    >
+                      <option value="">All Sections</option>
+                      {masterData.sections.map((s: string) => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-text-sub" size={16} />
+                      <input 
+                        type="text" 
+                        placeholder="Search student..." 
+                        className="bg-slate-100 pl-10 pr-4 py-2 rounded-xl border border-slate-200 outline-none text-sm font-medium w-64"
+                        onChange={(e) => setFilters({...filters, search: e.target.value})}
+                      />
+                    </div>
+                  </div>
+                  <button 
+                    onClick={exportToExcel}
+                    className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-green-700 transition-all"
+                  >
+                    <FileSpreadsheet size={18} />
+                    Export Excel
+                  </button>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="text-left border-b border-slate-200">
+                        <th className="pb-4 font-bold text-text-secondary text-xs uppercase tracking-wider">Date</th>
+                        <th className="pb-4 font-bold text-text-secondary text-xs uppercase tracking-wider">Student</th>
+                        <th className="pb-4 font-bold text-text-secondary text-xs uppercase tracking-wider">Class</th>
+                        <th className="pb-4 font-bold text-text-secondary text-xs uppercase tracking-wider">Fee Type</th>
+                        <th className="pb-4 font-bold text-text-secondary text-xs uppercase tracking-wider">Mode</th>
+                        <th className="pb-4 font-bold text-text-secondary text-xs uppercase tracking-wider text-right">Amount</th>
+                        <th className="pb-4 font-bold text-text-secondary text-xs uppercase tracking-wider text-center">Receipt</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {filteredTransactions.map(t => (
+                        <tr key={t.id} className="hover:bg-slate-50/50 transition-colors">
+                          <td className="py-4 text-sm font-medium text-text-sub">{t.date}</td>
+                          <td className="py-4">
+                            <p className="text-sm font-bold text-text-heading">{t.studentName}</p>
+                            <p className="text-[10px] text-text-sub uppercase">{t.studentId}</p>
+                          </td>
+                          <td className="py-4 text-sm font-medium text-text-sub">{t.class}-{t.section}</td>
+                          <td className="py-4 text-sm font-medium text-text-sub">{t.feeType}</td>
+                          <td className="py-4">
+                            <span className={`text-[10px] font-black px-2 py-1 rounded-full uppercase ${
+                              t.paymentMode === 'Cash' ? 'bg-green-100 text-green-700' : 
+                              t.paymentMode === 'UPI' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'
+                            }`}>
+                              {t.paymentMode}
+                            </span>
+                          </td>
+                          <td className="py-4 text-right font-black text-primary">₹{t.totalPaid}</td>
+                          <td className="py-4 text-center">
+                            <div className="flex items-center justify-center gap-2">
+                              <button 
+                                onClick={() => setShowReceipt(t)}
+                                className="p-2 text-primary hover:bg-primary/10 rounded-lg transition-all"
+                                title="Print Receipt"
+                              >
+                                <Printer size={16} />
+                              </button>
+                              <button 
+                                onClick={() => {
+                                  const newAmount = prompt('Edit Transaction Amount:', t.totalPaid.toString());
+                                  if (newAmount && !isNaN(parseFloat(newAmount))) {
+                                    setFeeTransactions(feeTransactions.map(tr => tr.id === t.id ? { ...tr, totalPaid: parseFloat(newAmount) } : tr));
+                                    alert('Transaction updated successfully!');
+                                  }
+                                }}
+                                className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-all"
+                                title="Edit Transaction"
+                              >
+                                <Edit2 size={16} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {filteredTransactions.length === 0 && (
+                    <div className="text-center py-12">
+                      <p className="text-text-secondary font-medium">No transactions found matching your filters.</p>
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : (
+              <div className="space-y-8">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-bold flex items-center gap-2 text-primary">
+                    <History size={20} />
+                    Bank & Cash Statement
+                  </h3>
+                  <div className="flex gap-6">
+                    <div className="text-right">
+                      <p className="text-[10px] font-bold text-text-sub uppercase">Bank Balance</p>
+                      <p className="text-lg font-black text-primary">₹{bankBalance.toLocaleString()}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[10px] font-bold text-text-sub uppercase">Cash Balance</p>
+                      <p className="text-lg font-black text-green-600">₹{cashBalance.toLocaleString()}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left">
+                    <thead>
+                      <tr className="border-b border-slate-200">
+                        <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Date</th>
+                        <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Particulars</th>
+                        <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider text-right">Cash In/Out</th>
+                        <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider text-right">Bank In/Out</th>
+                        <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider text-right">Running Balance</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {(() => {
+                        const movements = [
+                          ...feeTransactions.map(t => ({
+                            date: t.date,
+                            particulars: `Fee: ${t.studentName} (${t.feeType})`,
+                            cash: t.paymentMode === 'Cash' ? t.totalPaid : 0,
+                            bank: t.paymentMode !== 'Cash' ? t.totalPaid : 0,
+                            type: 'Receipt'
+                          })),
+                          ...contraEntries.map(e => ({
+                            date: e.date,
+                            particulars: `Contra: ${e.type} (${e.reference})`,
+                            cash: e.type === 'Bank to Cash' ? e.amount : -e.amount,
+                            bank: e.type === 'Bank to Cash' ? -e.amount : e.amount,
+                            type: 'Contra'
+                          })),
+                          ...adjustmentLogs.map(l => ({
+                            date: l.date,
+                            particulars: `Adjustment: ${l.type} (${l.reference})`,
+                            cash: l.type.includes('Cash') ? l.amount : 0,
+                            bank: l.type.includes('Bank') ? l.amount : 0,
+                            type: 'Adjustment'
+                          }))
+                        ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+                        let runningCash = 0;
+                        let runningBank = 0;
+
+                        return movements.map((m, idx) => {
+                          runningCash += m.cash;
+                          runningBank += m.bank;
+                          return (
+                            <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
+                              <td className="py-4 text-sm text-text-sub">{m.date}</td>
+                              <td className="py-4">
+                                <p className="text-sm font-bold text-text-heading">{m.particulars}</p>
+                                <p className="text-[10px] text-text-sub uppercase">{m.type}</p>
+                              </td>
+                              <td className={`py-4 text-sm font-black text-right ${m.cash > 0 ? 'text-green-600' : m.cash < 0 ? 'text-rose-600' : 'text-text-sub'}`}>
+                                {m.cash !== 0 ? `${m.cash > 0 ? '+' : ''}₹${Math.abs(m.cash).toLocaleString()}` : '-'}
+                              </td>
+                              <td className={`py-4 text-sm font-black text-right ${m.bank > 0 ? 'text-primary' : m.bank < 0 ? 'text-rose-600' : 'text-text-sub'}`}>
+                                {m.bank !== 0 ? `${m.bank > 0 ? '+' : ''}₹${Math.abs(m.bank).toLocaleString()}` : '-'}
+                              </td>
+                              <td className="py-4 text-right">
+                                <div className="text-[10px] font-bold text-text-sub">
+                                  <p>C: ₹{runningCash.toLocaleString()}</p>
+                                  <p>B: ₹{runningBank.toLocaleString()}</p>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        }).reverse();
+                      })()}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )}
-          </div>
-        </Card>
+          </Card>
+        </div>
       )}
 
       {showReceipt && (
