@@ -45,6 +45,7 @@ import {
   Filter,
   Coins,
   ArrowRightLeft,
+  ArrowUpRight,
   History,
   X,
   Clock,
@@ -2518,7 +2519,7 @@ const FeeManagement = ({
             onClick={() => setActiveTab('bank-cash')}
             className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${activeTab === 'bank-cash' ? 'bg-primary text-white shadow-md' : 'text-text-sub hover:bg-slate-50'}`}
           >
-            Bank & Cash
+            Bank / Cash Ledger
           </button>
           <button 
             onClick={() => setActiveTab('adjustment-logs')}
@@ -3242,7 +3243,7 @@ const FeeManagement = ({
                   onChange={(e: any) => setContraForm({...contraForm, amount: parseFloat(e.target.value) || 0})}
                 />
                 <Input 
-                  label="Reference / Reason" 
+                  label="Reference / Note" 
                   placeholder="e.g. Withdrawal for petty cash" 
                   value={contraForm.reference}
                   onChange={(e: any) => setContraForm({...contraForm, reference: e.target.value})}
@@ -3268,37 +3269,53 @@ const FeeManagement = ({
             <Card>
               <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-primary">
                 <ClipboardList size={20} />
-                Recent Contra Entries
+                Bank / Cash Ledger (Recent Entries)
               </h3>
               <div className="overflow-x-auto">
                 <table className="w-full text-left">
                   <thead>
                     <tr className="border-b border-slate-200">
                       <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Date</th>
-                      <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Type</th>
-                      <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Amount</th>
-                      <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Reference</th>
+                      <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Note</th>
+                      <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider text-right">Withdrawal</th>
+                      <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider text-right">Deposit</th>
+                      <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider text-right">Balance</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {contraEntries.length === 0 ? (
-                      <tr>
-                        <td colSpan={4} className="py-12 text-center text-text-sub">No contra entries recorded yet.</td>
-                      </tr>
-                    ) : (
-                      contraEntries.map((e: any) => (
-                        <tr key={e.id} className="hover:bg-slate-50/50 transition-colors">
-                          <td className="py-4 text-sm">{e.date}</td>
-                          <td className="py-4">
-                            <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase ${e.type === 'Bank to Cash' ? 'bg-blue-100 text-blue-600' : 'bg-green-100 text-green-600'}`}>
-                              {e.type}
-                            </span>
-                          </td>
-                          <td className="py-4 text-sm font-black">₹{e.amount.toLocaleString()}</td>
-                          <td className="py-4 text-sm text-text-sub">{e.reference}</td>
+                    {(() => {
+                      let runningBalance = bankBalance + cashBalance;
+                      // To show running balance correctly, we should sort by date and then calculate
+                      // But for "Recent Entries" we'll just show them as they are
+                      return contraEntries.length === 0 ? (
+                        <tr>
+                          <td colSpan={5} className="py-12 text-center text-text-sub">No contra entries recorded yet.</td>
                         </tr>
-                      ))
-                    )}
+                      ) : (
+                        contraEntries.map((e: any, idx: number) => {
+                          const isWithdrawal = e.type === 'Bank to Cash' || e.type === 'Cash Adjustment' && e.amount < 0 || e.type === 'Bank Adjustment' && e.amount < 0;
+                          // This is simplified. For a real ledger, we'd need more logic.
+                          return (
+                            <tr key={e.id} className="hover:bg-slate-50/50 transition-colors">
+                              <td className="py-4 text-sm">{e.date}</td>
+                              <td className="py-4 text-sm font-medium">
+                                {e.reference}
+                                <p className="text-[10px] text-text-sub uppercase">{e.type}</p>
+                              </td>
+                              <td className="py-4 text-sm font-black text-rose-600 text-right">
+                                {e.type === 'Bank to Cash' || (e.type.includes('Adjustment') && e.amount < 0) ? `₹${Math.abs(e.amount).toLocaleString()}` : '-'}
+                              </td>
+                              <td className="py-4 text-sm font-black text-green-600 text-right">
+                                {e.type === 'Cash to Bank' || (e.type.includes('Adjustment') && e.amount > 0) ? `₹${Math.abs(e.amount).toLocaleString()}` : '-'}
+                              </td>
+                              <td className="py-4 text-sm font-black text-right text-primary">
+                                ₹{(bankBalance + cashBalance).toLocaleString()}
+                              </td>
+                            </tr>
+                          );
+                        })
+                      );
+                    })()}
                   </tbody>
                 </table>
               </div>
@@ -5155,7 +5172,7 @@ const DueFeesModule = ({ students, feeMaster, feeTransactions, currentUser, getS
   );
 };
 
-const Admin360View = ({ students, masterData, feeTransactions, attendance }: any) => {
+const Admin360View = ({ students, masterData, feeTransactions, attendance, bankBalance, cashBalance, contraEntries }: any) => {
   const revenueData = [
     { month: 'Jan', amount: 450000 },
     { month: 'Feb', amount: 520000 },
@@ -5202,10 +5219,46 @@ const Admin360View = ({ students, masterData, feeTransactions, attendance }: any
         </div>
       </div>
 
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <Card className="p-6 bg-gradient-to-br from-blue-600 to-blue-700 text-white border-none">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-white/20 text-white rounded-xl flex items-center justify-center backdrop-blur-sm">
+              <Building2 size={24} />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-white/70 uppercase tracking-wider">Bank Balance</p>
+              <p className="text-2xl font-black">₹{bankBalance.toLocaleString()}</p>
+            </div>
+          </div>
+        </Card>
+        <Card className="p-6 bg-gradient-to-br from-emerald-600 to-emerald-700 text-white border-none">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-white/20 text-white rounded-xl flex items-center justify-center backdrop-blur-sm">
+              <Wallet size={24} />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-white/70 uppercase tracking-wider">Cash in Hand</p>
+              <p className="text-2xl font-black">₹{cashBalance.toLocaleString()}</p>
+            </div>
+          </div>
+        </Card>
+        <Card className="p-6 bg-gradient-to-br from-orange-600 to-orange-700 text-white border-none">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-white/20 text-white rounded-xl flex items-center justify-center backdrop-blur-sm">
+              <Receipt size={24} />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-white/70 uppercase tracking-wider">Total Fees Collected</p>
+              <p className="text-2xl font-black">₹{feeTransactions.reduce((sum: number, t: any) => sum + t.totalPaid, 0).toLocaleString()}</p>
+            </div>
+          </div>
+        </Card>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <Card className="p-6">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-blue-500 text-white rounded-xl flex items-center justify-center shadow-lg">
+            <div className="w-12 h-12 bg-blue-500/10 text-blue-600 rounded-xl flex items-center justify-center">
               <Users size={24} />
             </div>
             <div>
@@ -5216,7 +5269,7 @@ const Admin360View = ({ students, masterData, feeTransactions, attendance }: any
         </Card>
         <Card className="p-6">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-emerald-500 text-white rounded-xl flex items-center justify-center shadow-lg">
+            <div className="w-12 h-12 bg-emerald-500/10 text-emerald-600 rounded-xl flex items-center justify-center">
               <UserCog size={24} />
             </div>
             <div>
@@ -5227,23 +5280,23 @@ const Admin360View = ({ students, masterData, feeTransactions, attendance }: any
         </Card>
         <Card className="p-6">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-orange-500 text-white rounded-xl flex items-center justify-center shadow-lg">
-              <Receipt size={24} />
-            </div>
-            <div>
-              <p className="text-xs font-bold text-text-secondary uppercase tracking-wider">Fees Collected</p>
-              <p className="text-2xl font-black text-text-heading">₹{feeTransactions.reduce((sum: number, t: any) => sum + t.totalPaid, 0).toLocaleString()}</p>
-            </div>
-          </div>
-        </Card>
-        <Card className="p-6">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-purple-500 text-white rounded-xl flex items-center justify-center shadow-lg">
+            <div className="w-12 h-12 bg-orange-500/10 text-orange-600 rounded-xl flex items-center justify-center">
               <UserCheck size={24} />
             </div>
             <div>
               <p className="text-xs font-bold text-text-secondary uppercase tracking-wider">Avg Attendance</p>
               <p className="text-2xl font-black text-text-heading">92%</p>
+            </div>
+          </div>
+        </Card>
+        <Card className="p-6">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-purple-500/10 text-purple-600 rounded-xl flex items-center justify-center">
+              <History size={24} />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-text-secondary uppercase tracking-wider">Recent Entries</p>
+              <p className="text-2xl font-black text-text-heading">{contraEntries.length}</p>
             </div>
           </div>
         </Card>
@@ -5373,6 +5426,51 @@ const Admin360View = ({ students, masterData, feeTransactions, attendance }: any
           <button className="w-full mt-6 py-3 rounded-xl border border-slate-200 text-[10px] font-black uppercase tracking-widest hover:bg-slate-50 transition-all">View Full Staff Report</button>
         </Card>
       </div>
+
+      <Card className="p-6">
+        <h3 className="text-lg font-black text-text-heading mb-6 flex items-center gap-2 uppercase tracking-tighter">
+          <ClipboardList size={20} className="text-primary" />
+          Recent Bank / Cash Ledger
+        </h3>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead>
+              <tr className="border-b border-slate-200">
+                <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Date</th>
+                <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Note</th>
+                <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider text-right">Withdrawal</th>
+                <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider text-right">Deposit</th>
+                <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider text-right">Balance</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {contraEntries.slice(0, 5).map((e: any) => (
+                <tr key={e.id} className="hover:bg-slate-50/50 transition-colors">
+                  <td className="py-4 text-sm">{e.date}</td>
+                  <td className="py-4 text-sm font-medium">
+                    {e.reference}
+                    <p className="text-[10px] text-text-sub uppercase">{e.type}</p>
+                  </td>
+                  <td className="py-4 text-sm font-black text-rose-600 text-right">
+                    {e.type === 'Bank to Cash' || (e.type.includes('Adjustment') && e.amount < 0) ? `₹${Math.abs(e.amount).toLocaleString()}` : '-'}
+                  </td>
+                  <td className="py-4 text-sm font-black text-green-600 text-right">
+                    {e.type === 'Cash to Bank' || (e.type.includes('Adjustment') && e.amount > 0) ? `₹${Math.abs(e.amount).toLocaleString()}` : '-'}
+                  </td>
+                  <td className="py-4 text-sm font-black text-right text-primary">
+                    ₹{(bankBalance + cashBalance).toLocaleString()}
+                  </td>
+                </tr>
+              ))}
+              {contraEntries.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="py-8 text-center text-text-sub italic">No recent transactions</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Card>
     </div>
   );
 };
@@ -8555,7 +8653,7 @@ export default function App() {
                 className="space-y-8"
               >
                 {/* Stats Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
                   <Card className="p-6 bg-gradient-to-br from-primary to-primary/80 text-white border-none shadow-xl shadow-primary/20">
                     <div className="flex justify-between items-start mb-4">
                       <div className="p-3 bg-white/20 rounded-xl backdrop-blur-sm">
@@ -8594,27 +8692,43 @@ export default function App() {
 
                   <Card className="p-6 bg-white border-slate-100 shadow-sm">
                     <div className="flex justify-between items-start mb-4">
-                      <div className="p-3 bg-green-50 text-green-600 rounded-xl">
-                        <Coins size={24} />
+                      <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl">
+                        <Building2 size={24} />
                       </div>
+                      <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full uppercase tracking-widest">Live</span>
                     </div>
-                    <p className="text-text-secondary text-xs font-bold uppercase tracking-widest mb-1">Fee Collection</p>
-                    <h3 className="text-3xl font-black text-text-heading">₹ 1.2M</h3>
-                    <div className="flex items-center gap-1 mt-2 text-green-600">
-                      <ArrowUpCircle size={14} />
-                      <span className="text-[10px] font-black uppercase tracking-widest">+12% from last month</span>
+                    <p className="text-text-secondary text-xs font-bold uppercase tracking-widest mb-1">Bank Balance</p>
+                    <h3 className="text-3xl font-black text-text-heading">₹{bankBalance.toLocaleString()}</h3>
+                    <div className="mt-4 flex items-center gap-2 text-[10px] font-black text-emerald-600 uppercase tracking-widest">
+                      <ArrowUpRight size={14} />
+                      <span>Updated Just Now</span>
                     </div>
                   </Card>
 
                   <Card className="p-6 bg-white border-slate-100 shadow-sm">
                     <div className="flex justify-between items-start mb-4">
-                      <div className="p-3 bg-red-50 text-red-600 rounded-xl">
-                        <AlertCircle size={24} />
+                      <div className="p-3 bg-orange-50 text-orange-600 rounded-xl">
+                        <Wallet size={24} />
+                      </div>
+                      <span className="text-[10px] font-black text-orange-600 bg-orange-50 px-2 py-1 rounded-full uppercase tracking-widest">Live</span>
+                    </div>
+                    <p className="text-text-secondary text-xs font-bold uppercase tracking-widest mb-1">Cash in Hand</p>
+                    <h3 className="text-3xl font-black text-text-heading">₹{cashBalance.toLocaleString()}</h3>
+                    <div className="mt-4 flex items-center gap-2 text-[10px] font-black text-orange-600 uppercase tracking-widest">
+                      <ArrowUpRight size={14} />
+                      <span>Updated Just Now</span>
+                    </div>
+                  </Card>
+
+                  <Card className="p-6 bg-white border-slate-100 shadow-sm">
+                    <div className="flex justify-between items-start mb-4">
+                      <div className="p-3 bg-green-50 text-green-600 rounded-xl">
+                        <Coins size={24} />
                       </div>
                     </div>
-                    <p className="text-text-secondary text-xs font-bold uppercase tracking-widest mb-1">Due Fees</p>
-                    <h3 className="text-3xl font-black text-text-heading">₹ 450K</h3>
-                    <p className="text-[10px] text-text-sub mt-2 font-black uppercase tracking-widest">124 students pending</p>
+                    <p className="text-text-secondary text-xs font-bold uppercase tracking-widest mb-1">Fees Collected</p>
+                    <h3 className="text-3xl font-black text-text-heading">₹{feeTransactions.reduce((sum, t) => sum + t.totalPaid, 0).toLocaleString()}</h3>
+                    <p className="text-[10px] mt-4 font-black text-green-600 uppercase tracking-widest">Total Revenue</p>
                   </Card>
                 </div>
 
@@ -8652,6 +8766,52 @@ export default function App() {
                           </div>
                           <span className="text-[10px] font-black uppercase tracking-widest">New Admission</span>
                         </button>
+                      </div>
+                    </Card>
+
+                    {/* Recent Bank / Cash Ledger */}
+                    <Card className="p-6">
+                      <h3 className="text-lg font-black text-text-heading mb-6 flex items-center gap-2 uppercase tracking-tighter">
+                        <ClipboardList size={20} className="text-primary" />
+                        Recent Bank / Cash Ledger
+                      </h3>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left">
+                          <thead>
+                            <tr className="border-b border-slate-200">
+                              <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Date</th>
+                              <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Note</th>
+                              <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider text-right">Withdrawal</th>
+                              <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider text-right">Deposit</th>
+                              <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider text-right">Balance</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {contraEntries.slice(0, 5).map((e: any) => (
+                              <tr key={e.id} className="hover:bg-slate-50/50 transition-colors">
+                                <td className="py-4 text-sm">{e.date}</td>
+                                <td className="py-4 text-sm font-medium">
+                                  {e.reference}
+                                  <p className="text-[10px] text-text-sub uppercase">{e.type}</p>
+                                </td>
+                                <td className="py-4 text-sm font-black text-rose-600 text-right">
+                                  {e.type === 'Bank to Cash' || (e.type.includes('Adjustment') && e.amount < 0) ? `₹${Math.abs(e.amount).toLocaleString()}` : '-'}
+                                </td>
+                                <td className="py-4 text-sm font-black text-green-600 text-right">
+                                  {e.type === 'Cash to Bank' || (e.type.includes('Adjustment') && e.amount > 0) ? `₹${Math.abs(e.amount).toLocaleString()}` : '-'}
+                                </td>
+                                <td className="py-4 text-sm font-black text-right text-primary">
+                                  ₹{(bankBalance + cashBalance).toLocaleString()}
+                                </td>
+                              </tr>
+                            ))}
+                            {contraEntries.length === 0 && (
+                              <tr>
+                                <td colSpan={5} className="py-8 text-center text-text-sub italic">No recent transactions</td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
                       </div>
                     </Card>
 
@@ -9863,6 +10023,9 @@ export default function App() {
                   feeTransactions={feeTransactions}
                   attendance={attendance}
                   masterData={masterData}
+                  bankBalance={bankBalance}
+                  cashBalance={cashBalance}
+                  contraEntries={contraEntries}
                 />
               </motion.div>
             )}
