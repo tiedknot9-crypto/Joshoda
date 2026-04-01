@@ -465,6 +465,10 @@ interface Student {
   motherName: string;
   fatherMobile: string;
   motherMobile: string;
+  fatherIncome?: string;
+  fatherIncomeSource?: string;
+  motherIncome?: string;
+  motherIncomeSource?: string;
   bloodGroup: string;
   emergencyContact: string;
   localGuardianContact: string;
@@ -475,12 +479,18 @@ interface Student {
   gender: string;
   hasDisability: boolean;
   disabilityDetails: string;
+  aadhaarNumber?: string;
+  panNumber?: string;
+  passportNumber?: string;
   photo?: string;
-  relationInSchool: {
+  relationsInSchool: {
     name: string;
-    class: string;
-    section: string;
-  };
+    classSection: string;
+  }[];
+  documents?: {
+    name: string;
+    file: string;
+  }[];
 }
 
 // --- Components ---
@@ -546,24 +556,26 @@ const Select = ({ label, options, required = false, ...props }: any) => (
   </div>
 );
 
-const FileUpload = ({ label, icon: Icon = Upload, required = false, onChange, preview }: any) => (
+const FileUpload = ({ label, icon: Icon = Upload, required = false, onChange, preview, isViewOnly }: any) => (
   <div className="w-full">
     <label className="label-text">
       {label} {required && <span className="text-red-500">*</span>}
     </label>
-    <div className="relative group">
-      <input
-        type="file"
-        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-        onChange={onChange}
-      />
-      <div className="flex flex-col items-center justify-center gap-2 p-4 border-2 border-dashed border-slate-200 rounded-xl group-hover:border-primary group-hover:bg-primary/5 transition-all overflow-hidden min-h-[120px]">
+    <div className={`relative group ${isViewOnly ? 'cursor-default' : 'cursor-pointer'}`}>
+      {!isViewOnly && (
+        <input
+          type="file"
+          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+          onChange={onChange}
+        />
+      )}
+      <div className={`flex flex-col items-center justify-center gap-2 p-4 border-2 border-dashed border-slate-200 rounded-xl transition-all overflow-hidden min-h-[120px] ${!isViewOnly ? 'group-hover:border-primary group-hover:bg-primary/5' : 'opacity-80'}`}>
         {preview ? (
           <img src={preview} alt="Preview" className="max-h-20 w-auto object-contain rounded-lg" referrerPolicy="no-referrer" />
         ) : (
           <>
-            <Icon className="text-slate-400 group-hover:text-primary" size={24} />
-            <span className="text-xs text-text-secondary group-hover:text-primary">Click or drag to upload</span>
+            <Icon className="text-slate-400" size={24} />
+            <span className="text-xs text-text-secondary">{isViewOnly ? 'No file uploaded' : 'Click or drag to upload'}</span>
           </>
         )}
       </div>
@@ -7532,6 +7544,18 @@ export default function App() {
   const [selectedPersonForID, setSelectedPersonForID] = useState<any>(null);
   const [idCardTab, setIdCardTab] = useState('student');
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [showLeaveModal, setShowLeaveModal] = useState(false);
+  const [newLeave, setNewLeave] = useState<Partial<LeaveRequest>>({
+    studentId: '',
+    studentName: '',
+    class: '',
+    section: '',
+    startDate: '',
+    endDate: '',
+    reason: '',
+    status: 'Pending',
+    type: 'Leave'
+  });
   
   // Master Data State
   const [masterData, setMasterData] = useState({
@@ -7727,27 +7751,27 @@ export default function App() {
       const indianStudents: Student[] = [
         { 
           id: '1', studentId: 'DS-100001', name: 'Aarav', surname: 'Sharma', class: 'Class 1', section: 'A', gender: 'Male', address: 'New Delhi', category: 'General', religion: 'Hinduism', caste: 'Brahmin',
-          fatherName: 'Rajesh Sharma', motherName: 'Sunita Sharma', fatherMobile: '9876543210', motherMobile: '9876543211', bloodGroup: 'A+', emergencyContact: '9876543212', localGuardianContact: '9876543213', email: 'aarav@example.com', allergy: 'None', hasDisability: false, disabilityDetails: '', relationInSchool: { name: '', class: '', section: '' },
+          fatherName: 'Rajesh Sharma', motherName: 'Sunita Sharma', fatherMobile: '9876543210', motherMobile: '9876543211', bloodGroup: 'A+', emergencyContact: '9876543212', localGuardianContact: '9876543213', email: 'aarav@example.com', allergy: 'None', hasDisability: false, disabilityDetails: '', relationsInSchool: [],
           photo: 'https://picsum.photos/seed/aarav/200'
         },
         { 
           id: '2', studentId: 'DS-100002', name: 'Vihaan', surname: 'Gupta', class: 'Class 2', section: 'B', gender: 'Male', address: 'Mumbai', category: 'General', religion: 'Hinduism', caste: 'Vaishya',
-          fatherName: 'Amit Gupta', motherName: 'Neha Gupta', fatherMobile: '9876543214', motherMobile: '9876543215', bloodGroup: 'B+', emergencyContact: '9876543216', localGuardianContact: '9876543217', email: 'vihaan@example.com', allergy: 'None', hasDisability: false, disabilityDetails: '', relationInSchool: { name: '', class: '', section: '' },
+          fatherName: 'Amit Gupta', motherName: 'Neha Gupta', fatherMobile: '9876543214', motherMobile: '9876543215', bloodGroup: 'B+', emergencyContact: '9876543216', localGuardianContact: '9876543217', email: 'vihaan@example.com', allergy: 'None', hasDisability: false, disabilityDetails: '', relationsInSchool: [],
           photo: 'https://picsum.photos/seed/vihaan/200'
         },
         { 
           id: '3', studentId: 'DS-100003', name: 'Advik', surname: 'Verma', class: 'Class 3', section: 'C', gender: 'Male', address: 'Bangalore', category: 'OBC', religion: 'Hinduism', caste: 'Kshatriya',
-          fatherName: 'Sanjay Verma', motherName: 'Meera Verma', fatherMobile: '9876543218', motherMobile: '9876543219', bloodGroup: 'O+', emergencyContact: '9876543220', localGuardianContact: '9876543221', email: 'advik@example.com', allergy: 'None', hasDisability: false, disabilityDetails: '', relationInSchool: { name: '', class: '', section: '' },
+          fatherName: 'Sanjay Verma', motherName: 'Meera Verma', fatherMobile: '9876543218', motherMobile: '9876543219', bloodGroup: 'O+', emergencyContact: '9876543220', localGuardianContact: '9876543221', email: 'advik@example.com', allergy: 'None', hasDisability: false, disabilityDetails: '', relationsInSchool: [],
           photo: 'https://picsum.photos/seed/advik/200'
         },
         { 
           id: '4', studentId: 'DS-100004', name: 'Ananya', surname: 'Iyer', class: 'Class 4', section: 'D', gender: 'Female', address: 'Chennai', category: 'General', religion: 'Hinduism', caste: 'Brahmin',
-          fatherName: 'Subramanian Iyer', motherName: 'Lakshmi Iyer', fatherMobile: '9876543222', motherMobile: '9876543223', bloodGroup: 'AB+', emergencyContact: '9876543224', localGuardianContact: '9876543225', email: 'ananya@example.com', allergy: 'None', hasDisability: false, disabilityDetails: '', relationInSchool: { name: '', class: '', section: '' },
+          fatherName: 'Subramanian Iyer', motherName: 'Lakshmi Iyer', fatherMobile: '9876543222', motherMobile: '9876543223', bloodGroup: 'AB+', emergencyContact: '9876543224', localGuardianContact: '9876543225', email: 'ananya@example.com', allergy: 'None', hasDisability: false, disabilityDetails: '', relationsInSchool: [],
           photo: 'https://picsum.photos/seed/ananya/200'
         },
         { 
           id: '5', studentId: 'DS-100005', name: 'Ishani', surname: 'Reddy', class: 'Class 5', section: 'A', gender: 'Female', address: 'Hyderabad', category: 'General', religion: 'Hinduism', caste: 'Reddy',
-          fatherName: 'Venkat Reddy', motherName: 'Kavitha Reddy', fatherMobile: '9876543226', motherMobile: '9876543227', bloodGroup: 'A-', emergencyContact: '9876543228', localGuardianContact: '9876543229', email: 'ishani@example.com', allergy: 'None', hasDisability: false, disabilityDetails: '', relationInSchool: { name: '', class: '', section: '' },
+          fatherName: 'Venkat Reddy', motherName: 'Kavitha Reddy', fatherMobile: '9876543226', motherMobile: '9876543227', bloodGroup: 'A-', emergencyContact: '9876543228', localGuardianContact: '9876543229', email: 'ishani@example.com', allergy: 'None', hasDisability: false, disabilityDetails: '', relationsInSchool: [],
           photo: 'https://picsum.photos/seed/ishani/200'
         },
       ];
@@ -9049,6 +9073,24 @@ export default function App() {
                         value={formData.email || ''}
                         onChange={(e: any) => setFormData({...formData, email: e.target.value})} 
                       />
+                      <Input 
+                        label="Aadhaar Number" 
+                        placeholder="12-digit Aadhaar" 
+                        value={formData.aadhaarNumber || ''}
+                        onChange={(e: any) => setFormData({...formData, aadhaarNumber: e.target.value})} 
+                      />
+                      <Input 
+                        label="PAN Number" 
+                        placeholder="10-digit PAN" 
+                        value={formData.panNumber || ''}
+                        onChange={(e: any) => setFormData({...formData, panNumber: e.target.value})} 
+                      />
+                      <Input 
+                        label="Passport Number" 
+                        placeholder="Passport No." 
+                        value={formData.passportNumber || ''}
+                        onChange={(e: any) => setFormData({...formData, passportNumber: e.target.value})} 
+                      />
                     </div>
                   </Card>
 
@@ -9084,6 +9126,30 @@ export default function App() {
                         required 
                         value={formData.motherMobile || ''}
                         onChange={(e: any) => setFormData({...formData, motherMobile: e.target.value})} 
+                      />
+                      <Input 
+                        label="Father's Income" 
+                        placeholder="e.g. 5,00,000" 
+                        value={formData.fatherIncome || ''}
+                        onChange={(e: any) => setFormData({...formData, fatherIncome: e.target.value})} 
+                      />
+                      <Input 
+                        label="Father's Source of Income" 
+                        placeholder="e.g. Business" 
+                        value={formData.fatherIncomeSource || ''}
+                        onChange={(e: any) => setFormData({...formData, fatherIncomeSource: e.target.value})} 
+                      />
+                      <Input 
+                        label="Mother's Income" 
+                        placeholder="e.g. 3,00,000" 
+                        value={formData.motherIncome || ''}
+                        onChange={(e: any) => setFormData({...formData, motherIncome: e.target.value})} 
+                      />
+                      <Input 
+                        label="Mother's Source of Income" 
+                        placeholder="e.g. Service" 
+                        value={formData.motherIncomeSource || ''}
+                        onChange={(e: any) => setFormData({...formData, motherIncomeSource: e.target.value})} 
                       />
                       <Input 
                         label="Emergency Contact Number" 
@@ -9141,44 +9207,246 @@ export default function App() {
                         )}
                       </div>
                       <div className="p-4 bg-slate-50 rounded-xl border border-slate-100 space-y-4">
-                        <p className="text-sm font-bold text-text-secondary uppercase">Relation in School (Sibling/Relative)</p>
-                        <div className="grid grid-cols-2 gap-4">
-                          <Input 
-                            label="Relation Name" 
-                            placeholder="Name" 
-                            value={formData.relationInSchool?.name || ''}
-                            onChange={(e: any) => setFormData({
-                              ...formData, 
-                              relationInSchool: { ...formData.relationInSchool, name: e.target.value }
-                            })}
-                          />
-                          <Input 
-                            label="Class/Section" 
-                            placeholder="e.g. 8-A" 
-                            value={formData.relationInSchool?.classSection || ''}
-                            onChange={(e: any) => setFormData({
-                              ...formData, 
-                              relationInSchool: { ...formData.relationInSchool, classSection: e.target.value }
-                            })}
-                          />
+                        <div className="flex items-center justify-between">
+                          <p className="text-sm font-bold text-text-secondary uppercase">Relation in School (Sibling/Relative)</p>
+                          {!isViewOnly && (
+                            <button 
+                              type="button"
+                              onClick={() => {
+                                const relations = formData.relationsInSchool || [];
+                                setFormData({
+                                  ...formData,
+                                  relationsInSchool: [...relations, { name: '', classSection: '' }]
+                                });
+                              }}
+                              className="text-xs font-bold text-primary hover:underline flex items-center gap-1"
+                            >
+                              <Plus size={14} />
+                              Add More
+                            </button>
+                          )}
+                        </div>
+                        <div className="space-y-4">
+                          {(formData.relationsInSchool || []).map((rel: any, index: number) => (
+                            <div key={index} className="grid grid-cols-12 gap-4 items-end bg-white p-3 rounded-lg border border-slate-200 shadow-sm">
+                              <div className="col-span-5">
+                                <Input 
+                                  label="Relation Name" 
+                                  placeholder="Name" 
+                                  value={rel.name || ''}
+                                  onChange={(e: any) => {
+                                    const relations = [...(formData.relationsInSchool || [])];
+                                    relations[index].name = e.target.value;
+                                    setFormData({ ...formData, relationsInSchool: relations });
+                                  }}
+                                />
+                              </div>
+                              <div className="col-span-5">
+                                <Input 
+                                  label="Class/Section" 
+                                  placeholder="e.g. 8-A" 
+                                  value={rel.classSection || ''}
+                                  onChange={(e: any) => {
+                                    const relations = [...(formData.relationsInSchool || [])];
+                                    relations[index].classSection = e.target.value;
+                                    setFormData({ ...formData, relationsInSchool: relations });
+                                  }}
+                                />
+                              </div>
+                              <div className="col-span-2 flex justify-center pb-2">
+                                {!isViewOnly && (
+                                  <button 
+                                    type="button"
+                                    onClick={() => {
+                                      const relations = (formData.relationsInSchool || []).filter((_: any, i: number) => i !== index);
+                                      setFormData({ ...formData, relationsInSchool: relations });
+                                    }}
+                                    className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                                    title="Delete"
+                                  >
+                                    <Trash2 size={18} />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                          {(!formData.relationsInSchool || formData.relationsInSchool.length === 0) && !isViewOnly && (
+                            <div className="grid grid-cols-2 gap-4">
+                              <Input 
+                                label="Relation Name" 
+                                placeholder="Name" 
+                                value=""
+                                onChange={(e: any) => {
+                                  setFormData({
+                                    ...formData, 
+                                    relationsInSchool: [{ name: e.target.value, classSection: '' }]
+                                  });
+                                }}
+                              />
+                              <Input 
+                                label="Class/Section" 
+                                placeholder="e.g. 8-A" 
+                                value=""
+                                onChange={(e: any) => {
+                                  setFormData({
+                                    ...formData, 
+                                    relationsInSchool: [{ name: '', classSection: e.target.value }]
+                                  });
+                                }}
+                              />
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
                   </Card>
 
                   {/* Document Uploads */}
-                  <Card>
-                    <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-primary">
-                      <FileText size={20} />
-                      Document Uploads
-                    </h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                      <FileUpload label="Student Photo" required />
-                      <FileUpload label="Student Aadhaar Card" required />
-                      <FileUpload label="Parents Documents" required />
-                      <FileUpload label="Student Signature" icon={Signature} required />
-                    </div>
-                  </Card>
+                  <div className="space-y-6">
+                    <Card>
+                      <div className="flex items-center justify-between mb-6">
+                        <h3 className="text-lg font-bold flex items-center gap-2 text-primary">
+                          <FileText size={20} />
+                          Document Uploads
+                        </h3>
+                        <button 
+                          type="button"
+                          onClick={() => {
+                            const documents = formData.documents || [];
+                            if (documents.length === 0) {
+                              showModal('Info', 'No documents uploaded to print.');
+                              return;
+                            }
+                            
+                            const printWindow = window.open('', '_blank');
+                            if (printWindow) {
+                              printWindow.document.write('<html><head><title>Print Certificates</title>');
+                              printWindow.document.write('<style>body { font-family: sans-serif; } .cert { margin-bottom: 50px; page-break-after: always; text-align: center; } img { max-width: 100%; height: auto; border: 1px solid #ccc; } h2 { margin-bottom: 20px; }</style>');
+                              printWindow.document.write('</head><body>');
+                              printWindow.document.write(`<h1>Certificates for ${formData.name || 'Student'} ${formData.surname || ''}</h1>`);
+                              
+                              documents.forEach((doc: any) => {
+                                printWindow.document.write('<div class="cert">');
+                                printWindow.document.write(`<h2>${doc.name}</h2>`);
+                                if (doc.file.startsWith('data:image')) {
+                                  printWindow.document.write(`<img src="${doc.file}" />`);
+                                } else {
+                                  printWindow.document.write(`<p>Document Content: ${doc.name}</p>`);
+                                }
+                                printWindow.document.write('</div>');
+                              });
+                              
+                              printWindow.document.write('</body></html>');
+                              printWindow.document.close();
+                              printWindow.print();
+                            }
+                          }}
+                          className="px-4 py-2 bg-slate-100 text-slate-700 rounded-xl text-xs font-bold hover:bg-slate-200 transition-all flex items-center gap-2 relative z-20"
+                        >
+                          <Printer size={16} />
+                          Print All Certificates
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
+                        <FileUpload 
+                          label="Student Photo" 
+                          required 
+                          isViewOnly={isViewOnly}
+                          preview={formData.photo}
+                          onChange={(e: any) => {
+                            const file = e.target.files[0];
+                            if (file) {
+                              const reader = new FileReader();
+                              reader.onloadend = () => {
+                                setFormData({ ...formData, photo: reader.result as string });
+                              };
+                              reader.readAsDataURL(file);
+                            }
+                          }}
+                        />
+                        <FileUpload 
+                          label="Student Aadhaar Card" 
+                          required 
+                          isViewOnly={isViewOnly}
+                          preview={(formData.documents || []).find((d: any) => d.name === 'Aadhaar Card')?.file}
+                          onChange={(e: any) => {
+                            const file = e.target.files[0];
+                            if (file) {
+                              const reader = new FileReader();
+                              reader.onloadend = () => {
+                                const docs = [...(formData.documents || [])];
+                                const index = docs.findIndex(d => d.name === 'Aadhaar Card');
+                                if (index > -1) docs[index].file = reader.result as string;
+                                else docs.push({ name: 'Aadhaar Card', file: reader.result as string });
+                                setFormData({ ...formData, documents: docs });
+                              };
+                              reader.readAsDataURL(file);
+                            }
+                          }}
+                        />
+                        <FileUpload 
+                          label="Caste Certificate" 
+                          isViewOnly={isViewOnly}
+                          preview={(formData.documents || []).find((d: any) => d.name === 'Caste Certificate')?.file}
+                          onChange={(e: any) => {
+                            const file = e.target.files[0];
+                            if (file) {
+                              const reader = new FileReader();
+                              reader.onloadend = () => {
+                                const docs = [...(formData.documents || [])];
+                                const index = docs.findIndex(d => d.name === 'Caste Certificate');
+                                if (index > -1) docs[index].file = reader.result as string;
+                                else docs.push({ name: 'Caste Certificate', file: reader.result as string });
+                                setFormData({ ...formData, documents: docs });
+                              };
+                              reader.readAsDataURL(file);
+                            }
+                          }}
+                        />
+                        <FileUpload 
+                          label="Parents Documents" 
+                          required 
+                          isViewOnly={isViewOnly}
+                          preview={(formData.documents || []).find((d: any) => d.name === 'Parents Documents')?.file}
+                          onChange={(e: any) => {
+                            const file = e.target.files[0];
+                            if (file) {
+                              const reader = new FileReader();
+                              reader.onloadend = () => {
+                                const docs = [...(formData.documents || [])];
+                                const index = docs.findIndex(d => d.name === 'Parents Documents');
+                                if (index > -1) docs[index].file = reader.result as string;
+                                else docs.push({ name: 'Parents Documents', file: reader.result as string });
+                                setFormData({ ...formData, documents: docs });
+                              };
+                              reader.readAsDataURL(file);
+                            }
+                          }}
+                        />
+                        <FileUpload 
+                          label="Student Signature" 
+                          icon={Signature} 
+                          required 
+                          isViewOnly={isViewOnly}
+                          preview={(formData.documents || []).find((d: any) => d.name === 'Signature')?.file}
+                          onChange={(e: any) => {
+                            const file = e.target.files[0];
+                            if (file) {
+                              const reader = new FileReader();
+                              reader.onloadend = () => {
+                                const docs = [...(formData.documents || [])];
+                                const index = docs.findIndex(d => d.name === 'Signature');
+                                if (index > -1) docs[index].file = reader.result as string;
+                                else docs.push({ name: 'Signature', file: reader.result as string });
+                                setFormData({ ...formData, documents: docs });
+                              };
+                              reader.readAsDataURL(file);
+                            }
+                          }}
+                        />
+                      </div>
+                    </Card>
+                  </div>
 
                   <div className="flex justify-end gap-4 pb-10">
                     <button 
@@ -9475,6 +9743,13 @@ export default function App() {
                       <h1 className="text-3xl font-black text-text-heading tracking-tight">Leave Management</h1>
                       <p className="text-text-sub font-medium">Overview of all student leave requests and approvals.</p>
                     </div>
+                    <button 
+                      onClick={() => setShowLeaveModal(true)}
+                      className="flex items-center gap-2 px-6 py-3 bg-primary text-white rounded-xl font-black uppercase tracking-widest hover:bg-primary/90 transition-all shadow-lg shadow-primary/20"
+                    >
+                      <Plus size={20} />
+                      Manual Entry
+                    </button>
                   </div>
                   <Card>
                     <div className="overflow-x-auto">
@@ -9539,6 +9814,149 @@ export default function App() {
                     </div>
                   </Card>
                 </div>
+
+                {/* Manual Leave Entry Modal */}
+                {showLeaveModal && (
+                  <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowLeaveModal(false)} />
+                    <motion.div 
+                      initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      className="relative w-full max-w-2xl bg-white rounded-3xl shadow-2xl overflow-hidden"
+                    >
+                      <div className="p-8 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+                        <div>
+                          <h2 className="text-2xl font-black text-text-heading tracking-tight">Manual Leave Entry</h2>
+                          <p className="text-text-sub text-sm font-medium">Add a new leave request for a student.</p>
+                        </div>
+                        <button onClick={() => setShowLeaveModal(false)} className="p-2 hover:bg-white rounded-xl transition-all shadow-sm">
+                          <X size={20} />
+                        </button>
+                      </div>
+                      
+                      <div className="p-8 max-h-[70vh] overflow-y-auto space-y-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-text-secondary ml-1">Student ID</label>
+                            <input 
+                              type="text" 
+                              value={newLeave.studentId}
+                              onChange={(e) => setNewLeave({...newLeave, studentId: e.target.value})}
+                              placeholder="e.g. ST-102938"
+                              className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-text-secondary ml-1">Student Name</label>
+                            <input 
+                              type="text" 
+                              value={newLeave.studentName}
+                              onChange={(e) => setNewLeave({...newLeave, studentName: e.target.value})}
+                              placeholder="Full Name"
+                              className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-text-secondary ml-1">Class</label>
+                            <select 
+                              value={newLeave.class}
+                              onChange={(e) => setNewLeave({...newLeave, class: e.target.value})}
+                              className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none"
+                            >
+                              <option value="">Select Class</option>
+                              {masterData.classes.map(c => <option key={c} value={c}>{c}</option>)}
+                            </select>
+                          </div>
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-text-secondary ml-1">Section</label>
+                            <select 
+                              value={newLeave.section}
+                              onChange={(e) => setNewLeave({...newLeave, section: e.target.value})}
+                              className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none"
+                            >
+                              <option value="">Select Section</option>
+                              {masterData.sections.map(s => <option key={s} value={s}>{s}</option>)}
+                            </select>
+                          </div>
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-text-secondary ml-1">Start Date</label>
+                            <input 
+                              type="date" 
+                              value={newLeave.startDate}
+                              onChange={(e) => setNewLeave({...newLeave, startDate: e.target.value})}
+                              className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none"
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-text-secondary ml-1">End Date</label>
+                            <input 
+                              type="date" 
+                              value={newLeave.endDate}
+                              onChange={(e) => setNewLeave({...newLeave, endDate: e.target.value})}
+                              className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none"
+                            />
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black uppercase tracking-widest text-text-secondary ml-1">Reason for Leave</label>
+                          <textarea 
+                            value={newLeave.reason}
+                            onChange={(e) => setNewLeave({...newLeave, reason: e.target.value})}
+                            rows={3}
+                            placeholder="Describe the reason..."
+                            className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none resize-none"
+                          />
+                        </div>
+                      </div>
+                      
+                      <div className="p-8 bg-slate-50/50 border-t border-slate-100 flex gap-4">
+                        <button 
+                          onClick={() => setShowLeaveModal(false)}
+                          className="flex-1 py-4 rounded-2xl font-black uppercase tracking-widest text-text-sub hover:bg-white transition-all border border-transparent hover:border-slate-200"
+                        >
+                          Cancel
+                        </button>
+                        <button 
+                          onClick={() => {
+                            if (!newLeave.studentId || !newLeave.startDate || !newLeave.endDate) {
+                              showModal('Error', 'Please fill all required fields');
+                              return;
+                            }
+                            const start = new Date(newLeave.startDate!);
+                            const end = new Date(newLeave.endDate!);
+                            const duration = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+                            
+                            const request: LeaveRequest = {
+                              ...newLeave as LeaveRequest,
+                              id: `LR-${Date.now()}`,
+                              duration,
+                              appliedDate: new Date().toISOString().split('T')[0],
+                              status: 'Approved',
+                              approvedBy: 'Admin'
+                            };
+                            setLeaveRequests([request, ...leaveRequests]);
+                            setShowLeaveModal(false);
+                            setNewLeave({
+                              studentId: '',
+                              studentName: '',
+                              class: '',
+                              section: '',
+                              startDate: '',
+                              endDate: '',
+                              reason: '',
+                              status: 'Pending',
+                              type: 'Leave'
+                            });
+                            showModal('Success', 'Leave Entry Added Successfully!');
+                          }}
+                          className="flex-1 py-4 rounded-2xl bg-primary text-white font-black uppercase tracking-widest hover:bg-primary/90 transition-all shadow-lg shadow-primary/20"
+                        >
+                          Submit Entry
+                        </button>
+                      </div>
+                    </motion.div>
+                  </div>
+                )}
               </motion.div>
             )}
 
