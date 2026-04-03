@@ -417,7 +417,7 @@ interface AdmissionEnquiry {
   class: string;
   date: string;
   source: string;
-  status: 'Pending' | 'Follow-up' | 'Closed' | 'Approved';
+  status: 'Pending' | 'Follow-up' | 'Closed' | 'Approved' | 'Converted' | 'Cancelled';
   fatherName?: string;
   motherName?: string;
   address?: string;
@@ -4201,7 +4201,7 @@ const ReceiptModal = ({ transaction, schoolProfile, onClose }: { transaction: Fe
   );
 };
 
-const TeacherPanel = ({ syllabuses, setSyllabuses, leaveRequests, setLeaveRequests, notifications, currentUser, teacherAssignments, activities, setActivities, masterData }: any) => {
+const TeacherPanel = ({ syllabuses, setSyllabuses, leaveRequests, setLeaveRequests, notifications, currentUser, teacherAssignments, activities, setActivities, masterData, students }: any) => {
   const assignedClasses = teacherAssignments.filter((a: any) => 
     a.classTeacher === currentUser.name || a.subjectTeachers.some((st: any) => st.teacher === currentUser.name)
   );
@@ -4422,7 +4422,7 @@ const TeacherPanel = ({ syllabuses, setSyllabuses, leaveRequests, setLeaveReques
               </h3>
               <button 
                 onClick={() => {
-                  const classStudents = masterData.students.filter((s: any) => s.class === attendanceForm.class && s.section === attendanceForm.section);
+                  const classStudents = students.filter((s: any) => s.class === attendanceForm.class && s.section === attendanceForm.section);
                   if (selectedAttendanceStudents.length === classStudents.length) {
                     setSelectedAttendanceStudents([]);
                   } else {
@@ -4445,7 +4445,7 @@ const TeacherPanel = ({ syllabuses, setSyllabuses, leaveRequests, setLeaveReques
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {masterData.students
+                  {students
                     .filter((s: any) => s.class === attendanceForm.class && s.section === attendanceForm.section)
                     .map((s: any) => (
                       <tr 
@@ -4487,7 +4487,7 @@ const TeacherPanel = ({ syllabuses, setSyllabuses, leaveRequests, setLeaveReques
                         </td>
                       </tr>
                     ))}
-                  {(!attendanceForm.class || masterData.students.filter((s: any) => s.class === attendanceForm.class && s.section === attendanceForm.section).length === 0) && (
+                  {(!attendanceForm.class || students.filter((s: any) => s.class === attendanceForm.class && s.section === attendanceForm.section).length === 0) && (
                     <tr>
                       <td colSpan={3} className="py-12 text-center text-text-sub italic">
                         {attendanceForm.class ? 'No students found for this class/section.' : 'Please select a class and section.'}
@@ -4619,7 +4619,7 @@ const TeacherPanel = ({ syllabuses, setSyllabuses, leaveRequests, setLeaveReques
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {masterData.students.slice(0, 5).map((s: any) => (
+                  {students.slice(0, 5).map((s: any) => (
                     <tr key={s.studentId}>
                       <td className="py-4 flex items-center gap-2">
                         <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-primary font-bold text-xs overflow-hidden border border-slate-200">
@@ -7089,6 +7089,7 @@ const CommunicatePanel = ({ notifications, setNotifications, templates, setTempl
 const FrontOfficePanel = ({ enquiries, setEnquiries, visitors, setVisitors, complaints, setComplaints, setView, setFormData, currentUser, masterData }: any) => {
   const [activeTab, setActiveTab] = useState('enquiry');
   const [showAddEnquiry, setShowAddEnquiry] = useState(false);
+  const [editingEnquiryId, setEditingEnquiryId] = useState<string | null>(null);
   const [newEnquiry, setNewEnquiry] = useState<Partial<AdmissionEnquiry>>({
     status: 'Pending',
     date: new Date().toISOString().split('T')[0]
@@ -7102,39 +7103,176 @@ const FrontOfficePanel = ({ enquiries, setEnquiries, visitors, setVisitors, comp
     status: 'Pending'
   });
 
-  const handleAddEnquiry = () => {
+  const handleAddEnquiry = async () => {
     if (!newEnquiry.name || !newEnquiry.mobile) return;
-    const enquiry: AdmissionEnquiry = {
-      ...newEnquiry as AdmissionEnquiry,
-      id: `ENQ-${Date.now()}`
+    
+    const payload = {
+      student_name: newEnquiry.name,
+      father_name: newEnquiry.fatherName,
+      mobile: newEnquiry.mobile,
+      class: newEnquiry.class,
+      source: newEnquiry.source,
+      date: newEnquiry.date,
+      description: newEnquiry.note,
+      status: newEnquiry.status
     };
-    setEnquiries([enquiry, ...enquiries]);
+
+    if (editingEnquiryId) {
+      const { data, error } = await supabase
+        .from('enquiries')
+        .update(payload)
+        .eq('id', editingEnquiryId)
+        .select();
+      
+      if (data && !error) {
+        setEnquiries(enquiries.map((e: any) => e.id === editingEnquiryId ? { ...e, ...newEnquiry } : e));
+        setEditingEnquiryId(null);
+      }
+    } else {
+      const { data, error } = await supabase
+        .from('enquiries')
+        .insert([payload])
+        .select();
+      
+      if (data && !error) {
+        const savedEnquiry = {
+          ...data[0],
+          name: data[0].student_name,
+          fatherName: data[0].father_name,
+          note: data[0].description
+        };
+        setEnquiries([savedEnquiry, ...enquiries]);
+      }
+    }
+    
     setShowAddEnquiry(false);
     setNewEnquiry({ status: 'Pending', date: new Date().toISOString().split('T')[0] });
   };
 
-  const handleApproveForAdmission = (enquiry: AdmissionEnquiry) => {
-    // 1. Update enquiry status
-    setEnquiries(enquiries.map((e: AdmissionEnquiry) => 
-      e.id === enquiry.id ? { ...e, status: 'Approved' } : e
-    ));
+  const handleDeleteEnquiry = async (id: string) => {
+    const { error } = await supabase.from('enquiries').delete().eq('id', id);
+    if (!error) setEnquiries(enquiries.filter((e: any) => e.id !== id));
+  };
 
-    // 2. Pre-fill student registration form
-    setFormData({
-      name: enquiry.name,
-      surname: enquiry.surname,
-      mobile: enquiry.mobile,
-      email: enquiry.email,
-      class: enquiry.class,
-      fatherName: enquiry.fatherName,
-      motherName: enquiry.motherName,
-      address: enquiry.address,
-      gender: enquiry.gender,
-      fatherMobile: enquiry.mobile // Assuming mobile is father's mobile if not specified
-    });
+  const handleApproveForAdmission = async (enquiry: AdmissionEnquiry) => {
+    const { error } = await supabase
+      .from('enquiries')
+      .update({ status: 'Converted' })
+      .eq('id', enquiry.id);
 
-    // 3. Navigate to registration
-    setView('register-student');
+    if (!error) {
+      setEnquiries(enquiries.map((e: AdmissionEnquiry) => 
+        e.id === enquiry.id ? { ...e, status: 'Converted' } : e
+      ));
+
+      setFormData({
+        name: enquiry.name,
+        surname: enquiry.surname || '',
+        mobile: enquiry.mobile,
+        email: enquiry.email || '',
+        class: enquiry.class,
+        fatherName: enquiry.fatherName || '',
+        motherName: enquiry.motherName || '',
+        address: enquiry.address || '',
+        gender: enquiry.gender || '',
+        fatherMobile: enquiry.mobile
+      });
+
+      setView('register-student');
+    }
+  };
+
+  const handleAddVisitor = async () => {
+    if (!newVisitor.name || !newVisitor.mobile) return;
+    
+    const payload = {
+      name: newVisitor.name,
+      mobile: newVisitor.mobile,
+      purpose: newVisitor.purpose,
+      date: newVisitor.date,
+      in_time: newVisitor.inTime
+    };
+
+    const { data, error } = await supabase
+      .from('visitors')
+      .insert([payload])
+      .select();
+    
+    if (data && !error) {
+      const savedVisitor = {
+        ...data[0],
+        inTime: data[0].in_time
+      };
+      setVisitors([savedVisitor, ...visitors]);
+      setNewVisitor({
+        date: new Date().toISOString().split('T')[0],
+        inTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      });
+    }
+  };
+
+  const handleMarkOutVisitor = async (id: string) => {
+    const outTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const { error } = await supabase
+      .from('visitors')
+      .update({ out_time: outTime })
+      .eq('id', id);
+    
+    if (!error) {
+      setVisitors(visitors.map((v: Visitor) => v.id === id ? { ...v, outTime } : v));
+    }
+  };
+
+  const handleDeleteVisitor = async (id: string) => {
+    const { error } = await supabase.from('visitors').delete().eq('id', id);
+    if (!error) setVisitors(visitors.filter((v: any) => v.id !== id));
+  };
+
+  const handleAddComplaint = async () => {
+    if (!newComplaint.name || !newComplaint.description) return;
+    
+    const payload = {
+      complainant_name: newComplaint.name,
+      complaint_type: newComplaint.type,
+      source: newComplaint.source,
+      date: newComplaint.date,
+      description: newComplaint.description,
+      status: newComplaint.status
+    };
+
+    const { data, error } = await supabase
+      .from('complaints')
+      .insert([payload])
+      .select();
+    
+    if (data && !error) {
+      const savedComplaint = {
+        ...data[0],
+        type: data[0].complaint_type,
+        name: data[0].complainant_name
+      };
+      setComplaints([savedComplaint, ...complaints]);
+      setNewComplaint({
+        date: new Date().toISOString().split('T')[0],
+        status: 'Pending'
+      });
+    }
+  };
+
+  const handleResolveComplaint = async (id: string) => {
+    const { error } = await supabase
+      .from('complaints')
+      .update({ status: 'Resolved' })
+      .eq('id', id);
+    
+    if (!error) {
+      setComplaints(complaints.map((c: Complaint) => c.id === id ? { ...c, status: 'Resolved' } : c));
+    }
+  };
+
+  const handleDeleteComplaint = async (id: string) => {
+    const { error } = await supabase.from('complaints').delete().eq('id', id);
+    if (!error) setComplaints(complaints.filter((c: any) => c.id !== id));
   };
 
   return (
@@ -7142,7 +7280,11 @@ const FrontOfficePanel = ({ enquiries, setEnquiries, visitors, setVisitors, comp
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-black text-text-heading">Front Office</h2>
         <button 
-          onClick={() => setShowAddEnquiry(true)}
+          onClick={() => {
+            setEditingEnquiryId(null);
+            setNewEnquiry({ status: 'Pending', date: new Date().toISOString().split('T')[0] });
+            setShowAddEnquiry(true);
+          }}
           className="btn-primary flex items-center gap-2"
         >
           <Plus size={18} /> New Enquiry
@@ -7189,20 +7331,20 @@ const FrontOfficePanel = ({ enquiries, setEnquiries, visitors, setVisitors, comp
                   {enquiries.map((e: AdmissionEnquiry) => (
                     <tr key={e.id} className="hover:bg-slate-50/50 transition-colors">
                       <td className="py-4 text-sm text-text-sub">{e.date}</td>
-                      <td className="py-4 text-sm font-bold text-text-heading">{e.name} {e.surname}</td>
+                      <td className="py-4 text-sm font-bold text-text-heading">{e.name} {e.surname || ''}</td>
                       <td className="py-4 text-sm text-text-sub">{e.mobile}</td>
                       <td className="py-4 text-sm text-text-sub">{e.class}</td>
                       <td className="py-4">
                         <span className={`text-[10px] font-black px-2 py-1 rounded-full uppercase ${
-                          e.status === 'Closed' ? 'bg-slate-100 text-slate-700' : 
+                          e.status === 'Closed' || e.status === 'Cancelled' ? 'bg-slate-100 text-slate-700' : 
                           e.status === 'Follow-up' ? 'bg-orange-100 text-orange-700' : 
-                          e.status === 'Approved' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'
+                          e.status === 'Approved' || e.status === 'Converted' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'
                         }`}>
                           {e.status}
                         </span>
                       </td>
-                      <td className="py-4 text-right">
-                        {currentUser?.role === 'admin' && e.status !== 'Approved' && (
+                      <td className="py-4 text-right space-x-3">
+                        {currentUser?.role === 'admin' && e.status !== 'Converted' && (
                           <button 
                             onClick={() => handleApproveForAdmission(e)}
                             className="text-[10px] font-black text-primary hover:underline uppercase"
@@ -7210,9 +7352,22 @@ const FrontOfficePanel = ({ enquiries, setEnquiries, visitors, setVisitors, comp
                             Convert to Admission
                           </button>
                         )}
-                        {e.status === 'Approved' && (
-                          <span className="text-[10px] font-black text-green-600 uppercase">Admission Processed</span>
-                        )}
+                        <button 
+                          onClick={() => {
+                            setEditingEnquiryId(e.id);
+                            setNewEnquiry(e);
+                            setShowAddEnquiry(true);
+                          }}
+                          className="text-slate-400 hover:text-primary transition-colors"
+                        >
+                          <Edit2 size={16} />
+                        </button>
+                        <button 
+                          onClick={() => handleDeleteEnquiry(e.id)}
+                          className="text-slate-400 hover:text-red-500 transition-colors"
+                        >
+                          <Trash2 size={16} />
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -7274,7 +7429,7 @@ const FrontOfficePanel = ({ enquiries, setEnquiries, visitors, setVisitors, comp
                 onClick={handleAddEnquiry}
                 className="bg-primary text-white px-10 py-4 rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl shadow-primary/20 hover:scale-105 active:scale-95 transition-all"
               >
-                Save Enquiry
+                {editingEnquiryId ? 'Update Enquiry' : 'Save Enquiry'}
               </button>
             </div>
           </Card>
@@ -7286,22 +7441,15 @@ const FrontOfficePanel = ({ enquiries, setEnquiries, visitors, setVisitors, comp
           <Card className="md:col-span-1 p-6">
             <h3 className="text-lg font-bold mb-6">Add Visitor</h3>
             <div className="space-y-4">
-              <Input label="Visitor Name" value={newVisitor.name} onChange={(e: any) => setNewVisitor({...newVisitor, name: e.target.value})} />
-              <Input label="Mobile" value={newVisitor.mobile} onChange={(e: any) => setNewVisitor({...newVisitor, mobile: e.target.value})} />
-              <Input label="Purpose" value={newVisitor.purpose} onChange={(e: any) => setNewVisitor({...newVisitor, purpose: e.target.value})} />
+              <Input label="Visitor Name" value={newVisitor.name || ''} onChange={(e: any) => setNewVisitor({...newVisitor, name: e.target.value})} />
+              <Input label="Mobile" value={newVisitor.mobile || ''} onChange={(e: any) => setNewVisitor({...newVisitor, mobile: e.target.value})} />
+              <Input label="Purpose" value={newVisitor.purpose || ''} onChange={(e: any) => setNewVisitor({...newVisitor, purpose: e.target.value})} />
               <div className="grid grid-cols-2 gap-4">
-                <Input label="Date" type="date" value={newVisitor.date} onChange={(e: any) => setNewVisitor({...newVisitor, date: e.target.value})} />
-                <Input label="In Time" type="time" value={newVisitor.inTime} onChange={(e: any) => setNewVisitor({...newVisitor, inTime: e.target.value})} />
+                <Input label="Date" type="date" value={newVisitor.date || ''} onChange={(e: any) => setNewVisitor({...newVisitor, date: e.target.value})} />
+                <Input label="In Time" type="time" value={newVisitor.inTime || ''} onChange={(e: any) => setNewVisitor({...newVisitor, inTime: e.target.value})} />
               </div>
               <button 
-                onClick={() => {
-                  if (!newVisitor.name || !newVisitor.mobile) return;
-                  setVisitors([{...newVisitor, id: Date.now().toString()}, ...visitors]);
-                  setNewVisitor({
-                    date: new Date().toISOString().split('T')[0],
-                    inTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                  });
-                }}
+                onClick={handleAddVisitor}
                 className="btn-primary w-full py-3"
               >
                 Save Visitor
@@ -7319,6 +7467,7 @@ const FrontOfficePanel = ({ enquiries, setEnquiries, visitors, setVisitors, comp
                     <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Purpose</th>
                     <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">In Time</th>
                     <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Out Time</th>
+                    <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider text-right">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
@@ -7331,12 +7480,20 @@ const FrontOfficePanel = ({ enquiries, setEnquiries, visitors, setVisitors, comp
                       <td className="py-4 text-sm text-text-sub">
                         {v.outTime ? v.outTime : (
                           <button 
-                            onClick={() => setVisitors(visitors.map((vis: Visitor) => vis.id === v.id ? {...vis, outTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} : vis))}
+                            onClick={() => handleMarkOutVisitor(v.id)}
                             className="text-[10px] font-black text-primary hover:underline uppercase"
                           >
                             Mark Out
                           </button>
                         )}
+                      </td>
+                      <td className="py-4 text-right">
+                        <button 
+                          onClick={() => handleDeleteVisitor(v.id)}
+                          className="text-slate-400 hover:text-red-500 transition-colors"
+                        >
+                          <Trash2 size={16} />
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -7352,27 +7509,20 @@ const FrontOfficePanel = ({ enquiries, setEnquiries, visitors, setVisitors, comp
           <Card className="md:col-span-1 p-6">
             <h3 className="text-lg font-bold mb-6">Add Complaint</h3>
             <div className="space-y-4">
-              <Input label="Complainant Name" value={newComplaint.name} onChange={(e: any) => setNewComplaint({...newComplaint, name: e.target.value})} />
-              <Input label="Complaint Type" value={newComplaint.type} onChange={(e: any) => setNewComplaint({...newComplaint, type: e.target.value})} />
-              <Input label="Source" value={newComplaint.source} onChange={(e: any) => setNewComplaint({...newComplaint, source: e.target.value})} />
-              <Input label="Date" type="date" value={newComplaint.date} onChange={(e: any) => setNewComplaint({...newComplaint, date: e.target.value})} />
+              <Input label="Complainant Name" value={newComplaint.name || ''} onChange={(e: any) => setNewComplaint({...newComplaint, name: e.target.value})} />
+              <Input label="Complaint Type" value={newComplaint.type || ''} onChange={(e: any) => setNewComplaint({...newComplaint, type: e.target.value})} />
+              <Input label="Source" value={newComplaint.source || ''} onChange={(e: any) => setNewComplaint({...newComplaint, source: e.target.value})} />
+              <Input label="Date" type="date" value={newComplaint.date || ''} onChange={(e: any) => setNewComplaint({...newComplaint, date: e.target.value})} />
               <div className="w-full">
                 <label className="label-text">Description</label>
                 <textarea 
                   className="input-field min-h-[100px]" 
-                  value={newComplaint.description}
+                  value={newComplaint.description || ''}
                   onChange={(e: any) => setNewComplaint({...newComplaint, description: e.target.value})}
                 />
               </div>
               <button 
-                onClick={() => {
-                  if (!newComplaint.name || !newComplaint.description) return;
-                  setComplaints([{...newComplaint, id: Date.now().toString()}, ...complaints]);
-                  setNewComplaint({
-                    date: new Date().toISOString().split('T')[0],
-                    status: 'Pending'
-                  });
-                }}
+                onClick={handleAddComplaint}
                 className="btn-primary w-full py-3"
               >
                 Save Complaint
@@ -7389,7 +7539,7 @@ const FrontOfficePanel = ({ enquiries, setEnquiries, visitors, setVisitors, comp
                     <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Name</th>
                     <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Type</th>
                     <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Status</th>
-                    <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider">Action</th>
+                    <th className="pb-4 font-bold text-xs uppercase text-text-secondary tracking-wider text-right">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50">
@@ -7405,15 +7555,21 @@ const FrontOfficePanel = ({ enquiries, setEnquiries, visitors, setVisitors, comp
                           {c.status}
                         </span>
                       </td>
-                      <td className="py-4">
+                      <td className="py-4 text-right space-x-3">
                         {c.status === 'Pending' && (
                           <button 
-                            onClick={() => setComplaints(complaints.map((comp: Complaint) => comp.id === c.id ? {...comp, status: 'Resolved'} : comp))}
+                            onClick={() => handleResolveComplaint(c.id)}
                             className="text-[10px] font-black text-primary hover:underline uppercase"
                           >
                             Resolve
                           </button>
                         )}
+                        <button 
+                          onClick={() => handleDeleteComplaint(c.id)}
+                          className="text-slate-400 hover:text-red-500 transition-colors"
+                        >
+                          <Trash2 size={16} />
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -7435,28 +7591,38 @@ const FrontOfficePanel = ({ enquiries, setEnquiries, visitors, setVisitors, comp
               className="bg-white rounded-3xl p-8 w-full max-w-xl shadow-2xl"
             >
               <div className="flex items-center justify-between mb-8">
-                <h3 className="text-2xl font-black text-text-heading">New Admission Enquiry</h3>
+                <h3 className="text-2xl font-black text-text-heading">{editingEnquiryId ? 'Edit Enquiry' : 'New Admission Enquiry'}</h3>
                 <button onClick={() => setShowAddEnquiry(false)} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
                   <X size={24} />
                 </button>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <Input label="First Name" required value={newEnquiry.name} onChange={(e: any) => setNewEnquiry({...newEnquiry, name: e.target.value})} />
-                <Input label="Surname" required value={newEnquiry.surname} onChange={(e: any) => setNewEnquiry({...newEnquiry, surname: e.target.value})} />
-                <Input label="Mobile" required value={newEnquiry.mobile} onChange={(e: any) => setNewEnquiry({...newEnquiry, mobile: e.target.value})} />
-                <Input label="Email" value={newEnquiry.email} onChange={(e: any) => setNewEnquiry({...newEnquiry, email: e.target.value})} />
-                <Input label="Class" value={newEnquiry.class} onChange={(e: any) => setNewEnquiry({...newEnquiry, class: e.target.value})} />
-                <Input label="Gender" value={newEnquiry.gender} onChange={(e: any) => setNewEnquiry({...newEnquiry, gender: e.target.value})} />
-                <Input label="Father's Name" value={newEnquiry.fatherName} onChange={(e: any) => setNewEnquiry({...newEnquiry, fatherName: e.target.value})} />
-                <Input label="Mother's Name" value={newEnquiry.motherName} onChange={(e: any) => setNewEnquiry({...newEnquiry, motherName: e.target.value})} />
-                <Input label="Source" placeholder="e.g. Website, Newspaper" value={newEnquiry.source} onChange={(e: any) => setNewEnquiry({...newEnquiry, source: e.target.value})} />
-                <Input label="Date" type="date" value={newEnquiry.date} onChange={(e: any) => setNewEnquiry({...newEnquiry, date: e.target.value})} />
+                <Input label="First Name" required value={newEnquiry.name || ''} onChange={(e: any) => setNewEnquiry({...newEnquiry, name: e.target.value})} />
+                <Input label="Surname" value={newEnquiry.surname || ''} onChange={(e: any) => setNewEnquiry({...newEnquiry, surname: e.target.value})} />
+                <Input label="Mobile" required value={newEnquiry.mobile || ''} onChange={(e: any) => setNewEnquiry({...newEnquiry, mobile: e.target.value})} />
+                <Input label="Email" value={newEnquiry.email || ''} onChange={(e: any) => setNewEnquiry({...newEnquiry, email: e.target.value})} />
+                <div className="space-y-1">
+                  <label className="label-text">Class</label>
+                  <select 
+                    className="input-field"
+                    value={newEnquiry.class || ''}
+                    onChange={(e) => setNewEnquiry({...newEnquiry, class: e.target.value})}
+                  >
+                    <option value="">Select Class</option>
+                    {masterData.classes.map((c: string) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+                <Input label="Gender" value={newEnquiry.gender || ''} onChange={(e: any) => setNewEnquiry({...newEnquiry, gender: e.target.value})} />
+                <Input label="Father's Name" value={newEnquiry.fatherName || ''} onChange={(e: any) => setNewEnquiry({...newEnquiry, fatherName: e.target.value})} />
+                <Input label="Mother's Name" value={newEnquiry.motherName || ''} onChange={(e: any) => setNewEnquiry({...newEnquiry, motherName: e.target.value})} />
+                <Input label="Source" placeholder="e.g. Website, Newspaper" value={newEnquiry.source || ''} onChange={(e: any) => setNewEnquiry({...newEnquiry, source: e.target.value})} />
+                <Input label="Date" type="date" value={newEnquiry.date || ''} onChange={(e: any) => setNewEnquiry({...newEnquiry, date: e.target.value})} />
                 <div className="md:col-span-2">
                   <label className="label-text">Address</label>
                   <textarea 
                     className="input-field min-h-[80px]" 
-                    value={newEnquiry.address}
+                    value={newEnquiry.address || ''}
                     onChange={(e: any) => setNewEnquiry({...newEnquiry, address: e.target.value})}
                   />
                 </div>
@@ -7464,7 +7630,7 @@ const FrontOfficePanel = ({ enquiries, setEnquiries, visitors, setVisitors, comp
 
               <div className="mt-8 flex gap-3">
                 <button onClick={() => setShowAddEnquiry(false)} className="flex-1 py-4 font-bold text-text-sub hover:bg-slate-50 rounded-2xl transition-all">Cancel</button>
-                <button onClick={handleAddEnquiry} className="flex-1 btn-primary py-4">Save Enquiry</button>
+                <button onClick={handleAddEnquiry} className="flex-1 btn-primary py-4">{editingEnquiryId ? 'Update Enquiry' : 'Save Enquiry'}</button>
               </div>
             </motion.div>
           </div>
@@ -8049,6 +8215,49 @@ export default function App() {
           setExamResults(formattedResults);
         }
 
+        // Fetch Enquiries
+        const { data: enquiriesData } = await supabase
+          .from('enquiries')
+          .select('*')
+          .order('created_at', { ascending: false });
+        if (enquiriesData) {
+          const formattedEnquiries = enquiriesData.map(e => ({
+            ...e,
+            name: e.student_name,
+            fatherName: e.father_name,
+            note: e.description
+          }));
+          setAdmissionEnquiries(formattedEnquiries);
+        }
+
+        // Fetch Visitors
+        const { data: visitorsData } = await supabase
+          .from('visitors')
+          .select('*')
+          .order('created_at', { ascending: false });
+        if (visitorsData) {
+          const formattedVisitors = visitorsData.map(v => ({
+            ...v,
+            inTime: v.in_time,
+            outTime: v.out_time
+          }));
+          setVisitors(formattedVisitors);
+        }
+
+        // Fetch Complaints
+        const { data: complaintsData } = await supabase
+          .from('complaints')
+          .select('*')
+          .order('created_at', { ascending: false });
+        if (complaintsData) {
+          const formattedComplaints = complaintsData.map(c => ({
+            ...c,
+            type: c.complaint_type,
+            name: c.complainant_name
+          }));
+          setComplaints(formattedComplaints);
+        }
+
         // Fetch Income & Expense
         const { data: incomeHeadsData } = await supabase.from('income_heads').select('*');
         if (incomeHeadsData) setIncomeHeads(incomeHeadsData);
@@ -8155,11 +8364,14 @@ export default function App() {
     return Math.max(0, totalDue - paidAmount);
   };
   const [students, setStudents] = useState<Student[]>([]);
+  const [studentFilterClass, setStudentFilterClass] = useState<string>('');
+  const [studentFilterSection, setStudentFilterSection] = useState<string>('');
+  const [studentSearchQuery, setStudentSearchQuery] = useState<string>('');
   const [editingStudentId, setEditingStudentId] = useState<string | null>(null);
   const [schoolProfile, setSchoolProfile] = useState({
     name: 'Digital School Systems',
     tagline: 'Excellence in Education',
-    logo: 'https://ais-pre-b3e775v3rvj7egmf2trpz3-352124703760.asia-southeast1.run.app/logo.png',
+    logo: 'https://ais-pre-b3e775v3rvj7egmf2trpz3-352124703760.asia-southeast1.run.app/input_file_0.png',
     email: 'info@digitalschool.com',
     principalSignature: null,
     classTeacherSignature: null,
@@ -8177,6 +8389,26 @@ export default function App() {
       { id: '4', name: 'Library', url: 'https://picsum.photos/seed/library/640/480' }
     ]
   });
+
+  // Effect to handle role-based branding
+  useEffect(() => {
+    if (currentUser?.role === 'parent') {
+      setSchoolProfile(prev => ({
+        ...prev,
+        name: 'SUBRAI MISSION CONVENT SCHOOL',
+        logo: 'https://ais-pre-b3e775v3rvj7egmf2trpz3-352124703760.asia-southeast1.run.app/input_file_1.png',
+        tagline: 'TELIAMURA, KHOWAI, TRIPURA'
+      }));
+    } else {
+      // For Admin, Staff, Teacher, or Guest
+      setSchoolProfile(prev => ({
+        ...prev,
+        name: 'Digital School Systems',
+        logo: 'https://ais-pre-b3e775v3rvj7egmf2trpz3-352124703760.asia-southeast1.run.app/input_file_0.png',
+        tagline: 'Excellence in Education'
+      }));
+    }
+  }, [currentUser?.role]);
   const [formData, setFormData] = useState<any>({});
   const [selectedPersonForID, setSelectedPersonForID] = useState<any>(null);
   const [idCardTab, setIdCardTab] = useState('student');
@@ -8850,17 +9082,21 @@ export default function App() {
                 </div>
               </div>
               <div className="text-center">
-                <h1 className="text-3xl font-black tracking-tighter text-blue-900 leading-none">DIGITAL <span className="text-green-700">SCHOOL</span></h1>
-                <div className="mt-1 px-4 py-0.5 bg-orange-500 rounded-full">
-                  <p className="text-[10px] font-black text-white uppercase tracking-[0.3em]">SYSTEMS</p>
-                </div>
+              <h1 className="text-3xl font-black tracking-tighter text-blue-900 leading-none uppercase">
+                {schoolProfile.name.split(' ').slice(0, -1).join(' ')}
+              </h1>
+              <div className="mt-1 px-4 py-0.5 bg-orange-500 rounded-full">
+                <p className="text-[10px] font-black text-white uppercase tracking-[0.3em]">
+                  {schoolProfile.name.split(' ').slice(-1)}
+                </p>
+              </div>
               </div>
             </div>
           </div>
 
           <div className="bg-white/90 rounded-[32px] overflow-hidden shadow-[0_30px_60px_rgba(0,0,0,0.3)] border border-white/50">
             <div className="pt-20 pb-4 text-center">
-              <h2 className="text-2xl font-bold text-slate-800 tracking-tight">Digital School Login</h2>
+              <h2 className="text-2xl font-bold text-slate-800 tracking-tight">{schoolProfile.name} Login</h2>
             </div>
 
             <div className="px-10 pb-10 space-y-6">
@@ -9004,8 +9240,12 @@ export default function App() {
           </div>
           {isSidebarOpen && (
             <div className="overflow-hidden whitespace-nowrap">
-              <h2 className="font-black text-sm leading-tight text-primary tracking-tighter">DIGITAL SCHOOL</h2>
-              <p className="text-[9px] text-secondary font-bold uppercase tracking-widest">SYSTEMS</p>
+              <h2 className="font-black text-sm leading-tight text-primary tracking-tighter uppercase">
+                {schoolProfile.name.split(' ').slice(0, -1).join(' ')}
+              </h2>
+              <p className="text-[9px] text-secondary font-bold uppercase tracking-widest">
+                {schoolProfile.name.split(' ').slice(-1)}
+              </p>
             </div>
           )}
           <button 
@@ -10338,6 +10578,41 @@ export default function App() {
                   </div>
                 </div>
 
+                <div className="flex flex-col md:flex-row gap-4 mb-6">
+                  <div className="flex-1">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                      <input 
+                        type="text" 
+                        placeholder="Search by name or ID..." 
+                        className="w-full bg-white border border-slate-200 rounded-xl pl-10 pr-4 py-2.5 text-sm focus:ring-2 focus:ring-primary/20 outline-none transition-all"
+                        value={studentSearchQuery}
+                        onChange={(e) => setStudentSearchQuery(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <div className="w-full md:w-48">
+                    <select 
+                      className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary/20 outline-none transition-all"
+                      value={studentFilterClass}
+                      onChange={(e) => setStudentFilterClass(e.target.value)}
+                    >
+                      <option value="">All Classes</option>
+                      {masterData.classes.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+                  <div className="w-full md:w-48">
+                    <select 
+                      className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary/20 outline-none transition-all"
+                      value={studentFilterSection}
+                      onChange={(e) => setStudentFilterSection(e.target.value)}
+                    >
+                      <option value="">All Sections</option>
+                      {masterData.sections.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
+                </div>
+
                 <Card>
                   <div className="overflow-x-auto">
                     <table className="w-full">
@@ -10353,14 +10628,24 @@ export default function App() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-50">
-                        {students.length === 0 ? (
+                        {students.filter(s => {
+                          const matchesSearch = (s.name + ' ' + s.surname + ' ' + s.studentId).toLowerCase().includes(studentSearchQuery.toLowerCase());
+                          const matchesClass = !studentFilterClass || s.class === studentFilterClass;
+                          const matchesSection = !studentFilterSection || s.section === studentFilterSection;
+                          return matchesSearch && matchesClass && matchesSection;
+                        }).length === 0 ? (
                           <tr>
-                            <td colSpan={6} className="py-12 text-center text-text-secondary italic">
+                            <td colSpan={7} className="py-12 text-center text-text-secondary italic">
                               No students found. Start by registering a new student.
                             </td>
                           </tr>
                         ) : (
-                          students.map((s) => (
+                          students.filter(s => {
+                            const matchesSearch = (s.name + ' ' + s.surname + ' ' + s.studentId).toLowerCase().includes(studentSearchQuery.toLowerCase());
+                            const matchesClass = !studentFilterClass || s.class === studentFilterClass;
+                            const matchesSection = !studentFilterSection || s.section === studentFilterSection;
+                            return matchesSearch && matchesClass && matchesSection;
+                          }).map((s) => (
                             <tr key={s.id} className="text-sm hover:bg-slate-50/50 transition-all">
                               <td className="py-4 font-mono text-xs text-primary font-bold">{s.studentId}</td>
                               <td className="py-4">
@@ -10517,7 +10802,8 @@ export default function App() {
                   teacherAssignments={teacherAssignments}
                   activities={activities}
                   setActivities={setActivities}
-                  masterData={{...masterData, students}}
+                  masterData={masterData}
+                  students={students}
                 />
               </motion.div>
             )}

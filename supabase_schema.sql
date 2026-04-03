@@ -223,6 +223,52 @@ CREATE TABLE IF NOT EXISTS settings (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+-- SQL Snippets Table
+CREATE TABLE IF NOT EXISTS sql_snippets (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  title TEXT NOT NULL,
+  code TEXT NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Enquiries Table
+CREATE TABLE IF NOT EXISTS enquiries (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  student_name TEXT NOT NULL,
+  father_name TEXT,
+  mobile TEXT NOT NULL,
+  class TEXT NOT NULL,
+  source TEXT,
+  date DATE DEFAULT CURRENT_DATE,
+  description TEXT,
+  status TEXT DEFAULT 'Pending' CHECK (status IN ('Pending', 'Converted', 'Cancelled')),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Visitors Table
+CREATE TABLE IF NOT EXISTS visitors (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  name TEXT NOT NULL,
+  mobile TEXT NOT NULL,
+  purpose TEXT,
+  date DATE DEFAULT CURRENT_DATE,
+  in_time TIME,
+  out_time TIME,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Complaints Table
+CREATE TABLE IF NOT EXISTS complaints (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  complainant_name TEXT NOT NULL,
+  complaint_type TEXT,
+  source TEXT,
+  date DATE DEFAULT CURRENT_DATE,
+  description TEXT,
+  status TEXT DEFAULT 'Pending' CHECK (status IN ('Pending', 'Resolved')),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Insert default settings if not exists
 INSERT INTO settings (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
 
@@ -240,6 +286,10 @@ ALTER TABLE incomes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE expenses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE staff ENABLE ROW LEVEL SECURITY;
 ALTER TABLE leave_requests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE sql_snippets ENABLE ROW LEVEL SECURITY;
+ALTER TABLE enquiries ENABLE ROW LEVEL SECURITY;
+ALTER TABLE visitors ENABLE ROW LEVEL SECURITY;
+ALTER TABLE complaints ENABLE ROW LEVEL SECURITY;
 
 -- Helper function to check if user is authenticated
 -- (Note: In Supabase, auth.role() = 'authenticated' is standard)
@@ -359,3 +409,43 @@ DROP POLICY IF EXISTS "Allow public read" ON settings;
 DROP POLICY IF EXISTS "Allow authenticated update" ON settings;
 CREATE POLICY "Allow public read" ON settings FOR SELECT USING (true);
 CREATE POLICY "Allow authenticated update" ON settings FOR UPDATE USING (true);
+
+-- SQL Snippets Policies
+DROP POLICY IF EXISTS "Allow public read" ON sql_snippets;
+DROP POLICY IF EXISTS "Allow authenticated insert" ON sql_snippets;
+DROP POLICY IF EXISTS "Allow authenticated update" ON sql_snippets;
+DROP POLICY IF EXISTS "Allow authenticated delete" ON sql_snippets;
+CREATE POLICY "Allow public read" ON sql_snippets FOR SELECT USING (true);
+CREATE POLICY "Allow authenticated insert" ON sql_snippets FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow authenticated update" ON sql_snippets FOR UPDATE USING (true);
+CREATE POLICY "Allow authenticated delete" ON sql_snippets FOR DELETE USING (true);
+
+-- Enquiries Policies
+DROP POLICY IF EXISTS "Allow public read" ON enquiries;
+DROP POLICY IF EXISTS "Allow authenticated insert" ON enquiries;
+DROP POLICY IF EXISTS "Allow authenticated update" ON enquiries;
+DROP POLICY IF EXISTS "Allow authenticated delete" ON enquiries;
+CREATE POLICY "Allow public read" ON enquiries FOR SELECT USING (true);
+CREATE POLICY "Allow authenticated insert" ON enquiries FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow authenticated update" ON enquiries FOR UPDATE USING (true);
+CREATE POLICY "Allow authenticated delete" ON enquiries FOR DELETE USING (true);
+
+-- Visitors Policies
+DROP POLICY IF EXISTS "Allow public read" ON visitors;
+DROP POLICY IF EXISTS "Allow authenticated insert" ON visitors;
+DROP POLICY IF EXISTS "Allow authenticated update" ON visitors;
+DROP POLICY IF EXISTS "Allow authenticated delete" ON visitors;
+CREATE POLICY "Allow public read" ON visitors FOR SELECT USING (true);
+CREATE POLICY "Allow authenticated insert" ON visitors FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow authenticated update" ON visitors FOR UPDATE USING (true);
+CREATE POLICY "Allow authenticated delete" ON visitors FOR DELETE USING (true);
+
+-- Complaints Policies
+DROP POLICY IF EXISTS "Allow public read" ON complaints;
+DROP POLICY IF EXISTS "Allow authenticated insert" ON complaints;
+DROP POLICY IF EXISTS "Allow authenticated update" ON complaints;
+DROP POLICY IF EXISTS "Allow authenticated delete" ON complaints;
+CREATE POLICY "Allow public read" ON complaints FOR SELECT USING (true);
+CREATE POLICY "Allow authenticated insert" ON complaints FOR INSERT WITH CHECK (true);
+CREATE POLICY "Allow authenticated update" ON complaints FOR UPDATE USING (true);
+CREATE POLICY "Allow authenticated delete" ON complaints FOR DELETE USING (true);

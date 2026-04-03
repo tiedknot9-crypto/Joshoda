@@ -22,6 +22,7 @@ export const SqlEditor: React.FC = () => {
   const [executing, setExecuting] = useState<boolean>(false);
   const [results, setResults] = useState<any[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const [copied, setCopied] = useState<boolean>(false);
 
   useEffect(() => {
@@ -39,6 +40,7 @@ export const SqlEditor: React.FC = () => {
   const fetchSnippets = async () => {
     if (!supabase) return;
     setLoading(true);
+    setFetchError(null);
     try {
       const { data, error } = await supabase
         .from('sql_snippets')
@@ -49,6 +51,7 @@ export const SqlEditor: React.FC = () => {
       setSnippets(data || []);
     } catch (err: any) {
       console.error('Error fetching snippets:', err.message);
+      setFetchError(err.message);
     } finally {
       setLoading(false);
     }
@@ -163,7 +166,21 @@ export const SqlEditor: React.FC = () => {
             </div>
             
             <div className="flex-1 overflow-y-auto space-y-2 pr-2">
-              {snippets.length === 0 ? (
+              {loading ? (
+                <div className="flex items-center justify-center py-8">
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary"></div>
+                </div>
+              ) : fetchError ? (
+                <div className="text-center py-8 text-red-400 text-xs px-2">
+                  <p className="font-bold mb-1">Error loading snippets</p>
+                  <p className="opacity-70">{fetchError}</p>
+                  {fetchError.includes('schema cache') && (
+                    <p className="mt-2 text-primary hover:underline cursor-pointer" onClick={() => window.open('https://supabase.com/dashboard', '_blank')}>
+                      Check Supabase Dashboard
+                    </p>
+                  )}
+                </div>
+              ) : snippets.length === 0 ? (
                 <div className="text-center py-8 text-slate-400 text-sm italic">
                   No saved snippets yet.
                 </div>
