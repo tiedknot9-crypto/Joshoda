@@ -165,7 +165,7 @@ const CalendarView = ({ calendarEvents, setCalendarEvents, currentUser }: Calend
       </div>
 
       {showEventModal && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md z-[100] flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-slate-900/40 z-[100] flex items-center justify-center p-4">
           <motion.div 
             initial={{ scale: 0.9, opacity: 0, y: 20 }} 
             animate={{ scale: 1, opacity: 1, y: 0 }} 

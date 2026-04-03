@@ -57,13 +57,13 @@ export const LiveCamera = () => {
         {cameras.map((cam) => (
           <Card key={cam.id} className="overflow-hidden group">
             <div className="relative aspect-video bg-slate-900 flex items-center justify-center">
-              <div className="absolute top-4 left-4 flex items-center gap-2 px-3 py-1 bg-black/50 backdrop-blur-sm rounded-full border border-white/20">
+              <div className="absolute top-4 left-4 flex items-center gap-2 px-3 py-1 bg-black/50 rounded-full border border-white/20">
                 <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
                 <p className="text-[10px] font-black text-white uppercase tracking-widest">Live: {cam.name}</p>
               </div>
               <div className="absolute top-4 right-4 flex items-center gap-2">
-                <button className="p-2 bg-black/50 backdrop-blur-sm rounded-lg text-white/80 hover:text-white hover:bg-black/70 transition-all"><Maximize2 size={16} /></button>
-                <button className="p-2 bg-black/50 backdrop-blur-sm rounded-lg text-white/80 hover:text-white hover:bg-black/70 transition-all"><Settings size={16} /></button>
+                <button className="p-2 bg-black/50 rounded-lg text-white/80 hover:text-white hover:bg-black/70 transition-all"><Maximize2 size={16} /></button>
+                <button className="p-2 bg-black/50 rounded-lg text-white/80 hover:text-white hover:bg-black/70 transition-all"><Settings size={16} /></button>
               </div>
               <div className="flex flex-col items-center gap-4 opacity-40 group-hover:opacity-100 transition-all">
                 <Video size={48} className="text-white" />
@@ -71,8 +71,8 @@ export const LiveCamera = () => {
               </div>
               <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between opacity-0 group-hover:opacity-100 transition-all">
                 <div className="flex gap-2">
-                  <button className="p-2 bg-black/50 backdrop-blur-sm rounded-lg text-white/80 hover:text-white"><Volume2 size={16} /></button>
-                  <button className="p-2 bg-black/50 backdrop-blur-sm rounded-lg text-white/80 hover:text-white"><Mic size={16} /></button>
+                  <button className="p-2 bg-black/50 rounded-lg text-white/80 hover:text-white"><Volume2 size={16} /></button>
+                  <button className="p-2 bg-black/50 rounded-lg text-white/80 hover:text-white"><Mic size={16} /></button>
                 </div>
                 <p className="text-[10px] font-black text-white/60 uppercase tracking-widest">{cam.resolution}</p>
               </div>

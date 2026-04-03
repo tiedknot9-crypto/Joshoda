@@ -42,7 +42,7 @@ export const ReceiptModal = ({ transaction, schoolProfile, onClose }: ReceiptMod
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md z-[110] flex items-center justify-center p-4 overflow-y-auto">
+    <div className="fixed inset-0 bg-slate-900/40 z-[110] flex items-center justify-center p-4 overflow-y-auto">
       <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-white rounded-[2.5rem] p-8 max-w-2xl w-full shadow-2xl my-8">
         <div className="flex items-center justify-between mb-8 pb-4 border-b border-slate-100">
           <h3 className="text-xl font-black text-text-heading uppercase tracking-tight">Fee Receipt</h3>

@@ -48,6 +48,7 @@ import {
   ArrowUpRight,
   History,
   X,
+  Save,
   Clock,
   ArrowUpCircle,
   FileEdit,
@@ -86,6 +87,7 @@ import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 import { Html5QrcodeScanner, Html5Qrcode } from 'html5-qrcode';
+import { supabase } from './lib/supabase';
 
 import { 
   LineChart, 
@@ -104,9 +106,11 @@ import {
   Cell 
 } from 'recharts';
 
+import { SqlEditor } from './components/SqlEditor';
+
 // --- Types ---
 
-type View = 'login' | 'dashboard' | 'register-student' | 'student-list' | 'settings' | 'fee-management' | 'academics' | 'attendance' | 'examination' | 'id-cards' | 'hostel' | 'live-camera' | 'admin-360' | 'class-360' | 'due-fees' | 'teacher-panel' | 'parent-panel' | 'leave-management' | 'reports' | 'calendar' | 'role-assign' | 'human-resource' | 'communicate' | 'front-office' | 'income-expense' | 'profile-settings' | 'user-logs' | 'super-admin-panel';
+type View = 'login' | 'dashboard' | 'register-student' | 'student-list' | 'settings' | 'fee-management' | 'academics' | 'attendance' | 'examination' | 'id-cards' | 'hostel' | 'live-camera' | 'admin-360' | 'class-360' | 'due-fees' | 'teacher-panel' | 'parent-panel' | 'leave-management' | 'reports' | 'calendar' | 'role-assign' | 'human-resource' | 'communicate' | 'front-office' | 'income-expense' | 'profile-settings' | 'user-logs' | 'super-admin-panel' | 'sql-editor';
 
 interface User {
   id: string;
@@ -263,6 +267,41 @@ interface ExamResult {
   status: 'Pass' | 'Fail';
   feedback: string;
   teacherId: string;
+}
+
+interface ReportCardTemplate {
+  id: string;
+  name: string;
+  terms: {
+    id: string;
+    name: string;
+    subColumns: { id: string; name: string; maxMarks: number }[];
+    weightage: number;
+  }[];
+  subjects: string[];
+}
+
+interface ReportCard {
+  id: string;
+  studentId: string;
+  templateId: string;
+  termData: {
+    [termId: string]: {
+      subjects: {
+        [subjectName: string]: {
+          [columnId: string]: number;
+        };
+      };
+      attendance?: string;
+    };
+  };
+  result: string;
+  aggregate: string;
+  percentage: string;
+  rank: string;
+  teacherComments: string;
+  promotionStatus: string;
+  isPublished: boolean;
 }
 
 interface HomeworkSubmission {
@@ -493,7 +532,292 @@ interface Student {
   }[];
 }
 
-// --- Components ---
+// --- Report Card Components ---
+
+const ReportCardView = ({ student, template, reportCard }: { student: any, template: ReportCardTemplate, reportCard: ReportCard }) => {
+  return (
+    <div className="bg-white p-8 rounded-none shadow-none border border-slate-300 max-w-4xl mx-auto font-serif text-slate-900">
+      {/* Header */}
+      <div className="text-center mb-8 border-b-2 border-slate-900 pb-4">
+        <h1 className="text-3xl font-bold uppercase tracking-widest mb-1">Academic Progress Report</h1>
+        <p className="text-sm font-bold uppercase tracking-widest">Session 2023-24</p>
+      </div>
+
+      {/* Student Info */}
+      <div className="grid grid-cols-2 gap-4 mb-6 text-sm">
+        <div className="space-y-1">
+          <p><span className="font-bold uppercase w-24 inline-block">Name:</span> <span className="border-b border-slate-400 px-2">{student.name} {student.surname}</span></p>
+          <p><span className="font-bold uppercase w-24 inline-block">Class:</span> <span className="border-b border-slate-400 px-2">{student.class}</span></p>
+        </div>
+        <div className="space-y-1 text-right">
+          <p><span className="font-bold uppercase w-24 inline-block">Roll No:</span> <span className="border-b border-slate-400 px-2">{student.rollNo || '03'}</span></p>
+          <p><span className="font-bold uppercase w-24 inline-block">Section:</span> <span className="border-b border-slate-400 px-2">{student.section}</span></p>
+        </div>
+      </div>
+
+      {/* Marks Table */}
+      <div className="overflow-x-auto mb-6">
+        <table className="w-full border-collapse border-2 border-slate-900 text-xs">
+          <thead>
+            <tr>
+              <th rowSpan={2} className="border-2 border-slate-900 p-2 bg-slate-50">Subject</th>
+              {template.terms.map(term => (
+                <th key={term.id} colSpan={term.subColumns.length + 1} className="border-2 border-slate-900 p-1 bg-slate-50">{term.name}</th>
+              ))}
+              <th rowSpan={2} className="border-2 border-slate-900 p-2 bg-slate-50">Total</th>
+              <th rowSpan={2} className="border-2 border-slate-900 p-2 bg-slate-50">Grade</th>
+            </tr>
+            <tr>
+              {template.terms.map(term => (
+                <React.Fragment key={term.id}>
+                  {term.subColumns.map(col => (
+                    <th key={col.id} className="border-2 border-slate-900 p-1 font-normal">{col.name}</th>
+                  ))}
+                  <th className="border-2 border-slate-900 p-1 font-bold">TOTAL</th>
+                </React.Fragment>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {template.subjects.map(subject => {
+              let grandTotal = 0;
+              return (
+                <tr key={subject}>
+                  <td className="border-2 border-slate-900 p-2 font-bold">{subject}</td>
+                  {template.terms.map(term => {
+                    let termTotal = 0;
+                    return (
+                      <React.Fragment key={term.id}>
+                        {term.subColumns.map(col => {
+                          const val = reportCard?.termData?.[term.id]?.subjects?.[subject]?.[col.id] || 0;
+                          termTotal += Number(val);
+                          return <td key={col.id} className="border-2 border-slate-900 p-1 text-center">{val || '-'}</td>;
+                        })}
+                        <td className="border-2 border-slate-900 p-1 text-center font-bold bg-slate-50">
+                          {termTotal || '-'}
+                          {(() => { grandTotal += termTotal; return null; })()}
+                        </td>
+                      </React.Fragment>
+                    );
+                  })}
+                  <td className="border-2 border-slate-900 p-2 text-center font-bold bg-slate-100">{grandTotal || '-'}</td>
+                  <td className="border-2 border-slate-900 p-2 text-center font-bold">
+                    {grandTotal >= 180 ? 'A+' : grandTotal >= 160 ? 'A' : grandTotal >= 140 ? 'B' : grandTotal >= 120 ? 'C' : 'D'}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Footer Info */}
+      <div className="grid grid-cols-3 gap-8 text-xs mb-8">
+        <div className="border-2 border-slate-900 p-4 space-y-2">
+          <p className="font-bold uppercase border-b border-slate-900 pb-1">Attendance</p>
+          {template.terms.map(term => (
+            <p key={term.id} className="flex justify-between">
+              <span>{term.name}:</span>
+              <span className="font-bold">{reportCard?.termData?.[term.id]?.attendance || '-'}</span>
+            </p>
+          ))}
+        </div>
+        <div className="border-2 border-slate-900 p-4 space-y-2">
+          <p className="font-bold uppercase border-b border-slate-900 pb-1">Result Summary</p>
+          <p className="flex justify-between"><span>Aggregate:</span> <span className="font-bold">{reportCard?.aggregate || '-'}</span></p>
+          <p className="flex justify-between"><span>Percentage:</span> <span className="font-bold">{reportCard?.percentage || '-'}%</span></p>
+          <p className="flex justify-between"><span>Rank:</span> <span className="font-bold">{reportCard?.rank || '-'}</span></p>
+        </div>
+        <div className="border-2 border-slate-900 p-4 space-y-2">
+          <p className="font-bold uppercase border-b border-slate-900 pb-1">Final Result</p>
+          <p className="text-center text-lg font-black pt-2 text-primary">{reportCard?.promotionStatus || 'PENDING'}</p>
+        </div>
+      </div>
+
+      {/* Comments */}
+      <div className="border-2 border-slate-900 p-4 mb-12 min-h-[100px]">
+        <p className="font-bold uppercase text-xs mb-2">Class Teacher's Remarks:</p>
+        <p className="italic text-sm">"{reportCard?.teacherComments || 'No comments yet.'}"</p>
+      </div>
+
+      {/* Signatures */}
+      <div className="flex justify-between items-end px-4 text-[10px] font-bold uppercase tracking-widest">
+        <div className="text-center border-t border-slate-900 pt-2 w-32">Class Teacher</div>
+        <div className="text-center border-t border-slate-900 pt-2 w-32">Parent/Guardian</div>
+        <div className="text-center border-t border-slate-900 pt-2 w-32">Principal</div>
+      </div>
+    </div>
+  );
+};
+
+const ReportCardEditor = ({ student, template, reportCard: existingReport, onClose, onSave }: any) => {
+  const [formData, setFormData] = useState<ReportCard>(existingReport || {
+    id: Date.now().toString(),
+    studentId: student.id,
+    templateId: template.id,
+    termData: {},
+    result: '',
+    aggregate: '',
+    percentage: '',
+    rank: '',
+    teacherComments: '',
+    promotionStatus: 'Pass/Promoted',
+    isPublished: false
+  });
+
+  const handleCellChange = (termId: string, subject: string, colId: string, value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      termData: {
+        ...prev.termData,
+        [termId]: {
+          ...prev.termData?.[termId],
+          subjects: {
+            ...prev.termData?.[termId]?.subjects,
+            [subject]: {
+              ...prev.termData?.[termId]?.subjects?.[subject],
+              [colId]: Number(value)
+            }
+          }
+        }
+      }
+    }));
+  };
+
+  const handleAttendanceChange = (termId: string, value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      termData: {
+        ...prev.termData,
+        [termId]: {
+          ...prev.termData?.[termId],
+          attendance: value
+        }
+      }
+    }));
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="bg-slate-50 w-full max-w-6xl h-[90vh] rounded-3xl shadow-2xl flex flex-col overflow-hidden"
+      >
+        {/* Header */}
+        <div className="p-6 bg-white border-b border-slate-200 flex items-center justify-between">
+          <div>
+            <h2 className="text-xl font-bold">Report Card Editor: {student.name} {student.surname}</h2>
+            <p className="text-sm text-text-sub">Template: {template.name}</p>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full transition-all">
+            <X size={24} />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-8">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+            {/* Form Side */}
+            <div className="space-y-8">
+              {template.terms.map(term => (
+                <div key={term.id} className="space-y-4">
+                  <h3 className="font-bold text-primary flex items-center gap-2">
+                    <Calendar size={18} /> {term.name}
+                  </h3>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs border-collapse">
+                      <thead>
+                        <tr>
+                          <th className="p-2 text-left bg-slate-100 border border-slate-200">Subject</th>
+                          {term.subColumns.map(col => (
+                            <th key={col.id} className="p-2 text-center bg-slate-100 border border-slate-200">{col.name}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {template.subjects.map(subject => (
+                          <tr key={subject}>
+                            <td className="p-2 border border-slate-200 font-medium">{subject}</td>
+                            {term.subColumns.map(col => (
+                              <td key={col.id} className="p-1 border border-slate-200">
+                                <input 
+                                  type="number"
+                                  className="w-full p-1 text-center outline-none focus:bg-primary/5"
+                                  value={formData.termData?.[term.id]?.subjects?.[subject]?.[col.id] || ''}
+                                  onChange={(e) => handleCellChange(term.id, subject, col.id, e.target.value)}
+                                />
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <Input 
+                    label={`${term.name} Attendance`} 
+                    placeholder="e.g. 230/240" 
+                    value={formData.termData?.[term.id]?.attendance || ''}
+                    onChange={(e: any) => handleAttendanceChange(term.id, e.target.value)}
+                  />
+                </div>
+              ))}
+
+              <div className="grid grid-cols-3 gap-4">
+                <Input label="Aggregate" value={formData.aggregate} onChange={(e: any) => setFormData({...formData, aggregate: e.target.value})} />
+                <Input label="Percentage" value={formData.percentage} onChange={(e: any) => setFormData({...formData, percentage: e.target.value})} />
+                <Input label="Rank" value={formData.rank} onChange={(e: any) => setFormData({...formData, rank: e.target.value})} />
+              </div>
+
+              <Select 
+                label="Promotion Status" 
+                options={['Pass/Promoted', 'Detained', 'Supplementary']} 
+                value={formData.promotionStatus}
+                onChange={(e: any) => setFormData({...formData, promotionStatus: e.target.value})}
+              />
+
+              <div className="w-full">
+                <label className="label-text">Teacher's Comments</label>
+                <textarea 
+                  className="input-field min-h-[100px] py-3"
+                  placeholder="Write your comments here..."
+                  value={formData.teacherComments}
+                  onChange={(e: any) => setFormData({...formData, teacherComments: e.target.value})}
+                ></textarea>
+              </div>
+
+              <div className="flex items-center gap-2 p-4 bg-primary/5 rounded-xl border border-primary/10">
+                <input 
+                  type="checkbox" 
+                  id="publish" 
+                  checked={formData.isPublished}
+                  onChange={(e) => setFormData({...formData, isPublished: e.target.checked})}
+                />
+                <label htmlFor="publish" className="text-sm font-bold text-primary cursor-pointer">Publish to Parent Panel</label>
+              </div>
+            </div>
+
+            {/* Preview Side */}
+            <div className="space-y-4">
+              <h3 className="font-bold text-slate-400 uppercase tracking-widest text-xs flex items-center gap-2">
+                <Eye size={14} /> Live Preview
+              </h3>
+              <div className="sticky top-0 scale-[0.8] origin-top">
+                <ReportCardView student={student} template={template} reportCard={formData} />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="p-6 bg-white border-t border-slate-200 flex justify-end gap-4">
+          <button onClick={onClose} className="px-8 py-3 rounded-xl font-bold text-text-sub hover:bg-slate-100 transition-all">Cancel</button>
+          <button onClick={() => onSave(formData)} className="btn-primary px-12 py-3">Save Report Card</button>
+        </div>
+      </motion.div>
+    </div>
+  );
+};
 
 const SidebarItem = ({ 
   icon: Icon, 
@@ -2985,7 +3309,7 @@ const FeeManagement = ({
       )}
 
       {editingFee && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <Card className="max-w-md w-full">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-lg font-bold">Edit Fee Master</h3>
@@ -3691,7 +4015,7 @@ const ReceiptModal = ({ transaction, schoolProfile, onClose }: { transaction: Fe
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4">
       <motion.div 
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
@@ -4431,7 +4755,7 @@ const TeacherPanel = ({ syllabuses, setSyllabuses, leaveRequests, setLeaveReques
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setShowActivityModal(false)}
-              className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+              className="absolute inset-0 bg-slate-900/40"
             />
             <motion.div 
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
@@ -4499,7 +4823,7 @@ const TeacherPanel = ({ syllabuses, setSyllabuses, leaveRequests, setLeaveReques
   );
 };
 
-const ParentPanel = ({ students, examResults, homeworks, syllabuses, leaveRequests, setLeaveRequests, notifications, feeTransactions, feeMaster, currentUser }: any) => {
+const ParentPanel = ({ students, examResults, reportCards, reportCardTemplates, homeworks, syllabuses, leaveRequests, setLeaveRequests, notifications, feeTransactions, feeMaster, currentUser }: any) => {
   const [activeTab, setActiveTab] = useState<'progress' | 'homework' | 'syllabus' | 'leave' | 'fees' | 'notifications' | 'documents' | 'profile'>('progress');
   const [leaveForm, setLeaveForm] = useState({
     startDate: '',
@@ -4669,46 +4993,95 @@ const ParentPanel = ({ students, examResults, homeworks, syllabuses, leaveReques
       )}
 
       {activeTab === 'progress' && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <Card className="lg:col-span-2">
-            <h3 className="text-lg font-bold mb-6">Recent Exam Results</h3>
-            <div className="space-y-4">
-              {examResults.filter((r: any) => r.studentId === myStudent.studentId).map((r: any) => (
-                <div key={r.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                  <div>
-                    <p className="font-bold">{r.subject}</p>
-                    <p className="text-xs text-text-sub">{r.examName}</p>
+        <div className="space-y-8">
+          {/* Detailed Report Card Section */}
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xl font-black text-text-heading tracking-tight uppercase">Academic Report Cards</h3>
+              <div className="flex gap-2">
+                <button className="p-2 bg-white rounded-xl border border-slate-200 shadow-sm hover:bg-slate-50 transition-all">
+                  <Download size={20} className="text-primary" />
+                </button>
+                <button className="p-2 bg-white rounded-xl border border-slate-200 shadow-sm hover:bg-slate-50 transition-all">
+                  <Share2 size={20} className="text-primary" />
+                </button>
+              </div>
+            </div>
+            
+            <div className="space-y-8">
+              {reportCards.filter(rc => rc.studentId === myStudent.studentId && rc.isPublished).map(rc => (
+                <div key={rc.id} className="bg-white rounded-3xl border border-slate-200 shadow-xl overflow-hidden">
+                  <div className="p-6 bg-slate-900 text-white flex items-center justify-between">
+                    <div>
+                      <h4 className="text-lg font-bold uppercase tracking-widest">Official Report Card</h4>
+                      <p className="text-xs text-slate-400 font-medium">Session 2023-24 | {reportCardTemplates.find(t => t.id === rc.templateId)?.name}</p>
+                    </div>
+                    <div className="text-right">
+                      <span className="px-4 py-1 bg-green-500 text-white rounded-full text-[10px] font-black uppercase tracking-widest">Verified</span>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-lg font-black text-primary">{r.marks}/{r.totalMarks}</p>
-                    <p className="text-[10px] font-bold uppercase text-text-sub">{((r.marks/r.totalMarks)*100).toFixed(1)}%</p>
+                  <div className="p-8 bg-slate-50 overflow-x-auto">
+                    <ReportCardView 
+                      student={myStudent} 
+                      template={reportCardTemplates.find(t => t.id === rc.templateId) || reportCardTemplates[0]} 
+                      reportCard={rc} 
+                    />
                   </div>
                 </div>
               ))}
-              {examResults.filter((r: any) => r.studentId === myStudent.studentId).length === 0 && (
-                <p className="text-center py-8 text-text-sub">No exam results available yet.</p>
+              {reportCards.filter(rc => rc.studentId === myStudent.studentId && rc.isPublished).length === 0 && (
+                <div className="text-center py-20 bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200">
+                  <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <ClipboardList size={40} className="text-slate-300" />
+                  </div>
+                  <h4 className="text-lg font-bold text-text-heading">No Published Report Cards</h4>
+                  <p className="text-sm text-text-sub max-w-xs mx-auto mt-2">Your child's official report cards will appear here once published by the school administration.</p>
+                </div>
               )}
             </div>
-          </Card>
-          <Card>
-            <h3 className="text-lg font-bold mb-6">Attendance Overview</h3>
-            <div className="text-center space-y-4">
-              <div className="w-32 h-32 rounded-full border-8 border-primary border-t-slate-100 flex items-center justify-center mx-auto">
-                <span className="text-2xl font-black text-primary">94%</span>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <Card className="lg:col-span-2">
+              <h3 className="text-lg font-bold mb-6">Recent Exam Results</h3>
+              <div className="space-y-4">
+                {examResults.filter((r: any) => r.studentId === myStudent.studentId).map((r: any) => (
+                  <div key={r.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                    <div>
+                      <p className="font-bold">{r.subject}</p>
+                      <p className="text-xs text-text-sub">{r.examName}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-lg font-black text-primary">{r.marks}/{r.totalMarks}</p>
+                      <p className="text-[10px] font-bold uppercase text-text-sub">{((r.marks/r.totalMarks)*100).toFixed(1)}%</p>
+                    </div>
+                  </div>
+                ))}
+                {examResults.filter((r: any) => r.studentId === myStudent.studentId).length === 0 && (
+                  <p className="text-center py-8 text-text-sub">No exam results available yet.</p>
+                )}
               </div>
-              <p className="text-sm font-medium text-text-sub">Overall attendance for this term</p>
-              <div className="grid grid-cols-2 gap-4 pt-4">
-                <div className="p-3 bg-green-50 rounded-xl">
-                  <p className="text-xs font-bold text-green-600 uppercase">Present</p>
-                  <p className="text-xl font-black text-green-700">142</p>
+            </Card>
+            <Card>
+              <h3 className="text-lg font-bold mb-6">Attendance Overview</h3>
+              <div className="text-center space-y-4">
+                <div className="w-32 h-32 rounded-full border-8 border-primary border-t-slate-100 flex items-center justify-center mx-auto">
+                  <span className="text-2xl font-black text-primary">94%</span>
                 </div>
-                <div className="p-3 bg-red-50 rounded-xl">
-                  <p className="text-xs font-bold text-red-600 uppercase">Absent</p>
-                  <p className="text-xl font-black text-red-700">8</p>
+                <p className="text-sm font-medium text-text-sub">Overall attendance for this term</p>
+                <div className="grid grid-cols-2 gap-4 pt-4">
+                  <div className="p-3 bg-green-50 rounded-xl">
+                    <p className="text-xs font-bold text-green-600 uppercase">Present</p>
+                    <p className="text-xl font-black text-green-700">142</p>
+                  </div>
+                  <div className="p-3 bg-red-50 rounded-xl">
+                    <p className="text-xs font-bold text-red-600 uppercase">Absent</p>
+                    <p className="text-xl font-black text-red-700">8</p>
+                  </div>
                 </div>
               </div>
-            </div>
-          </Card>
+            </Card>
+          </div>
         </div>
       )}
 
@@ -5007,15 +5380,15 @@ const LiveCamera = ({ cameraUrls }: { cameraUrls: { id: string, name: string, ur
               className="w-full h-full object-cover opacity-60"
               referrerPolicy="no-referrer"
             />
-            <div className="absolute top-6 left-6 flex items-center gap-3 bg-black/40 backdrop-blur-md px-4 py-2 rounded-xl border border-white/10">
+            <div className="absolute top-6 left-6 flex items-center gap-3 bg-black/40 px-4 py-2 rounded-xl border border-white/10">
               <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
               <span className="text-white text-xs font-bold uppercase tracking-widest">CAM-0{activeCamera + 1} - {cameraUrls[activeCamera]?.name || 'Campus'}</span>
             </div>
             <div className="absolute bottom-6 right-6 flex gap-2 opacity-0 group-hover:opacity-100 transition-all">
-              <button className="p-3 bg-white/10 backdrop-blur-md rounded-xl text-white hover:bg-white/20 border border-white/10">
+              <button className="p-3 bg-white/10 rounded-xl text-white hover:bg-white/20 border border-white/10">
                 <ScanLine size={20} />
               </button>
-              <button className="p-3 bg-white/10 backdrop-blur-md rounded-xl text-white hover:bg-white/20 border border-white/10">
+              <button className="p-3 bg-white/10 rounded-xl text-white hover:bg-white/20 border border-white/10">
                 <Camera size={20} />
               </button>
             </div>
@@ -5234,7 +5607,7 @@ const Admin360View = ({ students, masterData, feeTransactions, attendance, bankB
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <Card className="p-6 bg-gradient-to-br from-blue-600 to-blue-700 text-white border-none">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-white/20 text-white rounded-xl flex items-center justify-center backdrop-blur-sm">
+            <div className="w-12 h-12 bg-white/20 text-white rounded-xl flex items-center justify-center">
               <Building2 size={24} />
             </div>
             <div>
@@ -5245,7 +5618,7 @@ const Admin360View = ({ students, masterData, feeTransactions, attendance, bankB
         </Card>
         <Card className="p-6 bg-gradient-to-br from-emerald-600 to-emerald-700 text-white border-none">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-white/20 text-white rounded-xl flex items-center justify-center backdrop-blur-sm">
+            <div className="w-12 h-12 bg-white/20 text-white rounded-xl flex items-center justify-center">
               <Wallet size={24} />
             </div>
             <div>
@@ -5256,7 +5629,7 @@ const Admin360View = ({ students, masterData, feeTransactions, attendance, bankB
         </Card>
         <Card className="p-6 bg-gradient-to-br from-orange-600 to-orange-700 text-white border-none">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-white/20 text-white rounded-xl flex items-center justify-center backdrop-blur-sm">
+            <div className="w-12 h-12 bg-white/20 text-white rounded-xl flex items-center justify-center">
               <Receipt size={24} />
             </div>
             <div>
@@ -5798,7 +6171,7 @@ const CalendarView = ({ calendarEvents, setCalendarEvents, currentUser }: any) =
       </div>
 
       {showEventModal && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md z-[100] flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-slate-900/40 z-[100] flex items-center justify-center p-4">
           <motion.div 
             initial={{ scale: 0.9, opacity: 0, y: 20 }} 
             animate={{ scale: 1, opacity: 1, y: 0 }} 
@@ -6505,7 +6878,7 @@ const HumanResourcePanel = ({ staff, setStaff, departments, setDepartments, desi
       {/* Add Staff Modal */}
       <AnimatePresence>
         {showAddStaff && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50">
             <motion.div 
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -6662,7 +7035,7 @@ const CommunicatePanel = ({ notifications, setNotifications, templates, setTempl
       {/* Add Notice Modal */}
       <AnimatePresence>
         {showAddNotice && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50">
             <motion.div 
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -7054,7 +7427,7 @@ const FrontOfficePanel = ({ enquiries, setEnquiries, visitors, setVisitors, comp
       {/* Add Enquiry Modal */}
       <AnimatePresence>
         {showAddEnquiry && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/50">
             <motion.div 
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -7180,18 +7553,87 @@ const IncomeExpenseView = ({ incomes, setIncomes, expenses, setExpenses, incomeH
   const [formData, setFormData] = useState<any>({});
   const [searchTerm, setSearchTerm] = useState('');
 
-  const handleAdd = () => {
-    if (activeTab === 'income') {
-      setIncomes([...incomes, { ...formData, id: Date.now().toString() }]);
-    } else if (activeTab === 'expense') {
-      setExpenses([...expenses, { ...formData, id: Date.now().toString() }]);
-    } else if (activeTab === 'income-head') {
-      setIncomeHeads([...incomeHeads, { ...formData, id: Date.now().toString() }]);
-    } else if (activeTab === 'expense-head') {
-      setExpenseHeads([...expenseHeads, { ...formData, id: Date.now().toString() }]);
+  const handleAdd = async () => {
+    if (!supabase) {
+      console.error('Supabase not initialized.');
+      return;
+    }
+    try {
+      let table = '';
+      let payload: any = { ...formData };
+      
+      if (activeTab === 'income') {
+        table = 'incomes';
+        payload = {
+          name: formData.name,
+          income_head: formData.incomeHead,
+          invoice_number: formData.invoiceNumber,
+          date: formData.date,
+          amount: Number(formData.amount),
+          description: formData.description
+        };
+      } else if (activeTab === 'expense') {
+        table = 'expenses';
+        payload = {
+          name: formData.name,
+          expense_head: formData.expenseHead,
+          invoice_number: formData.invoiceNumber,
+          date: formData.date,
+          amount: Number(formData.amount),
+          description: formData.description
+        };
+      } else if (activeTab === 'income-head') {
+        table = 'income_heads';
+      } else if (activeTab === 'expense-head') {
+        table = 'expense_heads';
+      }
+
+      const { data: inserted, error } = await supabase
+        .from(table)
+        .insert([payload])
+        .select();
+      
+      if (error) throw error;
+
+      if (inserted) {
+        const newItem = {
+          ...inserted[0],
+          incomeHead: inserted[0].income_head,
+          expenseHead: inserted[0].expense_head,
+          invoiceNumber: inserted[0].invoice_number
+        };
+
+        if (activeTab === 'income') setIncomes([...incomes, newItem]);
+        else if (activeTab === 'expense') setExpenses([...expenses, newItem]);
+        else if (activeTab === 'income-head') setIncomeHeads([...incomeHeads, newItem]);
+        else if (activeTab === 'expense-head') setExpenseHeads([...expenseHeads, newItem]);
+      }
+    } catch (err) {
+      console.error('Error adding record:', err);
     }
     setShowAddModal(false);
     setFormData({});
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this record?')) return;
+    try {
+      let table = '';
+      if (activeTab === 'income') table = 'incomes';
+      else if (activeTab === 'expense') table = 'expenses';
+      else if (activeTab === 'income-head') table = 'income_heads';
+      else if (activeTab === 'expense-head') table = 'expense_heads';
+
+      const { error } = await supabase.from(table).delete().eq('id', id);
+      if (error) throw error;
+
+      if (activeTab === 'income') setIncomes(incomes.filter((i: any) => i.id !== id));
+      else if (activeTab === 'expense') setExpenses(expenses.filter((e: any) => e.id !== id));
+      else if (activeTab === 'income-head') setIncomeHeads(incomeHeads.filter((h: any) => h.id !== id));
+      else if (activeTab === 'expense-head') setExpenseHeads(expenseHeads.filter((h: any) => h.id !== id));
+    } catch (err) {
+      console.error('Error deleting record:', err);
+    }
   };
 
   const filteredData = (activeTab === 'income' ? incomes : expenses).filter((item: any) => 
@@ -7262,7 +7704,12 @@ const IncomeExpenseView = ({ incomes, setIncomes, expenses, setExpenses, incomeH
                     <td className="py-4 px-4">
                       <div className="flex gap-2">
                         <button className="p-2 hover:bg-slate-100 rounded-lg text-blue-500"><Edit2 size={16} /></button>
-                        <button className="p-2 hover:bg-slate-100 rounded-lg text-red-500"><Trash2 size={16} /></button>
+                        <button 
+                          onClick={() => handleDelete(item.id)}
+                          className="p-2 hover:bg-slate-100 rounded-lg text-red-500"
+                        >
+                          <Trash2 size={16} />
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -7297,7 +7744,12 @@ const IncomeExpenseView = ({ incomes, setIncomes, expenses, setExpenses, incomeH
                     <td className="py-4 px-4">
                       <div className="flex gap-2">
                         <button className="p-2 hover:bg-slate-100 rounded-lg text-blue-500"><Edit2 size={16} /></button>
-                        <button className="p-2 hover:bg-slate-100 rounded-lg text-red-500"><Trash2 size={16} /></button>
+                        <button 
+                          onClick={() => handleDelete(head.id)}
+                          className="p-2 hover:bg-slate-100 rounded-lg text-red-500"
+                        >
+                          <Trash2 size={16} />
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -7309,7 +7761,7 @@ const IncomeExpenseView = ({ incomes, setIncomes, expenses, setExpenses, incomeH
       )}
 
       {showAddModal && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md z-[100] flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-slate-900/40 z-[100] flex items-center justify-center p-4">
           <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="bg-white rounded-[2.5rem] p-10 max-w-md w-full shadow-2xl">
             <h3 className="text-2xl font-black text-text-heading mb-8 uppercase tracking-tight">Add {activeTab.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')}</h3>
             <div className="space-y-4">
@@ -7487,6 +7939,189 @@ const SuperAdminPanel = ({ users, setUsers }: any) => {
 };
 
 export default function App() {
+  // Supabase Data Fetching
+  useEffect(() => {
+    const fetchAllData = async () => {
+      if (!supabase) {
+        console.warn('Supabase not initialized. Skipping data fetch.');
+        return;
+      }
+      try {
+        // Fetch Students
+        const { data: studentsData, error: studentsError } = await supabase
+          .from('students')
+          .select('*');
+        if (studentsData) {
+          const formattedStudents = studentsData.map(s => ({
+            ...s,
+            studentId: s.student_id,
+            fatherName: s.father_name,
+            motherName: s.mother_name,
+            fatherMobile: s.father_mobile,
+            motherMobile: s.mother_mobile,
+            bloodGroup: s.blood_group,
+            emergencyContact: s.emergency_contact,
+            localGuardianContact: s.local_guardian_contact,
+            hasDisability: s.has_disability,
+            disabilityDetails: s.disability_details,
+            aadhaarNumber: s.aadhaar_number,
+            panNumber: s.pan_number,
+            passportNumber: s.passport_number,
+            fatherIncome: s.father_income,
+            fatherIncomeSource: s.father_income_source,
+            motherIncome: s.mother_income,
+            motherIncomeSource: s.mother_income_source,
+            relationsInSchool: s.relation_in_school || [],
+            documents: [
+              { name: 'Aadhaar Card', file: s.aadhaar_card_doc },
+              { name: 'Caste Certificate', file: s.caste_certificate_doc },
+              { name: 'Parents Documents', file: s.parents_docs },
+              { name: 'Signature', file: s.signature_doc }
+            ].filter(d => d.file)
+          }));
+          setStudents(formattedStudents);
+        }
+
+        // Fetch Report Card Templates
+        const { data: templatesData } = await supabase
+          .from('report_card_templates')
+          .select('*');
+        if (templatesData) setReportCardTemplates(templatesData);
+
+        // Fetch Report Cards
+        const { data: reportCardsData } = await supabase
+          .from('report_cards')
+          .select('*');
+        if (reportCardsData) {
+          const formattedRC = reportCardsData.map(rc => ({
+            ...rc,
+            studentId: rc.student_id,
+            templateId: rc.template_id,
+            termData: rc.term_data,
+            promotionStatus: rc.promotion_status,
+            isPublished: rc.is_published
+          }));
+          setReportCards(formattedRC);
+        }
+
+        // Fetch Exams
+        const { data: examsData } = await supabase
+          .from('exams')
+          .select('*');
+        if (examsData) {
+          const formattedExams = examsData.map(e => ({
+            ...e,
+            startDate: e.start_date,
+            endDate: e.end_date
+          }));
+          setExams(formattedExams);
+        }
+
+        // Fetch Exam Schedules
+        const { data: schedulesData } = await supabase
+          .from('exam_schedules')
+          .select('*');
+        if (schedulesData) {
+          const formattedSchedules = schedulesData.map(s => ({
+            ...s,
+            examId: s.exam_id,
+            startTime: s.start_time,
+            endTime: s.end_time,
+            questionPaper: s.question_paper,
+            answerSheet: s.answer_sheet
+          }));
+          setExamSchedules(formattedSchedules);
+        }
+
+        // Fetch Exam Results
+        const { data: resultsData } = await supabase
+          .from('exam_results')
+          .select('*');
+        if (resultsData) {
+          const formattedResults = resultsData.map(r => ({
+            ...r,
+            examScheduleId: r.exam_schedule_id,
+            studentId: r.student_id,
+            studentName: r.student_name,
+            maxMarks: r.max_marks,
+            teacherId: r.teacher_id
+          }));
+          setExamResults(formattedResults);
+        }
+
+        // Fetch Income & Expense
+        const { data: incomeHeadsData } = await supabase.from('income_heads').select('*');
+        if (incomeHeadsData) setIncomeHeads(incomeHeadsData);
+
+        const { data: expenseHeadsData } = await supabase.from('expense_heads').select('*');
+        if (expenseHeadsData) setExpenseHeads(expenseHeadsData);
+
+        const { data: incomesData } = await supabase.from('incomes').select('*');
+        if (incomesData) {
+          const formattedIncomes = incomesData.map(i => ({
+            ...i,
+            incomeHead: i.income_head,
+            invoiceNumber: i.invoice_number
+          }));
+          setIncomes(formattedIncomes);
+        }
+
+        const { data: expensesData } = await supabase.from('expenses').select('*');
+        if (expensesData) {
+          const formattedExpenses = expensesData.map(e => ({
+            ...e,
+            expenseHead: e.expense_head,
+            invoiceNumber: e.invoice_number
+          }));
+          setExpenses(formattedExpenses);
+        }
+
+        // Fetch Settings
+        const { data: settingsData } = await supabase.from('settings').select('*').eq('id', 1).single();
+        if (settingsData) {
+          setSchoolProfile(prev => ({
+            ...prev,
+            name: settingsData.school_name,
+            contact: settingsData.school_contact,
+            email: settingsData.school_email,
+            gst: settingsData.school_gst,
+            regNo: settingsData.school_reg_no,
+            address: settingsData.school_address,
+            logo: settingsData.school_logo,
+            principalSignature: settingsData.principal_signature,
+            classTeacherSignature: settingsData.class_teacher_signature,
+            schoolStamp: settingsData.school_stamp,
+            wardenPanelId: settingsData.warden_id,
+            wardenPanelPassword: settingsData.warden_password,
+            cameraUrls: [
+              { id: '1', name: settingsData.camera1_name || 'Main Gate', url: settingsData.camera1_url || 'https://picsum.photos/seed/gate/640/480' },
+              { id: '2', name: settingsData.camera2_name || 'Hostel Block A', url: settingsData.camera2_url || 'https://picsum.photos/seed/hostel/640/480' },
+              { id: '3', name: settingsData.camera3_name || 'Playground', url: settingsData.camera3_url || 'https://picsum.photos/seed/play/640/480' },
+              { id: '4', name: settingsData.camera4_name || 'Library', url: settingsData.camera4_url || 'https://picsum.photos/seed/library/640/480' }
+            ]
+          }));
+          setTaxes(settingsData.tax_percentage);
+          setMasterData(prev => ({
+            ...prev,
+            categories: settingsData.categories,
+            castes: settingsData.castes,
+            religions: settingsData.religions,
+            titles: settingsData.titles,
+            classes: settingsData.classes,
+            sections: settingsData.sections,
+            subjects: settingsData.subjects,
+            genders: settingsData.genders
+          }));
+        }
+
+      } catch (err) {
+        console.error('Error fetching data from Supabase:', err);
+      }
+    };
+
+    fetchAllData();
+  }, []);
+
   const [view, setView] = useState<View>('login');
   const [isViewOnly, setIsViewOnly] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -7525,11 +8160,13 @@ export default function App() {
     name: 'Digital School Systems',
     tagline: 'Excellence in Education',
     logo: 'https://ais-pre-b3e775v3rvj7egmf2trpz3-352124703760.asia-southeast1.run.app/logo.png',
-    signature: null,
-    stamp: null,
+    email: 'info@digitalschool.com',
+    principalSignature: null,
+    classTeacherSignature: null,
+    schoolStamp: null,
     contact: '+91 9876543210',
     address: '123 Education Hub, New Delhi, India',
-    gstNo: '22AAAAA0000A1Z5',
+    gst: '22AAAAA0000A1Z5',
     regNo: 'SCH/2024/001',
     wardenPanelId: 'warden',
     wardenPanelPassword: '12345',
@@ -7612,9 +8249,68 @@ export default function App() {
   const [exams, setExams] = useState<Exam[]>([]);
   const [examSchedules, setExamSchedules] = useState<ExamSchedule[]>([]);
   const [examResults, setExamResults] = useState<ExamResult[]>([]);
+  const [reportCardTemplates, setReportCardTemplates] = useState<ReportCardTemplate[]>([
+    {
+      id: '1',
+      name: 'Standard Report Card',
+      terms: [
+        {
+          id: 't1',
+          name: '1st Term',
+          subColumns: [
+            { id: 'pt1', name: 'PT-1', maxMarks: 20 },
+            { id: 'hy', name: 'Half Yearly', maxMarks: 80 }
+          ],
+          weightage: 50
+        },
+        {
+          id: 't2',
+          name: '2nd Term',
+          subColumns: [
+            { id: 'pt2', name: 'PT-2', maxMarks: 20 },
+            { id: 'an', name: 'Annual', maxMarks: 80 }
+          ],
+          weightage: 50
+        }
+      ],
+      subjects: ['English-I', 'English-II', 'Hindi-I', 'Hindi-II', 'Bengali', 'Mathematics', 'Science', 'S. Study', 'G. Knowledge', 'Computer', 'Art & Cursive']
+    }
+  ]);
+  const [reportCards, setReportCards] = useState<ReportCard[]>([
+    {
+      id: 'rc1',
+      studentId: 'DS-100001',
+      templateId: '1',
+      termData: {
+        t1: {
+          subjects: {
+            'English-I': { pt1: 20, hy: 80 },
+            'Mathematics': { pt1: 20, hy: 76 },
+            'Science': { pt1: 20, hy: 80 }
+          },
+          attendance: '230/240'
+        },
+        t2: {
+          subjects: {
+            'English-I': { pt2: 20, an: 25 },
+            'Mathematics': { pt2: 20, an: 73 },
+            'Science': { pt2: 18.5, an: 31 }
+          },
+          attendance: '217/240'
+        }
+      },
+      result: 'Pass',
+      aggregate: '887.25',
+      percentage: '80.65',
+      rank: '1st',
+      teacherComments: 'Excellent performance in most subjects. Needs to focus more on English-I second term.',
+      promotionStatus: 'Pass/Promoted',
+      isPublished: true
+    }
+  ]);
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([
-    { id: '1', studentId: 'ST-102938', studentName: 'John Doe', class: '10', section: 'A', startDate: '2024-03-25', endDate: '2024-03-26', duration: 2, reason: 'Family function', status: 'Pending', appliedDate: '2024-03-20' },
-    { id: '2', studentId: 'ST-102939', studentName: 'Jane Smith', class: '10', section: 'B', startDate: '2024-03-22', endDate: '2024-03-22', duration: 1, reason: 'Medical checkup', status: 'Approved', appliedDate: '2024-03-19', approvedBy: 'Teacher A' },
+    { id: '1', studentId: 'DS-100001', studentName: 'Aarav Sharma', class: 'Class 1', section: 'A', startDate: '2024-03-25', endDate: '2024-03-26', duration: 2, reason: 'Family function', status: 'Pending', appliedDate: '2024-03-20' },
+    { id: '2', studentId: 'DS-100002', studentName: 'Vihaan Gupta', class: 'Class 2', section: 'B', startDate: '2024-03-22', endDate: '2024-03-22', duration: 1, reason: 'Medical checkup', status: 'Approved', appliedDate: '2024-03-19', approvedBy: 'Teacher A' },
   ]);
   const [notifications, setNotifications] = useState<Notification[]>([
     { id: '1', title: 'Fee Reminder', message: 'Your tuition fee for March is due.', date: '2024-03-20', type: 'Fee', targetRoles: ['parent'], targetStudentId: 'ST-102938' },
@@ -7968,26 +8664,156 @@ export default function App() {
     return 'DS-' + Math.floor(100000 + Math.random() * 900000);
   };
 
-  const handleRegister = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (editingStudentId) {
-      const updatedStudents = students.map(s => 
-        s.id === editingStudentId ? { ...formData, id: s.id, studentId: s.studentId } : s
-      );
-      setStudents(updatedStudents);
-      showModal('Success', 'Student Details Updated Successfully!');
-    } else {
-      const newStudent = {
-        ...formData,
-        id: Date.now().toString(),
-        studentId: generateStudentId(),
+  const handleSaveSettings = async () => {
+    if (!supabase) return;
+    try {
+      const payload = {
+        school_name: schoolProfile.name,
+        school_contact: schoolProfile.contact,
+        school_email: schoolProfile.email,
+        school_gst: schoolProfile.gst,
+        school_reg_no: schoolProfile.regNo,
+        school_address: schoolProfile.address,
+        school_logo: schoolProfile.logo,
+        principal_signature: schoolProfile.principalSignature,
+        class_teacher_signature: schoolProfile.classTeacherSignature,
+        school_stamp: schoolProfile.schoolStamp,
+        warden_id: schoolProfile.wardenPanelId,
+        warden_password: schoolProfile.wardenPanelPassword,
+        camera1_name: schoolProfile.cameraUrls[0]?.name,
+        camera1_url: schoolProfile.cameraUrls[0]?.url,
+        camera2_name: schoolProfile.cameraUrls[1]?.name,
+        camera2_url: schoolProfile.cameraUrls[1]?.url,
+        camera3_name: schoolProfile.cameraUrls[2]?.name,
+        camera3_url: schoolProfile.cameraUrls[2]?.url,
+        camera4_name: schoolProfile.cameraUrls[3]?.name,
+        camera4_url: schoolProfile.cameraUrls[3]?.url,
+        tax_percentage: taxes,
+        categories: masterData.categories,
+        castes: masterData.castes,
+        religions: masterData.religions,
+        titles: masterData.titles,
+        classes: masterData.classes,
+        sections: masterData.sections,
+        subjects: masterData.subjects,
+        genders: masterData.genders
       };
-      setStudents([...students, newStudent]);
-      showModal('Success', `Student Registered Successfully! ID: ${newStudent.studentId}`);
+
+      const { error } = await supabase
+        .from('settings')
+        .update(payload)
+        .eq('id', 1);
+
+      if (error) throw error;
+      showModal('Success', 'System Settings Updated Successfully!');
+    } catch (err) {
+      console.error('Error saving settings:', err);
+      showModal('Error', 'Failed to save settings.');
     }
-    setEditingStudentId(null);
-    setFormData({});
-    setView('dashboard');
+  };
+
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!supabase) {
+      showModal('Error', 'Supabase not initialized. Please check your configuration.');
+      return;
+    }
+    try {
+      const payload = {
+        student_id: formData.studentId || generateStudentId(),
+        name: formData.name,
+        surname: formData.surname,
+        class: formData.class,
+        section: formData.section,
+        gender: formData.gender,
+        address: formData.address,
+        category: formData.category,
+        religion: formData.religion,
+        caste: formData.caste,
+        father_name: formData.fatherName,
+        mother_name: formData.motherName,
+        father_mobile: formData.fatherMobile,
+        mother_mobile: formData.motherMobile,
+        father_income: formData.fatherIncome,
+        father_income_source: formData.fatherIncomeSource,
+        mother_income: formData.motherIncome,
+        mother_income_source: formData.motherIncomeSource,
+        blood_group: formData.bloodGroup,
+        emergency_contact: formData.emergencyContact,
+        local_guardian_contact: formData.localGuardianContact,
+        email: formData.email,
+        allergy: formData.allergy,
+        has_disability: formData.hasDisability,
+        disability_details: formData.disabilityDetails,
+        photo: formData.photo,
+        title: formData.title,
+        aadhaar_number: formData.aadhaarNumber,
+        pan_number: formData.panNumber,
+        passport_number: formData.passportNumber,
+        relation_in_school: formData.relationsInSchool || [],
+        aadhaar_card_doc: (formData.documents || []).find((d: any) => d.name === 'Aadhaar Card')?.file,
+        caste_certificate_doc: (formData.documents || []).find((d: any) => d.name === 'Caste Certificate')?.file,
+        parents_docs: (formData.documents || []).find((d: any) => d.name === 'Parents Documents')?.file,
+        signature_doc: (formData.documents || []).find((d: any) => d.name === 'Signature')?.file
+      };
+
+      if (editingStudentId) {
+        const { error } = await supabase
+          .from('students')
+          .update(payload)
+          .eq('id', editingStudentId);
+        if (error) throw error;
+
+        const updatedStudents = students.map(s => 
+          s.id === editingStudentId ? { ...formData, id: s.id, studentId: s.studentId || formData.studentId } : s
+        );
+        setStudents(updatedStudents);
+        showModal('Success', 'Student Details Updated Successfully!');
+      } else {
+        const { data: inserted, error } = await supabase
+          .from('students')
+          .insert([payload])
+          .select();
+        if (error) throw error;
+        if (inserted) {
+          const newStudent = {
+            ...inserted[0],
+            studentId: inserted[0].student_id,
+            fatherName: inserted[0].father_name,
+            motherName: inserted[0].mother_name,
+            fatherMobile: inserted[0].father_mobile,
+            motherMobile: inserted[0].mother_mobile,
+            bloodGroup: inserted[0].blood_group,
+            emergencyContact: inserted[0].emergency_contact,
+            localGuardianContact: inserted[0].local_guardian_contact,
+            hasDisability: inserted[0].has_disability,
+            disabilityDetails: inserted[0].disability_details,
+            aadhaarNumber: inserted[0].aadhaar_number,
+            panNumber: inserted[0].pan_number,
+            passportNumber: inserted[0].passport_number,
+            fatherIncome: inserted[0].father_income,
+            fatherIncomeSource: inserted[0].father_income_source,
+            motherIncome: inserted[0].mother_income,
+            motherIncomeSource: inserted[0].mother_income_source,
+            relationsInSchool: inserted[0].relation_in_school || [],
+            documents: [
+              { name: 'Aadhaar Card', file: inserted[0].aadhaar_card_doc },
+              { name: 'Caste Certificate', file: inserted[0].caste_certificate_doc },
+              { name: 'Parents Documents', file: inserted[0].parents_docs },
+              { name: 'Signature', file: inserted[0].signature_doc }
+            ].filter(d => d.file)
+          };
+          setStudents([...students, newStudent]);
+          showModal('Success', `Student Registered Successfully! ID: ${newStudent.studentId}`);
+        }
+      }
+      setEditingStudentId(null);
+      setFormData({});
+      setView('dashboard');
+    } catch (err) {
+      console.error('Error saving student:', err);
+      showModal('Error', 'Failed to save student details.');
+    }
   };
 
   if (view === 'login') {
@@ -8002,7 +8828,7 @@ export default function App() {
         ></div>
         
         {/* Subtle overlay for focus */}
-        <div className="absolute inset-0 bg-linear-to-b from-slate-900/80 via-slate-900/40 to-slate-900/80 backdrop-blur-[2px]"></div>
+        <div className="absolute inset-0 bg-linear-to-b from-slate-900/80 via-slate-900/40 to-slate-900/80"></div>
 
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
@@ -8032,7 +8858,7 @@ export default function App() {
             </div>
           </div>
 
-          <div className="bg-white/90 backdrop-blur-xl rounded-[32px] overflow-hidden shadow-[0_30px_60px_rgba(0,0,0,0.3)] border border-white/50">
+          <div className="bg-white/90 rounded-[32px] overflow-hidden shadow-[0_30px_60px_rgba(0,0,0,0.3)] border border-white/50">
             <div className="pt-20 pb-4 text-center">
               <h2 className="text-2xl font-bold text-slate-800 tracking-tight">Digital School Login</h2>
             </div>
@@ -8119,14 +8945,14 @@ export default function App() {
                     <div className="absolute top-4 right-4 flex gap-2 pointer-events-auto">
                       <button 
                         onClick={() => setFacingMode(prev => prev === 'user' ? 'environment' : 'user')}
-                        className="p-4 bg-white/90 backdrop-blur-sm rounded-2xl shadow-xl text-blue-600 hover:scale-110 transition-all"
+                        className="p-4 bg-white/90 rounded-2xl shadow-xl text-blue-600 hover:scale-110 transition-all"
                         title="Swap Camera"
                       >
                         <Camera size={24} />
                       </button>
                       <button 
                         onClick={() => setIsQRLogin(false)}
-                        className="p-4 bg-white/90 backdrop-blur-sm rounded-2xl shadow-xl text-red-600 hover:scale-110 transition-all"
+                        className="p-4 bg-white/90 rounded-2xl shadow-xl text-red-600 hover:scale-110 transition-all"
                         title="Close QR"
                       >
                         <X size={24} />
@@ -8156,7 +8982,7 @@ export default function App() {
       {/* Sidebar Overlay for Mobile */}
       {isSidebarOpen && (
         <div 
-          className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[90] lg:hidden"
+          className="fixed inset-0 bg-slate-900/40 z-[90] lg:hidden"
           onClick={() => setIsSidebarOpen(false)}
         ></div>
       )}
@@ -8372,6 +9198,13 @@ export default function App() {
                 label={isSidebarOpen ? "User Logs" : ""} 
                 active={view === 'user-logs'} 
                 onClick={() => setView('user-logs')} 
+                isSidebarOpen={isSidebarOpen}
+              />
+              <SidebarItem 
+                icon={FileEdit} 
+                label={isSidebarOpen ? "SQL Editor" : ""} 
+                active={view === 'sql-editor'} 
+                onClick={() => setView('sql-editor')} 
                 isSidebarOpen={isSidebarOpen}
               />
             </>
@@ -8668,6 +9501,9 @@ export default function App() {
             {view === 'super-admin-panel' && (
               <SuperAdminPanel users={users} setUsers={setUsers} />
             )}
+            {view === 'sql-editor' && (
+              <SqlEditor />
+            )}
             {view === 'dashboard' && (
               <motion.div
                 key="dashboard"
@@ -8680,7 +9516,7 @@ export default function App() {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
                   <Card className="p-6 bg-gradient-to-br from-primary to-primary/80 text-white border-none shadow-xl shadow-primary/20">
                     <div className="flex justify-between items-start mb-4">
-                      <div className="p-3 bg-white/20 rounded-xl backdrop-blur-sm">
+                      <div className="p-3 bg-white/20 rounded-xl">
                         <Users size={24} />
                       </div>
                       <span className="text-[10px] font-black bg-white/20 px-2 py-1 rounded-full uppercase tracking-widest">Today</span>
@@ -9610,7 +10446,18 @@ export default function App() {
                                       showModal(
                                         'Confirm Delete', 
                                         `Are you sure you want to delete ${s.name}? This action cannot be undone.`,
-                                        () => setStudents(students.filter(std => std.id !== s.id))
+                                        async () => {
+                                          try {
+                                            const { error } = await supabase
+                                              .from('students')
+                                              .delete()
+                                              .eq('id', s.id);
+                                            if (error) throw error;
+                                            setStudents(students.filter(std => std.id !== s.id));
+                                          } catch (err) {
+                                            console.error('Error deleting student:', err);
+                                          }
+                                        }
                                       );
                                     }}
                                     className="p-2 hover:bg-red-50 hover:text-red-600 rounded-lg transition-all" 
@@ -9680,6 +10527,8 @@ export default function App() {
                 <ParentPanel 
                   students={students}
                   examResults={examResults}
+                  reportCards={reportCards}
+                  reportCardTemplates={reportCardTemplates}
                   homeworks={homeworks}
                   syllabuses={syllabuses}
                   leaveRequests={leaveRequests}
@@ -9818,7 +10667,7 @@ export default function App() {
                 {/* Manual Leave Entry Modal */}
                 {showLeaveModal && (
                   <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-                    <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={() => setShowLeaveModal(false)} />
+                    <div className="absolute inset-0 bg-slate-900/60" onClick={() => setShowLeaveModal(false)} />
                     <motion.div 
                       initial={{ opacity: 0, scale: 0.95, y: 20 }}
                       animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -10091,13 +10940,18 @@ export default function App() {
                           />
                           <Input 
                             label="GST Number" 
-                            value={schoolProfile.gstNo} 
-                            onChange={(e: any) => setSchoolProfile({...schoolProfile, gstNo: e.target.value})} 
+                            value={schoolProfile.gst} 
+                            onChange={(e: any) => setSchoolProfile({...schoolProfile, gst: e.target.value})} 
                           />
                           <Input 
                             label="Registration Number" 
                             value={schoolProfile.regNo} 
                             onChange={(e: any) => setSchoolProfile({...schoolProfile, regNo: e.target.value})} 
+                          />
+                          <Input 
+                            label="School Email" 
+                            value={schoolProfile.email} 
+                            onChange={(e: any) => setSchoolProfile({...schoolProfile, email: e.target.value})} 
                           />
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
@@ -10121,7 +10975,7 @@ export default function App() {
                             onChange={(e: any) => setSchoolProfile({...schoolProfile, address: e.target.value})}
                           ></textarea>
                         </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mt-8">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mt-8">
                           <FileUpload 
                             label="School Logo" 
                             icon={ImageIcon} 
@@ -10138,15 +10992,30 @@ export default function App() {
                             }}
                           />
                           <FileUpload 
-                            label="Authorized Signature" 
+                            label="Principal Signature" 
                             icon={Signature} 
-                            preview={schoolProfile.signature}
+                            preview={schoolProfile.principalSignature}
                             onChange={(e: any) => {
                               const file = e.target.files[0];
                               if (file) {
                                 const reader = new FileReader();
                                 reader.onloadend = () => {
-                                  setSchoolProfile({...schoolProfile, signature: reader.result as string});
+                                  setSchoolProfile({...schoolProfile, principalSignature: reader.result as string});
+                                };
+                                reader.readAsDataURL(file);
+                              }
+                            }}
+                          />
+                          <FileUpload 
+                            label="Class Teacher Signature" 
+                            icon={Signature} 
+                            preview={schoolProfile.classTeacherSignature}
+                            onChange={(e: any) => {
+                              const file = e.target.files[0];
+                              if (file) {
+                                const reader = new FileReader();
+                                reader.onloadend = () => {
+                                  setSchoolProfile({...schoolProfile, classTeacherSignature: reader.result as string});
                                 };
                                 reader.readAsDataURL(file);
                               }
@@ -10155,13 +11024,13 @@ export default function App() {
                           <FileUpload 
                             label="Official Stamp" 
                             icon={Stamp} 
-                            preview={schoolProfile.stamp}
+                            preview={schoolProfile.schoolStamp}
                             onChange={(e: any) => {
                               const file = e.target.files[0];
                               if (file) {
                                 const reader = new FileReader();
                                 reader.onloadend = () => {
-                                  setSchoolProfile({...schoolProfile, stamp: reader.result as string});
+                                  setSchoolProfile({...schoolProfile, schoolStamp: reader.result as string});
                                 };
                                 reader.readAsDataURL(file);
                               }
@@ -10285,6 +11154,16 @@ export default function App() {
                           ))}
                         </div>
                       </Card>
+
+                      <div className="flex justify-end pt-4">
+                        <button 
+                          onClick={handleSaveSettings}
+                          className="btn-primary px-12 py-4 text-lg shadow-2xl shadow-primary/30 hover:scale-105 transition-all flex items-center gap-3"
+                        >
+                          <Save size={24} />
+                          Save All Settings
+                        </button>
+                      </div>
                     </div>
                   ) : (
                     <div className="lg:col-span-2">
@@ -10379,6 +11258,10 @@ export default function App() {
                   students={students}
                   masterData={masterData}
                   currentUser={currentUser}
+                  reportCardTemplates={reportCardTemplates}
+                  setReportCardTemplates={setReportCardTemplates}
+                  reportCards={reportCards}
+                  setReportCards={setReportCards}
                 />
               </motion.div>
             )}
@@ -10530,7 +11413,7 @@ export default function App() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setModal(null)}
-              className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+              className="absolute inset-0 bg-slate-900/40"
             />
             <motion.div 
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
@@ -11282,7 +12165,7 @@ const HostelModule = ({
       {/* Modals */}
       {showRoomModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
-          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setShowRoomModal(false)} />
+          <div className="absolute inset-0 bg-slate-900/40" onClick={() => setShowRoomModal(false)} />
           <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="bg-white rounded-[32px] p-8 shadow-2xl relative z-10 w-full max-w-md">
             <h3 className="text-2xl font-black text-text-heading mb-6">{roomForm.id ? 'Edit Room' : 'Add New Room'}</h3>
             <div className="space-y-4">
@@ -11319,7 +12202,7 @@ const HostelModule = ({
 
       {showStaffModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
-          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setShowStaffModal(false)} />
+          <div className="absolute inset-0 bg-slate-900/40" onClick={() => setShowStaffModal(false)} />
           <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="bg-white rounded-[32px] p-8 shadow-2xl relative z-10 w-full max-w-md">
             <h3 className="text-2xl font-black text-text-heading mb-6">{staffForm.id ? 'Edit Staff' : 'Add Hostel Staff'}</h3>
             <div className="space-y-4">
@@ -11352,7 +12235,7 @@ const HostelModule = ({
 
       {showEnrollModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
-          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setShowEnrollModal(false)} />
+          <div className="absolute inset-0 bg-slate-900/40" onClick={() => setShowEnrollModal(false)} />
           <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="bg-white rounded-[32px] p-8 shadow-2xl relative z-10 w-full max-w-md">
             <h3 className="text-2xl font-black text-text-heading mb-6">Assign Bed to Student</h3>
             <div className="space-y-4">
@@ -11437,8 +12320,8 @@ const IDCardsModule = ({
       {/* Header */}
       <div className={`${orientation === 'portrait' ? 'bg-primary p-6' : 'bg-primary w-1/3 p-4'} text-white text-center relative overflow-hidden flex flex-col justify-center items-center`}>
         <div className="absolute top-0 left-0 w-full h-full opacity-10">
-          <div className="absolute -top-10 -left-10 w-32 h-32 bg-white rounded-full blur-2xl"></div>
-          <div className="absolute -bottom-10 -right-10 w-32 h-32 bg-white rounded-full blur-2xl"></div>
+          <div className="absolute -top-10 -left-10 w-32 h-32 bg-white rounded-full"></div>
+          <div className="absolute -bottom-10 -right-10 w-32 h-32 bg-white rounded-full"></div>
         </div>
         <div className="relative z-10">
           <h2 className={`${orientation === 'portrait' ? 'text-lg' : 'text-sm'} font-black tracking-tight uppercase leading-tight`}>{schoolProfile.name}</h2>
@@ -11634,8 +12517,8 @@ const IDCardsModule = ({
 
   const AppraisalCertificate = ({ person, title = "Outstanding Performance" }: { person: any, title?: string }) => (
     <div className="w-[1000px] h-[700px] bg-white p-12 shadow-2xl border-[20px] border-double border-primary/20 relative mx-auto overflow-hidden">
-      <div className="absolute -top-20 -right-20 w-64 h-64 bg-primary/5 rounded-full blur-3xl"></div>
-      <div className="absolute -bottom-20 -left-20 w-64 h-64 bg-primary/5 rounded-full blur-3xl"></div>
+      <div className="absolute -top-20 -right-20 w-64 h-64 bg-primary/5 rounded-full"></div>
+      <div className="absolute -bottom-20 -left-20 w-64 h-64 bg-primary/5 rounded-full"></div>
       
       <div className="border-4 border-primary/10 h-full w-full p-12 flex flex-col items-center justify-center text-center relative z-10">
         <div className="mb-8 p-6 bg-primary/5 rounded-full">
@@ -12101,9 +12984,14 @@ const ExaminationModule = ({
   examSchedules, 
   setExamSchedules, 
   examResults, 
-  setExamResults 
+  setExamResults,
+  reportCardTemplates,
+  setReportCardTemplates,
+  reportCards,
+  setReportCards
 }: any) => {
-  const [activeTab, setActiveTab] = useState<'setup' | 'schedule' | 'marks' | 'report' | 'stats'>('setup');
+  const [activeTab, setActiveTab] = useState<'setup' | 'schedule' | 'marks' | 'report' | 'stats' | 'templates'>('setup');
+  const [selectedReportStudent, setSelectedReportStudent] = useState<any>(null);
   
   // Exam Setup Form
   const [examForm, setExamForm] = useState({
@@ -12129,27 +13017,69 @@ const ExaminationModule = ({
   // Marks Entry Form
   const [marksForm, setMarksForm] = useState<any>({});
 
-  const handleAddExam = () => {
+  const handleAddExam = async () => {
     if (!examForm.name || !examForm.startDate) return;
-    const newExam: Exam = {
-      ...examForm,
-      id: Date.now().toString()
-    };
-    setExams([...exams, newExam]);
-    setExamForm({ name: '', type: 'Main', startDate: '', endDate: '', status: 'Upcoming' });
+    try {
+      const payload = {
+        name: examForm.name,
+        type: examForm.type,
+        start_date: examForm.startDate,
+        end_date: examForm.endDate,
+        status: examForm.status
+      };
+      const { data: inserted, error } = await supabase
+        .from('exams')
+        .insert([payload])
+        .select();
+      if (error) throw error;
+      if (inserted) {
+        const newExam = {
+          ...inserted[0],
+          startDate: inserted[0].start_date,
+          endDate: inserted[0].end_date
+        };
+        setExams([...exams, newExam]);
+      }
+      setExamForm({ name: '', type: 'Main', startDate: '', endDate: '', status: 'Upcoming' });
+    } catch (err) {
+      console.error('Error adding exam:', err);
+    }
   };
 
-  const handleAddSchedule = () => {
+  const handleAddSchedule = async () => {
     if (!scheduleForm.examId || !scheduleForm.class || !scheduleForm.subject) return;
-    const newSchedule: ExamSchedule = {
-      ...scheduleForm,
-      id: Date.now().toString()
-    };
-    setExamSchedules([...examSchedules, newSchedule]);
-    setScheduleForm({ examId: '', class: '', section: '', subject: '', date: '', startTime: '', endTime: '', room: '' });
+    try {
+      const payload = {
+        exam_id: scheduleForm.examId,
+        class: scheduleForm.class,
+        section: scheduleForm.section,
+        subject: scheduleForm.subject,
+        date: scheduleForm.date,
+        start_time: scheduleForm.startTime,
+        end_time: scheduleForm.endTime,
+        room: scheduleForm.room
+      };
+      const { data: inserted, error } = await supabase
+        .from('exam_schedules')
+        .insert([payload])
+        .select();
+      if (error) throw error;
+      if (inserted) {
+        const newSchedule = {
+          ...inserted[0],
+          examId: inserted[0].exam_id,
+          startTime: inserted[0].start_time,
+          endTime: inserted[0].end_time
+        };
+        setExamSchedules([...examSchedules, newSchedule]);
+      }
+      setScheduleForm({ examId: '', class: '', section: '', subject: '', date: '', startTime: '', endTime: '', room: '' });
+    } catch (err) {
+      console.error('Error adding schedule:', err);
+    }
   };
 
-  const handleSaveMarks = (scheduleId: string, studentId: string, studentName: string) => {
+  const handleSaveMarks = async (scheduleId: string, studentId: string, studentName: string) => {
     const data = marksForm[`${scheduleId}_${studentId}`] || {};
     if (data.marks === undefined) return;
 
@@ -12165,27 +13095,58 @@ const ExaminationModule = ({
     else if (data.marks >= 50) grade = 'D';
     else if (data.marks >= 33) grade = 'E';
 
-    const newResult: ExamResult = {
-      id: Date.now().toString(),
-      examScheduleId: scheduleId,
-      studentId,
-      studentName,
-      marks: Number(data.marks),
-      maxMarks: 100,
-      grade,
-      status,
-      feedback: data.feedback || '',
-      teacherId: currentUser.id
-    };
+    try {
+      const payload = {
+        exam_schedule_id: scheduleId,
+        student_id: studentId,
+        student_name: studentName,
+        marks: Number(data.marks),
+        max_marks: 100,
+        grade,
+        status,
+        feedback: data.feedback || '',
+        teacher_id: currentUser.id
+      };
 
-    // Update or add result
-    const existingIdx = examResults.findIndex((r: any) => r.examScheduleId === scheduleId && r.studentId === studentId);
-    if (existingIdx > -1) {
-      const updated = [...examResults];
-      updated[existingIdx] = newResult;
-      setExamResults(updated);
-    } else {
-      setExamResults([...examResults, newResult]);
+      const existingIdx = examResults.findIndex((r: any) => r.examScheduleId === scheduleId && r.studentId === studentId);
+      
+      if (existingIdx > -1) {
+        const existingId = examResults[existingIdx].id;
+        const { error } = await supabase
+          .from('exam_results')
+          .update(payload)
+          .eq('id', existingId);
+        if (error) throw error;
+        
+        const updated = [...examResults];
+        updated[existingIdx] = { ...examResults[existingIdx], ...payload, 
+          examScheduleId: payload.exam_schedule_id, 
+          studentId: payload.student_id, 
+          studentName: payload.student_name, 
+          maxMarks: payload.max_marks, 
+          teacherId: payload.teacher_id 
+        };
+        setExamResults(updated);
+      } else {
+        const { data: inserted, error } = await supabase
+          .from('exam_results')
+          .insert([payload])
+          .select();
+        if (error) throw error;
+        if (inserted) {
+          const newResult = {
+            ...inserted[0],
+            examScheduleId: inserted[0].exam_schedule_id,
+            studentId: inserted[0].student_id,
+            studentName: inserted[0].student_name,
+            maxMarks: inserted[0].max_marks,
+            teacherId: inserted[0].teacher_id
+          };
+          setExamResults([...examResults, newResult]);
+        }
+      }
+    } catch (err) {
+      console.error('Error saving marks:', err);
     }
   };
 
@@ -12241,6 +13202,7 @@ const ExaminationModule = ({
           { id: 'schedule', label: 'Schedule & Papers', icon: Calendar },
           { id: 'marks', label: 'Marks Entry', icon: FileEdit, teacherOnly: true },
           { id: 'report', label: 'Report Cards', icon: ClipboardList },
+          { id: 'templates', label: 'Templates', icon: Settings, adminOnly: true },
           { id: 'stats', label: 'Statistics', icon: BarChart3, adminOnly: true }
         ].filter(tab => {
           if (tab.adminOnly && currentUser?.role !== 'admin') return false;
@@ -12446,86 +13408,195 @@ const ExaminationModule = ({
           </motion.div>
         )}
 
+        {activeTab === 'templates' && (
+          <motion.div key="templates" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              <Card className="lg:col-span-1">
+                <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-primary">
+                  <Plus size={20} /> Create Template
+                </h3>
+                <div className="space-y-4">
+                  <Input label="Template Name" placeholder="e.g. Annual 2024" />
+                  <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
+                    <h4 className="text-xs font-bold uppercase mb-2">Terms</h4>
+                    {/* Simplified term management for now */}
+                    <p className="text-xs text-text-sub">Default: 1st Term, 2nd Term</p>
+                  </div>
+                  <div className="p-4 bg-slate-50 rounded-xl border border-slate-100">
+                    <h4 className="text-xs font-bold uppercase mb-2">Subjects</h4>
+                    <p className="text-xs text-text-sub">Default: All school subjects</p>
+                  </div>
+                  <button className="btn-primary w-full py-3 mt-4">Save Template</button>
+                </div>
+              </Card>
+
+              <Card className="lg:col-span-2">
+                <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-primary">
+                  <ClipboardList size={20} /> Template List
+                </h3>
+                <div className="space-y-4">
+                  {reportCardTemplates.map((t: any) => (
+                    <div key={t.id} className="p-6 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between">
+                      <div>
+                        <h4 className="font-bold text-lg">{t.name}</h4>
+                        <p className="text-sm text-text-sub">{t.terms.length} Terms | {t.subjects.length} Subjects</p>
+                      </div>
+                      <button className="text-primary hover:text-primary-dark font-bold text-sm">Edit</button>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            </div>
+          </motion.div>
+        )}
+
         {activeTab === 'report' && (
           <motion.div key="report" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              {students.filter(s => currentUser?.role === 'student' ? s.studentId === currentUser.id : true).map((student: any) => (
-                <Card key={student.studentId} className="relative overflow-hidden">
-                  <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-bl-full -mr-16 -mt-16"></div>
-                  <div className="flex items-center gap-6 mb-8">
-                    <img 
-                      src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${student.studentId}`} 
-                      alt="Avatar" 
-                      className="w-20 h-20 rounded-2xl bg-slate-100 border-4 border-white shadow-lg"
-                    />
-                    <div>
-                      <h3 className="text-2xl font-black text-text-heading tracking-tighter uppercase">{student.name} {student.surname}</h3>
-                      <p className="text-sm text-text-sub font-bold uppercase tracking-widest">{student.class} - Section {student.section}</p>
-                      <p className="text-xs text-text-sub">Student ID: {student.studentId}</p>
-                    </div>
+            <div className="grid grid-cols-1 gap-8">
+              <Card>
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-lg font-bold flex items-center gap-2 text-primary">
+                    <ClipboardList size={20} /> Generate Report Cards
+                  </h3>
+                  <div className="flex gap-4">
+                    <Select label="Class" options={masterData.classes} />
+                    <Select label="Section" options={masterData.sections} />
                   </div>
+                </div>
 
-                  <div className="space-y-4">
-                    <h4 className="text-sm font-bold text-primary uppercase tracking-wider border-b border-slate-100 pb-2">Academic Performance</h4>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left border-collapse">
-                        <thead>
-                          <tr className="text-[10px] font-bold text-text-secondary uppercase tracking-wider border-b border-slate-200">
-                            <th className="pb-3">Subject</th>
-                            <th className="pb-3 text-center">Marks</th>
-                            <th className="pb-3 text-center">Grade</th>
-                            <th className="pb-3 text-center">Status</th>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="text-xs font-bold text-text-secondary uppercase tracking-wider border-b border-slate-200">
+                        <th className="pb-3 px-4">Student</th>
+                        <th className="pb-3 px-4">Class</th>
+                        <th className="pb-3 px-4">Status</th>
+                        <th className="pb-3 px-4 text-right">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="text-sm">
+                      {students.map((student: any) => {
+                        const reportCard = reportCards.find(rc => rc.studentId === student.studentId);
+                        return (
+                          <tr key={student.studentId} className="border-b border-slate-100 last:border-0">
+                            <td className="py-4 px-4">
+                              <div className="flex items-center gap-3">
+                                <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${student.studentId}`} className="w-8 h-8 rounded-full bg-slate-100" />
+                                <span className="font-medium">{student.name} {student.surname}</span>
+                              </div>
+                            </td>
+                            <td className="py-4 px-4">{student.class}-{student.section}</td>
+                            <td className="py-4 px-4">
+                              {reportCard ? (
+                                <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${reportCard.isPublished ? 'bg-green-100 text-green-600' : 'bg-yellow-100 text-yellow-600'}`}>
+                                  {reportCard.isPublished ? 'Published' : 'Draft'}
+                                </span>
+                              ) : (
+                                <span className="px-3 py-1 bg-slate-100 text-slate-500 rounded-full text-[10px] font-bold uppercase tracking-wider">Not Generated</span>
+                              )}
+                            </td>
+                            <td className="py-4 px-4 text-right flex items-center justify-end gap-2">
+                              <button 
+                                onClick={() => setSelectedReportStudent(student)}
+                                className="text-primary hover:text-primary-dark font-bold text-sm"
+                              >
+                                {reportCard ? 'Edit Report' : 'Generate'}
+                              </button>
+                              {reportCard && (
+                                <button 
+                                  onClick={async () => {
+                                    if (confirm('Are you sure you want to delete this report card?')) {
+                                      try {
+                                        const { error } = await supabase
+                                          .from('report_cards')
+                                          .delete()
+                                          .eq('id', reportCard.id);
+                                        if (error) throw error;
+                                        setReportCards(reportCards.filter(rc => rc.id !== reportCard.id));
+                                      } catch (err) {
+                                        console.error('Error deleting report card:', err);
+                                      }
+                                    }
+                                  }}
+                                  className="p-2 hover:bg-red-50 text-red-500 rounded-lg transition-all"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              )}
+                            </td>
                           </tr>
-                        </thead>
-                        <tbody className="text-sm">
-                          {examSchedules.filter(s => s.class === student.class && s.section === student.section).map((s: any) => {
-                            const result = examResults.find(r => r.examScheduleId === s.id && r.studentId === student.studentId);
-                            return (
-                              <tr key={s.id} className="border-b border-slate-100 last:border-0">
-                                <td className="py-3 font-medium">{s.subject}</td>
-                                <td className="py-3 text-center font-bold">{result?.marks || '-'} / 100</td>
-                                <td className="py-3 text-center">
-                                  <span className="px-3 py-1 bg-slate-100 rounded-lg font-bold text-xs">{result?.grade || '-'}</span>
-                                </td>
-                                <td className="py-3 text-center">
-                                  {result ? (
-                                    <span className={`px-3 py-1 rounded-lg font-bold text-[10px] uppercase tracking-widest ${
-                                      result.status === 'Pass' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'
-                                    }`}>
-                                      {result.status}
-                                    </span>
-                                  ) : '-'}
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                    
-                    {/* Teacher Feedback Section */}
-                    <div className="mt-6 p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                      <h5 className="text-xs font-bold text-text-secondary uppercase tracking-wider mb-2">Teacher's Remarks</h5>
-                      <div className="space-y-2">
-                        {examSchedules.filter(s => s.class === student.class && s.section === student.section).map((s: any) => {
-                          const result = examResults.find(r => r.examScheduleId === s.id && r.studentId === student.studentId);
-                          if (!result?.feedback) return null;
-                          return (
-                            <div key={s.id} className="text-xs italic text-text-secondary">
-                              <span className="font-bold not-italic text-primary">{s.subject}:</span> "{result.feedback}"
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-
-                    <button className="w-full mt-6 flex items-center justify-center gap-2 bg-slate-900 text-white py-4 rounded-2xl font-bold hover:bg-slate-800 transition-all shadow-xl">
-                      <Download size={20} /> Download Report Card
-                    </button>
-                  </div>
-                </Card>
-              ))}
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
             </div>
+
+            {/* Report Card Editor Modal */}
+            {selectedReportStudent && (
+              <ReportCardEditor 
+                student={selectedReportStudent}
+                template={reportCardTemplates[0]} // Using first template for now
+                reportCard={reportCards.find(rc => rc.studentId === selectedReportStudent.studentId)}
+                onClose={() => setSelectedReportStudent(null)}
+                onSave={async (data: any) => {
+                  try {
+                    const { id, ...rcData } = data;
+                    const payload = {
+                      student_id: rcData.studentId,
+                      template_id: rcData.templateId,
+                      term_data: rcData.termData,
+                      result: rcData.result,
+                      aggregate: rcData.aggregate,
+                      percentage: rcData.percentage,
+                      rank: rcData.rank,
+                      teacher_comments: rcData.teacherComments,
+                      promotion_status: rcData.promotionStatus,
+                      is_published: rcData.isPublished
+                    };
+
+                    if (id && !id.startsWith('rc')) { // Existing record (UUID)
+                      const { error } = await supabase
+                        .from('report_cards')
+                        .update(payload)
+                        .eq('id', id);
+                      if (error) throw error;
+                    } else { // New record
+                      const { data: inserted, error } = await supabase
+                        .from('report_cards')
+                        .insert([payload])
+                        .select();
+                      if (error) throw error;
+                      if (inserted) {
+                        const newRC = {
+                          ...inserted[0],
+                          studentId: inserted[0].student_id,
+                          templateId: inserted[0].template_id,
+                          termData: inserted[0].term_data,
+                          promotionStatus: inserted[0].promotion_status,
+                          isPublished: inserted[0].is_published
+                        };
+                        setReportCards([...reportCards, newRC]);
+                      }
+                    }
+
+                    // Refresh local state if update
+                    if (id && !id.startsWith('rc')) {
+                      const existingIdx = reportCards.findIndex(rc => rc.id === id);
+                      if (existingIdx > -1) {
+                        const updated = [...reportCards];
+                        updated[existingIdx] = { ...data };
+                        setReportCards(updated);
+                      }
+                    }
+                  } catch (err) {
+                    console.error('Error saving report card:', err);
+                  }
+                  setSelectedReportStudent(null);
+                }}
+              />
+            )}
           </motion.div>
         )}
 
